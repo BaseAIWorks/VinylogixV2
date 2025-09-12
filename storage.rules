@@ -1,0 +1,18 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow public read access to all files.
+    // This is common for user-uploaded content like profile pictures or, in this case, album covers.
+    match /{allPaths=**} {
+      allow read;
+    }
+
+    // Secure the write operation.
+    // Only authenticated users can upload files.
+    // Further restrictions ensure users can only write to their own designated folders.
+    match /covers/{distributorId}/{userId}/{fileName} {
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

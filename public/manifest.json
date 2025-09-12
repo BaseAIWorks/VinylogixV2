@@ -1,0 +1,21 @@
+{
+  "name": "Vinylogix",
+  "short_name": "Vinylogix",
+  "description": "The ultimate platform for vinyl record stores and collectors to manage their inventory and passion.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#26222B",
+  "theme_color": "#673AB7",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

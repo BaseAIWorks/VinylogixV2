@@ -1,0 +1,27 @@
+
+[
+  {
+    "origin": [
+      "https://vinyldb-2b429.web.app",
+      "https://vinyldb-2b429.firebaseapp.com",
+      "https://*.cloudworkstations.dev",
+      "https://studio--vinylogix-v1.us-central1.hosted.app",
+      "http://localhost:9002"
+    ],
+    "method": [
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE",
+      "OPTIONS"
+    ],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Authorization",
+      "X-Requested-With",
+      "x-goog-resumable"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

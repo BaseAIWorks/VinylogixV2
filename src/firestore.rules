@@ -1,0 +1,125 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions to make rules cleaner
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+
+    function isRole(role) {
+      return isSignedIn() && getUserData(request.auth.uid).role == role;
+    }
+
+    function isSuperAdmin() {
+      return isRole('superadmin');
+    }
+
+    function isMaster() {
+      return isRole('master');
+    }
+    
+    function isWorker() {
+      return isRole('worker');
+    }
+    
+    function isOperator() {
+        return isMaster() || isWorker();
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Rules for 'settings' collection (e.g., subscription tiers)
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin(); // Only superadmins can change global settings
+    }
+
+    // Rules for 'distributors' collection
+    match /distributors/{distributorId} {
+      allow create, delete: if isSuperAdmin();
+      
+      // Superadmin can read any. Master/Worker can read their own distributor doc.
+      allow read: if isSuperAdmin() || 
+                    (isOperator() && getUserData(request.auth.uid).distributorId == distributorId);
+      
+      // Superadmin can update any. A master can only update their own.
+      allow update: if isSuperAdmin() ||
+                      (isMaster() && getUserData(request.auth.uid).distributorId == distributorId);
+    }
+    
+    // Rules for 'users' collection
+    match /users/{userId} {
+      // Self-signup OR a master/superadmin creating a user.
+      allow create: if isOwner(userId) || isMaster() || isSuperAdmin();
+      
+      // Read own profile, or if you are a master/superadmin.
+      allow read: if isOwner(userId) || isMaster() || isSuperAdmin();
+      
+      // Update own profile, or if you are a master/superadmin.
+      allow update: if isOwner(userId) || isMaster() || isSuperAdmin();
+      
+      // Only master/superadmin can delete.
+      allow delete: if isMaster() || isSuperAdmin();
+    }
+    
+    // Rules for the 'vinylRecords' collection
+    match /vinylRecords/{recordId} {
+      // Allow list for operators of their own distributor's records, or superadmins
+      allow list: if (isOperator() && request.query.distributorId == getUserData(request.auth.uid).distributorId) || isSuperAdmin();
+      
+      // Read is allowed for public inventory items, personal records, or by operators/superadmins
+      allow read: if (isSignedIn() && (resource.data.isInventoryItem == true || resource.data.ownerUid == request.auth.uid)) ||
+                    (isOperator() && resource.data.distributorId == getUserData(request.auth.uid).distributorId) ||
+                    isSuperAdmin();
+        
+      // Create is allowed for operators within their distributor scope, or users for non-inventory items
+      allow create: if (isOperator() && request.resource.data.distributorId == getUserData(request.auth.uid).distributorId) ||
+                      (isSignedIn() && request.resource.data.ownerUid == request.auth.uid && request.resource.data.isInventoryItem == false) ||
+                      isSuperAdmin();
+        
+      // Update is allowed by operators on their records, or by users on their own records
+      allow update: if (isOperator() && get(/databases/$(database)/documents/vinylRecords/$(recordId)).data.distributorId == getUserData(request.auth.uid).distributorId) ||
+                      (isSignedIn() && get(/databases/$(database)/documents/vinylRecords/$(recordId)).data.ownerUid == request.auth.uid) ||
+                      isSuperAdmin();
+        
+      // Delete is allowed by operators on their records, or by users on their own records
+      allow delete: if (isOperator() && get(/databases/$(database)/documents/vinylRecords/$(recordId)).data.distributorId == getUserData(request.auth.uid).distributorId) ||
+                      (isSignedIn() && get(/databases/$(database)/documents/vinylRecords/$(recordId)).data.ownerUid == request.auth.uid) ||
+                      isSuperAdmin();
+    }
+    
+    // Rules for 'orders' collection
+    match /orders/{orderId} {
+      allow create: if isSignedIn(); // Any authenticated user can place an order.
+      
+      // Read allowed if owner of order, operator of distributor, or superadmin
+      allow read: if isOwner(resource.data.viewerId) ||
+                    (isOperator() && resource.data.distributorId == getUserData(request.auth.uid).distributorId) ||
+                    isSuperAdmin();
+                    
+      // Only operators/superadmins can update an order's status.
+      allow update: if (isOperator() && resource.data.distributorId == getUserData(request.auth.uid).distributorId) || isSuperAdmin();
+
+      // Allow operators/superadmins to list orders
+      allow list: if (isOperator() && request.query.distributorId == getUserData(request.auth.uid).distributorId) || isSuperAdmin();
+    }
+
+    // Rules for 'notifications' collection
+    match /notifications/{notificationId} {
+        // Operators can create notifications for their own distributor.
+        allow create: if isOperator() && request.resource.data.distributorId == getUserData(request.auth.uid).distributorId;
+        
+        // Operators can read, update, or delete notifications for their own distributor.
+        allow read, update, delete: if isOperator() && resource.data.distributorId == getUserData(request.auth.uid).distributorId;
+    }
+  }
+}

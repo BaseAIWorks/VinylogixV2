@@ -1,0 +1,132 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions to make rules more readable
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && request.auth.token.role == 'superadmin';
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isMaster() {
+      return isSignedIn() && request.auth.token.role == 'master';
+    }
+
+    function isWorker() {
+      return isSignedIn() && request.auth.token.role == 'worker';
+    }
+
+    function isOperator() {
+      return isMaster() || isWorker();
+    }
+    
+    function isMasterOf(distributorId) {
+      return isMaster() && request.auth.token.distributorId == distributorId;
+    }
+
+    function isWorkerOf(distributorId) {
+      return isWorker() && request.auth.token.distributorId == distributorId;
+    }
+
+    function isOperatorOf(distributorId) {
+        return isMasterOf(distributorId) || isWorkerOf(distributorId);
+    }
+    
+    function isClientOf(distributorId) {
+      return isSignedIn() && request.auth.token.accessibleDistributorIds.hasAny([distributorId]);
+    }
+
+    // ==================================================================
+    // Collections
+    // ==================================================================
+
+    match /users/{userId} {
+      // Anyone can read their own user document.
+      // A master user can read any user document within their own distributorship.
+      // A superadmin can read any user document.
+      allow read: if isSuperAdmin() || isOwner(userId) || (isMaster() && resource.data.distributorId == request.auth.token.distributorId);
+
+      // A user can create their own document (on signup).
+      allow create: if isOwner(userId);
+      
+      // A user can update their own document.
+      // A master user can update users within their distributorship.
+      // A superadmin can update any user.
+      // Field-level security: only specific roles can change other specific fields.
+      allow update: if isSuperAdmin() || isOwner(userId) || isMaster();
+      
+      // A master or superadmin can delete a user document.
+      allow delete: if isMaster() || isSuperAdmin();
+    }
+
+    match /distributors/{distributorId} {
+      // Superadmins can manage all distributors.
+      allow read, write, delete: if isSuperAdmin();
+      
+      // Operators can read their own distributor document.
+      // Clients can read the document of distributors they have access to.
+      allow read: if isSignedIn() && (isOperatorOf(distributorId) || isClientOf(distributorId));
+      
+      // Only the master of a distributor can update it.
+      allow update: if isMasterOf(distributorId);
+    }
+
+    match /vinylRecords/{recordId} {
+      // Anyone signed in can create a record (for their own collection or inventory).
+      allow create: if isSignedIn();
+
+      // Read permissions are more complex:
+      // 1. Superadmins can read anything.
+      // 2. You can read your own personal records (that are not inventory items).
+      // 3. Operators can read any record belonging to their distributor.
+      // 4. Clients can read any inventory item from a distributor they have access to.
+      allow read: if isSuperAdmin() ||
+                   (isOwner(resource.data.ownerUid) && resource.data.isInventoryItem == false) ||
+                   isOperatorOf(resource.data.distributorId) ||
+                   (resource.data.isInventoryItem == true && isClientOf(resource.data.distributorId));
+
+      // Update permissions:
+      // 1. Superadmins can update anything.
+      // 2. You can update your own personal records.
+      // 3. Operators can update any record belonging to their distributor.
+      allow update: if isSuperAdmin() || isOwner(resource.data.ownerUid) || isOperatorOf(resource.data.distributorId);
+
+      // Delete permissions:
+      // 1. Superadmins can delete anything.
+      // 2. You can delete your own personal records.
+      // 3. Operators can delete any record belonging to their distributor.
+      allow delete: if isSuperAdmin() || isOwner(resource.data.ownerUid) || isOperatorOf(resource.data.distributorId);
+    }
+    
+    match /suppliers/{supplierId} {
+        // Allow operators to manage suppliers for their distributor
+        allow read, write, delete: if isOperatorOf(resource.data.distributorId);
+        
+        // Allow creating suppliers if user is an operator and the distributorId matches their token
+        allow create: if isOperator() && request.resource.data.distributorId == request.auth.token.distributorId;
+    }
+    
+    match /orders/{orderId} {
+        allow create: if isSignedIn();
+        allow read, update: if isOperatorOf(resource.data.distributorId) || isOwner(resource.data.viewerId);
+    }
+    
+    match /notifications/{notificationId} {
+        allow read, write: if isOperatorOf(resource.data.distributorId);
+    }
+
+    match /settings/{docId} {
+      // Superadmins can manage all settings.
+      allow read, write: if isSuperAdmin();
+      allow read: if isSignedIn();
+    }
+  }
+}

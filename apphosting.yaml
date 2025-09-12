@@ -1,0 +1,42 @@
+# Settings to manage and configure a Firebase App Hosting backend.
+# https://firebase.google.com/docs/app-hosting/configure
+
+runConfig:
+  # Increase this value if you'd like to automatically spin up
+  # more instances in response to increased traffic.
+  maxInstances: 2
+# Required for Firebase Authentication and other server-side Firebase SDKs.
+# Specifies the service account to use for server-side rendering and API routes.
+# This service account should have the necessary permissions to access Firebase services.
+# For example, roles/firebase.admin grants broad access.
+# firebaseauth.googleapis.com is required for Firebase Authentication
+# firestore.googleapis.com is required for Firestore
+# storage.googleapis.com is required for Cloud Storage
+requiredAPIs:
+  - identitytoolkit.googleapis.com
+  - firestore.googleapis.com
+  - storage.googleapis.com
+  - serviceusage.googleapis.com
+iam:
+  serviceAccount: managed-by-app-hosting
+  roles:
+    # Grants permission to use services like Firebase Auth
+    - role: roles/serviceusage.serviceUsageConsumer
+      description: "Allow the app to use enabled Google Cloud services."
+    # Grants permission to act as a Firebase Admin
+    - role: roles/firebase.admin
+      description: "Provides full access to Firebase services for server-side operations."
+    # Grants permission to manage users in Firebase Authentication
+    - role: roles/firebaseauth.admin
+      description: "Allows the server to manage users (create, delete, etc.)."
+# Environment variables for your backend application
+env:
+  - variable: GOOGLE_AI_API_KEY # The name your application expects to find
+    secret: projects/vinylogix-v1/secrets/GOOGLE_AI_API_KEY/versions/latest # Reference to the secret
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: RESEND_API_KEY # The name your application expects to find
+    secret: projects/vinylogix-v1/secrets/RESEND_API_KEY/versions/latest # Reference to the secret for sending emails
+    availability:
+      - RUNTIME
