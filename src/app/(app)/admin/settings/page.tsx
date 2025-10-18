@@ -1,3 +1,4 @@
+
 "use client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Separator } from "@/components/ui/separator";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 let weightOptionIdCounter = 0;
 
@@ -282,30 +284,59 @@ export default function PlatformSettingsPage() {
                             <CardTitle className="flex items-center gap-3"><CreditCard className="h-5 w-5"/> Payment Settings</CardTitle>
                             <CardDescription>Configure payment providers and platform transaction fees.</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-6">
-                             <div className="p-6 border rounded-lg space-y-4">
-                                <h4 className="font-semibold text-foreground">Transaction Fees</h4>
-                                <div className="space-y-2">
-                                    <Label htmlFor="application_fee">Platform Fee (%)</Label>
-                                    <Input id="application_fee" type="number" step="0.1" placeholder="e.g. 2.5" />
-                                    <p className="text-xs text-muted-foreground">The percentage your platform will take from each successful transaction via Stripe Connect.</p>
-                                </div>
-                             </div>
-                             <div className="p-6 border rounded-lg space-y-4">
-                                <h4 className="font-semibold text-foreground">Available Payment Providers</h4>
-                                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                                    <Label htmlFor="enable_stripe">Enable Stripe</Label>
-                                    <Switch id="enable_stripe" defaultChecked/>
-                                </div>
-                                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                                    <Label htmlFor="enable_paypal">Enable PayPal</Label>
-                                    <Switch id="enable_paypal" disabled />
-                                </div>
-                                 <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
-                                    <Label htmlFor="enable_paynl">Enable Pay.nl</Label>
-                                    <Switch id="enable_paynl" disabled />
-                                </div>
-                             </div>
+                        <CardContent className="space-y-4">
+                            <Accordion type="single" collapsible className="w-full">
+                                <AccordionItem value="stripe">
+                                    <AccordionTrigger>
+                                        <div className="flex items-center justify-between w-full pr-4">
+                                            <span className="font-semibold text-foreground">Stripe</span>
+                                            <Switch defaultChecked/>
+                                        </div>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="p-4 bg-muted/50 rounded-b-lg">
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="stripe_fee_base">Base Platform Fee (%)</Label>
+                                                <Input id="stripe_fee_base" type="number" step="0.1" placeholder="e.g. 2.0" />
+                                                <p className="text-xs text-muted-foreground">The default fee for transactions via Stripe.</p>
+                                            </div>
+                                            <Separator />
+                                            <div className="space-y-2">
+                                                <Label htmlFor="stripe_fee_ideal">iDEAL Fee (%)</Label>
+                                                <Input id="stripe_fee_ideal" type="number" step="0.1" placeholder="e.g. 1.5" />
+                                                <p className="text-xs text-muted-foreground">Specific fee for iDEAL payments. Overrides base fee.</p>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="stripe_fee_cc">Credit Card Fee (%)</Label>
+                                                <Input id="stripe_fee_cc" type="number" step="0.1" placeholder="e.g. 2.9" />
+                                                <p className="text-xs text-muted-foreground">Specific fee for Credit Card payments. Overrides base fee.</p>
+                                            </div>
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
+                                <AccordionItem value="paypal">
+                                    <AccordionTrigger>
+                                        <div className="flex items-center justify-between w-full pr-4">
+                                            <span className="font-semibold text-foreground">PayPal</span>
+                                            <Switch disabled />
+                                        </div>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="p-4 bg-muted/50 rounded-b-lg">
+                                        <p className="text-sm text-muted-foreground">PayPal integration is coming soon.</p>
+                                    </AccordionContent>
+                                </AccordionItem>
+                                <AccordionItem value="paynl">
+                                    <AccordionTrigger>
+                                        <div className="flex items-center justify-between w-full pr-4">
+                                            <span className="font-semibold text-foreground">Pay.nl</span>
+                                            <Switch disabled />
+                                        </div>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="p-4 bg-muted/50 rounded-b-lg">
+                                        <p className="text-sm text-muted-foreground">Pay.nl integration is coming soon.</p>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            </Accordion>
                         </CardContent>
                     </Card>
                 </TabsContent>
