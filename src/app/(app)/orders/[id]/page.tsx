@@ -11,12 +11,15 @@ import { getRecordById } from "@/services/record-service";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, ArrowLeft, Package, User, Receipt, Music, CheckCircle, XCircle, Clock, Weight, Printer, Truck, PackageCheck, Hourglass, DollarSign } from "lucide-react";
+import { Loader2, ArrowLeft, Package, User, Receipt, Music, CheckCircle, XCircle, Clock, Weight, Printer, Truck, PackageCheck, Hourglass, DollarSign, FileDown } from "lucide-react";
 import { format } from "date-fns";
 import Image from "next/image";
 import { formatPriceForDisplay } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
+
 
 const statusConfig: Record<OrderStatus, { icon: React.ElementType, color: string, label: string }> = {
     pending: { icon: Clock, color: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30', label: 'Pending' },
@@ -117,6 +120,73 @@ export default function OrderDetailPage() {
             setIsLoadingPackingSlip(false);
         }
     };
+    
+     const generateInvoicePdf = () => {
+        if (!order) return;
+
+        const doc = new jsPDF();
+        
+        // Header
+        doc.setFontSize(22);
+        doc.setFont("helvetica", "bold");
+        doc.text("INVOICE", 150, 20);
+
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Order #: ${order.orderNumber || order.id.slice(0, 8)}`, 150, 28);
+        doc.text(`Date: ${format(new Date(order.createdAt), 'PPP')}`, 150, 34);
+
+        // Client Info
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("Bill To:", 14, 50);
+        doc.setFont("helvetica", "normal");
+        doc.text(order.customerName, 14, 56);
+        doc.text(order.shippingAddress.split('\n'), 14, 62);
+        
+        // Status Badge
+        doc.setFillColor(230, 230, 230); // A light grey
+        doc.setDrawColor(150, 150, 150);
+        const statusText = statusConfig[order.status].label;
+        const statusWidth = doc.getStringUnitWidth(statusText) * doc.getFontSize() / doc.internal.scaleFactor + 10;
+        doc.roundedRect(14, 80, statusWidth, 10, 3, 3, 'FD');
+        doc.text(statusText, 19, 87);
+
+        // Order Items Table
+        const tableColumn = ["#", "Item", "Qty", "Unit Price", "Total"];
+        const tableRows = order.items.map((item, index) => [
+            index + 1,
+            `${item.title}\n${item.artist}`,
+            item.quantity,
+            `€${formatPriceForDisplay(item.priceAtTimeOfOrder)}`,
+            `€${formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}`
+        ]);
+
+        (doc as any).autoTable({
+            head: [tableColumn],
+            body: tableRows,
+            startY: 95,
+            theme: 'striped',
+            headStyles: { fillColor: [38, 34, 43] },
+            didDrawCell: (data: any) => {
+              // Your cell drawing logic if needed
+            }
+        });
+        
+        // Totals
+        const finalY = (doc as any).lastAutoTable.finalY || 150;
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.text("Total:", 150, finalY + 15, { align: 'right' });
+        doc.text(`€${formatPriceForDisplay(order.totalAmount)}`, 200, finalY + 15, { align: 'right' });
+
+        // Footer
+        doc.setFontSize(10);
+        doc.setTextColor(150);
+        doc.text("Thank you for your order!", 105, 285, { align: 'center' });
+
+        doc.save(`Invoice-${order.orderNumber || order.id.slice(0, 8)}.pdf`);
+    };
 
     if (isLoading) {
         return (
@@ -152,13 +222,14 @@ export default function OrderDetailPage() {
                 </div>
                 {canManageOrder && (
                     <div className="flex items-center gap-2 flex-wrap">
+                        <Button variant="outline" onClick={generateInvoicePdf}><FileDown className="mr-2 h-4 w-4" /> Download Invoice</Button>
                         <Dialog onOpenChange={(open) => { if(open) generatePackingSlip() }}>
                             <DialogTrigger asChild>
-                                <Button variant="outline"><Printer className="mr-2 h-4 w-4" /> Print Pakbon</Button>
+                                <Button variant="outline"><Printer className="mr-2 h-4 w-4" /> Print Packing Slip</Button>
                             </DialogTrigger>
                             <DialogContent className="max-w-3xl">
                                 <DialogHeader>
-                                    <DialogTitle>Pakbon for Order #{order.orderNumber}</DialogTitle>
+                                    <DialogTitle>Packing Slip for Order #{order.orderNumber}</DialogTitle>
                                     <DialogDescription>Items and their locations for picking.</DialogDescription>
                                 </DialogHeader>
                                 {isLoadingPackingSlip ? (

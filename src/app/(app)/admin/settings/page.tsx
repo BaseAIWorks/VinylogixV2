@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, AlertTriangle, Save, Shapes, ArrowLeft, Trash2, PlusCircle, Weight, Palette } from "lucide-react";
+import { Loader2, AlertTriangle, Save, Shapes, ArrowLeft, Trash2, PlusCircle, Weight, Palette, CreditCard } from "lucide-react";
 import type { SubscriptionInfo, SubscriptionTier, WeightOption } from "@/types";
 import { SubscriptionTiers } from "@/types";
 import { useState, useEffect, useCallback } from "react";
@@ -19,6 +19,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { Separator } from "@/components/ui/separator";
 
 let weightOptionIdCounter = 0;
 
@@ -187,10 +188,11 @@ export default function PlatformSettingsPage() {
             </div>
             
              <Tabs defaultValue="tiers" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="tiers">Subscription Tiers</TabsTrigger>
                     <TabsTrigger value="weights">Weight Options</TabsTrigger>
                     <TabsTrigger value="branding">Branding</TabsTrigger>
+                    <TabsTrigger value="payments">Payments</TabsTrigger>
                 </TabsList>
                 <TabsContent value="tiers">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
@@ -272,6 +274,39 @@ export default function PlatformSettingsPage() {
                                 </Button>
                                 </form>
                             </Form>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                <TabsContent value="payments">
+                     <Card className="mt-4">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-3"><CreditCard className="h-5 w-5"/> Payment Settings</CardTitle>
+                            <CardDescription>Configure payment providers and platform transaction fees.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                             <div className="p-6 border rounded-lg space-y-4">
+                                <h4 className="font-semibold text-foreground">Transaction Fees</h4>
+                                <div className="space-y-2">
+                                    <Label htmlFor="application_fee">Platform Fee (%)</Label>
+                                    <Input id="application_fee" type="number" step="0.1" placeholder="e.g. 2.5" />
+                                    <p className="text-xs text-muted-foreground">The percentage your platform will take from each successful transaction via Stripe Connect.</p>
+                                </div>
+                             </div>
+                             <div className="p-6 border rounded-lg space-y-4">
+                                <h4 className="font-semibold text-foreground">Available Payment Providers</h4>
+                                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                                    <Label htmlFor="enable_stripe">Enable Stripe</Label>
+                                    <Switch id="enable_stripe" defaultChecked/>
+                                </div>
+                                <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                                    <Label htmlFor="enable_paypal">Enable PayPal</Label>
+                                    <Switch id="enable_paypal" disabled />
+                                </div>
+                                 <div className="flex items-center justify-between rounded-lg border p-3 shadow-sm">
+                                    <Label htmlFor="enable_paynl">Enable Pay.nl</Label>
+                                    <Switch id="enable_paynl" disabled />
+                                </div>
+                             </div>
                         </CardContent>
                     </Card>
                 </TabsContent>

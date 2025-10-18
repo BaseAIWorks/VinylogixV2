@@ -150,7 +150,7 @@ export interface Distributor {
   orderCounter?: number;
   orderIdPrefix?: string;
   stripeAccountId?: string; // For Stripe Connect
-  stripeAccountStatus?: 'pending' | 'verified' | 'restricted';
+  stripeAccountStatus?: 'pending' | 'verified' | 'restricted' | 'details_needed';
   stripeCustomerId?: string; // For Stripe Billing
   subscriptionId?: string; // For Stripe Billing
 }
@@ -373,7 +373,7 @@ export interface FirestoreUser {
   discogsUsername?: string;
   discogsUserId?: number;
   permissions?: WorkerPermissions;
-  stripeCustomerId?: string;
+  stripeCustomerId?: string; // For Stripe Billing
   subscriptionStatus?: SubscriptionStatus;
   subscriptionTier?: SubscriptionTier;
   profileComplete?: boolean; // New flag for client onboarding

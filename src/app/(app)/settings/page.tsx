@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare } from "lucide-react";
+import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useEffect } from "react";
 import {
@@ -28,6 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { FileDown, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 
 
 const profileFormSchema = z.object({
@@ -170,8 +171,11 @@ export default function SettingsPage() {
   const [shelfLocations, setShelfLocations] = useState<string[]>([]);
   const [storageLocations, setStorageLocations] = useState<string[]>([]);
   const [isSavingLocations, setIsSavingLocations] = useState(false);
+  const [isConnectingStripe, setIsConnectingStripe] = useState(false);
 
   const { toast } = useToast();
+  const router = useRouter();
+
 
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
@@ -322,6 +326,33 @@ export default function SettingsPage() {
     setIsSavingLocations(true);
     await updateMyDistributorSettings({ shelfLocations, storageLocations });
     setIsSavingLocations(false);
+  };
+
+  const handleStripeConnect = async () => {
+    if (!user || !user.distributorId) {
+        toast({ title: "Error", description: "Distributor context not found.", variant: "destructive" });
+        return;
+    }
+    setIsConnectingStripe(true);
+    try {
+        const response = await fetch('/api/stripe/connect/onboard', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ distributorId: user.distributorId, distributorEmail: user.email }),
+        });
+        const { url, error } = await response.json();
+        if (error) {
+            throw new Error(error);
+        }
+        if (url) {
+            window.location.href = url;
+        } else {
+            throw new Error("Could not retrieve Stripe onboarding URL.");
+        }
+    } catch (error) {
+        toast({ title: "Stripe Connection Failed", description: (error as Error).message, variant: "destructive" });
+        setIsConnectingStripe(false);
+    }
   };
   
   const escapeCSVValue = (value: any): string => {
@@ -556,6 +587,52 @@ export default function SettingsPage() {
                   </form>
                 </Form>
               </CardContent>
+            </Card>
+        )}
+        
+        {user?.role === 'master' && (
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center gap-3">
+                        <CreditCard className="h-7 w-7 text-primary" />
+                        <div>
+                            <CardTitle className="text-xl">Payouts & Billing</CardTitle>
+                            <CardDescription>Manage how you receive payments from your customers.</CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                     {activeDistributor?.stripeAccountId ? (
+                        <div>
+                            {activeDistributor.stripeAccountStatus === 'verified' ? (
+                                <div className="flex items-center gap-2 text-green-600">
+                                    <Check className="h-5 w-5"/>
+                                    <p className="font-semibold">Your Stripe account is connected and verified.</p>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2 text-orange-600">
+                                    <AlertCircle className="h-5 w-5"/>
+                                    <p className="font-semibold">Your Stripe account needs attention.</p>
+                                </div>
+                            )}
+                            <p className="text-sm text-muted-foreground mt-2">
+                                Account ID: <code className="text-xs bg-muted px-1 py-0.5 rounded">{activeDistributor.stripeAccountId}</code>
+                            </p>
+                            <Button onClick={handleStripeConnect} disabled={isConnectingStripe} className="mt-4">
+                                {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Manage Stripe Account <ExternalLink className="ml-2 h-4 w-4"/>
+                            </Button>
+                        </div>
+                    ) : (
+                        <div>
+                            <p className="text-muted-foreground mb-4">Connect a Stripe account to receive payouts for your orders. Vinylogix uses Stripe Connect to securely route payments from your clients directly to you.</p>
+                            <Button onClick={handleStripeConnect} disabled={isConnectingStripe}>
+                                {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Connect with Stripe
+                            </Button>
+                        </div>
+                    )}
+                </CardContent>
             </Card>
         )}
 
