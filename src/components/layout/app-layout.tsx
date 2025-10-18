@@ -210,6 +210,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     { href: '/admin/dashboard', label: 'Admin Dashboard', title: 'Platform Dashboard', icon: Building, roles: ['superadmin']},
     { href: '/admin/statistics', label: 'Platform Stats', title: 'Platform Statistics', icon: BarChart3, roles: ['superadmin']},
     { href: '/admin/accounts', label: 'Accounts & Billing', title: 'Accounts & Billing', icon: DollarSign, roles: ['superadmin']},
+    { href: '/admin/settings', label: 'Platform Settings', title: 'Platform Settings', icon: Shapes, roles: ['superadmin']},
     
     // All Roles
     { href: '/dashboard', label: 'Dashboard', title: 'Dashboard', icon: LayoutDashboard, roles: ['master', 'worker', 'viewer'] },
