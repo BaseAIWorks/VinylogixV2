@@ -122,6 +122,21 @@ export async function getDistributorBySlug(slug: string): Promise<Distributor | 
     }
 }
 
+export async function findDistributorByStripeCustomerId(customerId: string): Promise<Distributor | null> {
+    const q = query(collection(db, DISTRIBUTORS_COLLECTION), where("stripeCustomerId", "==", customerId), limit(1));
+    try {
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+            return null;
+        }
+        const docSnap = querySnapshot.docs[0];
+        return processDistributorTimestamps({ ...docSnap.data(), id: docSnap.id });
+    } catch (error) {
+        console.error(`DistributorService: Error fetching distributor by stripeCustomerId "${customerId}":`, error);
+        throw error;
+    }
+}
+
 
 export async function addDistributor(
   distributorData: Partial<Omit<Distributor, 'id' | 'createdAt'>>,
@@ -160,18 +175,19 @@ export async function addDistributor(
 export async function updateDistributor(
   id: string,
   updatedData: Partial<Omit<Distributor, 'id' | 'createdAt' | 'creatorUid'>>,
-  actingUser: User
+  actingUser?: User
 ): Promise<Distributor | null> {
   const distributorDocRef = doc(db, DISTRIBUTORS_COLLECTION, id);
   
   try {
-    const isSuperAdmin = actingUser.role === 'superadmin';
-    const isCorrectMasterUser = actingUser.role === 'master' && actingUser.distributorId === id;
+    const isSuperAdmin = actingUser?.role === 'superadmin';
+    const isCorrectMasterUser = actingUser?.role === 'master' && actingUser.distributorId === id;
+    const isServerAction = actingUser?.email === 'server-action';
     
     const updateKeys = Object.keys(updatedData);
     const isOnlyCounterUpdate = updateKeys.length === 1 && updateKeys[0] === 'orderCounter';
     
-    if (!isSuperAdmin && !isCorrectMasterUser && !isOnlyCounterUpdate) {
+    if (!isSuperAdmin && !isCorrectMasterUser && !isOnlyCounterUpdate && !isServerAction) {
         throw new Error("Permission Denied: You do not have permission to update this distributor.");
     }
 
