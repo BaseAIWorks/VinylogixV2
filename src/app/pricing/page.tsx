@@ -12,11 +12,12 @@ import { cn } from "@/lib/utils";
 import { getSubscriptionTiers } from "@/services/subscription-service";
 import type { SubscriptionInfo, SubscriptionTier } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatPriceForDisplay } from "@/lib/utils";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
 
 const PageHeader = () => {
     const { user } = useAuth();
@@ -122,15 +123,41 @@ const PricingTierComponent = ({
 }: {
   tierName: string;
   tier: SubscriptionInfo;
-  billingCycle: 'monthly' | 'yearly';
+  billingCycle: 'monthly' | 'quarterly' | 'yearly';
   isPopular?: boolean;
   onChoosePlan: (tier: SubscriptionTier) => void;
 }) => {
     const isFree = tier.tier === 'essential';
-    const hasYearlyPrice = tier.yearlyPrice !== undefined && tier.yearlyPrice > 0;
-    const price = billingCycle === 'monthly' || !hasYearlyPrice ? tier.price : tier.yearlyPrice;
-    const priceDetails = isFree && price === 0 ? "" : billingCycle === 'monthly' ? '/month' : '/year';
-    const yearlySavings = tier.price && tier.yearlyPrice ? (tier.price * 12 - tier.yearlyPrice) : 0;
+
+    let price: number | undefined;
+    let priceDetails: string = '';
+    let savingsText: string | null = null;
+    
+    switch (billingCycle) {
+        case 'quarterly':
+            price = tier.quarterlyPrice;
+            priceDetails = '/3 months';
+            if (tier.price && tier.quarterlyPrice) {
+                const monthlyTotal = tier.price * 3;
+                const savings = monthlyTotal - tier.quarterlyPrice;
+                if (savings > 0) savingsText = `Save €${savings.toFixed(0)} every 3 months!`;
+            }
+            break;
+        case 'yearly':
+            price = tier.yearlyPrice;
+            priceDetails = '/year';
+            if (tier.price && tier.yearlyPrice) {
+                const monthlyTotal = tier.price * 12;
+                const savings = monthlyTotal - tier.yearlyPrice;
+                if (savings > 0) savingsText = `Save €${savings.toFixed(0)} a year!`;
+            }
+            break;
+        case 'monthly':
+        default:
+            price = tier.price;
+            priceDetails = '/month';
+            break;
+    }
     
     return (
         <div
@@ -157,8 +184,8 @@ const PricingTierComponent = ({
                     </>
                   ) : <Skeleton className="h-12 w-32" />}
                 </div>
-                {billingCycle === 'yearly' && yearlySavings > 0 && (
-                    <p className="text-sm font-semibold text-primary mt-2">Save €{yearlySavings.toFixed(0)} a year!</p>
+                {savingsText && (
+                    <p className="text-sm font-semibold text-primary mt-2">{savingsText}</p>
                 )}
                 
                 <p className="mt-6 text-muted-foreground min-h-[40px]">
@@ -206,7 +233,7 @@ const FeatureListItem = ({ icon: Icon, title, description }: { icon: React.Eleme
 
 export default function PricingPage() {
     const router = useRouter();
-    const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+    const [billingCycle, setBillingCycle] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
     const [tiers, setTiers] = useState<Record<SubscriptionTier, SubscriptionInfo> | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -272,9 +299,26 @@ export default function PricingPage() {
             <div className="py-16 sm:py-20">
               <div className="container mx-auto px-4">
                   <div className="flex justify-center items-center gap-4">
-                        <Label htmlFor="billing-cycle">Monthly</Label>
-                        <Switch id="billing-cycle" checked={billingCycle === 'yearly'} onCheckedChange={(checked) => setBillingCycle(checked ? 'yearly' : 'monthly')} />
-                        <Label htmlFor="billing-cycle">Yearly</Label>
+                    <RadioGroup defaultValue="monthly" onValueChange={(value) => setBillingCycle(value as any)} className="grid grid-cols-3 gap-4">
+                        <div>
+                            <RadioGroupItem value="monthly" id="monthly" className="peer sr-only" />
+                            <Label htmlFor="monthly" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                Monthly
+                            </Label>
+                        </div>
+                        <div>
+                            <RadioGroupItem value="quarterly" id="quarterly" className="peer sr-only" />
+                            <Label htmlFor="quarterly" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                Quarterly
+                            </Label>
+                        </div>
+                         <div>
+                            <RadioGroupItem value="yearly" id="yearly" className="peer sr-only" />
+                            <Label htmlFor="yearly" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                Yearly
+                            </Label>
+                        </div>
+                    </RadioGroup>
                   </div>
 
                   <div className="isolate mx-auto mt-10 grid max-w-md grid-cols-1 gap-8 md:max-w-2xl lg:max-w-5xl lg:grid-cols-3">

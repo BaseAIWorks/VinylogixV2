@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
     try {
         const { tier, billing, email, onboardingData } = await req.json();
 
-        if (!tier || !billing || !['monthly', 'yearly'].includes(billing)) {
+        if (!tier || !billing || !['monthly', 'quarterly', 'yearly'].includes(billing)) {
             return NextResponse.json({ error: 'Missing or invalid parameters.' }, { status: 400 });
         }
         
@@ -22,14 +22,17 @@ export async function POST(req: NextRequest) {
         const priceIdMap = {
             essential: {
                 monthly: process.env.STRIPE_ESSENTIAL_MONTHLY_PRICE_ID,
+                quarterly: process.env.STRIPE_ESSENTIAL_3MONTHS_PRICE_ID,
                 yearly: process.env.STRIPE_ESSENTIAL_YEARLY_PRICE_ID,
             },
             growth: {
                 monthly: process.env.STRIPE_GROWTH_MONTHLY_PRICE_ID,
+                quarterly: process.env.STRIPE_GROWTH_3MONTHS_PRICE_ID,
                 yearly: process.env.STRIPE_GROWTH_YEARLY_PRICE_ID
             },
             scale: {
                 monthly: process.env.STRIPE_SCALE_MONTHLY_PRICE_ID,
+                quarterly: process.env.STRIPE_SCALE_3MONTHS_PRICE_ID,
                 yearly: process.env.STRIPE_SCALE_YEARLY_PRICE_ID
             }
         };

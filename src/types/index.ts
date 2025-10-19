@@ -93,8 +93,9 @@ export interface SubscriptionInfo {
   allowOrders: boolean;
   allowAiFeatures: boolean;
   price?: number;
-  discountedPrice?: number;
+  quarterlyPrice?: number;
   yearlyPrice?: number;
+  discountedPrice?: number;
   description?: string;
   features?: string; // Newline-separated string
 }
@@ -562,4 +563,3 @@ export interface ApiLog {
     timestamp: string; // ISO string
     distributorId?: string;
 }
-

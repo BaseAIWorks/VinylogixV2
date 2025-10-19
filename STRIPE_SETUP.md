@@ -30,15 +30,17 @@ You need to create products in your Stripe Dashboard that correspond to the appl
     -   Name them `Essential`, `Growth`, and `Scale`.
     -   You can add descriptions if you wish.
 4.  **Add Prices for Each Product:**
-    -   For **each** of the three products you created, you need to add two prices: one for monthly billing and one for yearly billing.
+    -   For **each** of the three products you created, you need to add three prices: monthly, quarterly (every 3 months), and yearly.
     -   Select a product (e.g., "Growth").
     -   In the "Pricing" section, click **+ Add another price**.
     -   Set the price, select the currency, and set the billing period to **Monthly**.
     -   Click **+ Add another price** again.
+    -   Set the quarterly price, select the currency, and set the billing period to **Every 3 months**.
+    -   Click **+ Add another price** again.
     -   Set the yearly price, select the currency, and set the billing period to **Yearly**.
 5.  **Copy the Price IDs:**
     -   After creating each price, Stripe will generate a Price ID (e.g., `price_1P...`).
-    -   You will need **six** Price IDs in total. Copy each one.
+    -   You will need **nine** Price IDs in total. Copy each one.
 
 ### Step 2: Configure Environment Variables
 
@@ -49,10 +51,13 @@ The application's code in `src/app/api/stripe/checkout-session/route.ts` expects
 -   `STRIPE_SECRET_KEY`: Your Stripe secret key (starts with `sk_...`). Find this in your Stripe Dashboard under **Developers > API keys**.
 -   `STRIPE_WEBHOOK_SECRET`: You'll get this in the next step.
 -   `STRIPE_ESSENTIAL_MONTHLY_PRICE_ID`: The Price ID for the monthly Essential plan.
+-   `STRIPE_ESSENTIAL_3MONTHS_PRICE_ID`: The Price ID for the quarterly Essential plan.
 -   `STRIPE_ESSENTIAL_YEARLY_PRICE_ID`: The Price ID for the yearly Essential plan.
 -   `STRIPE_GROWTH_MONTHLY_PRICE_ID`: The Price ID for the monthly Growth plan.
+-   `STRIPE_GROWTH_3MONTHS_PRICE_ID`: The Price ID for the quarterly Growth plan.
 -   `STRIPE_GROWTH_YEARLY_PRICE_ID`: The Price ID for the yearly Growth plan.
 -   `STRIPE_SCALE_MONTHLY_PRICE_ID`: The Price ID for the monthly Scale plan.
+-   `STRIPE_SCALE_3MONTHS_PRICE_ID`: The Price ID for the quarterly Scale plan.
 -   `STRIPE_SCALE_YEARLY_PRICE_ID`: The Price ID for the yearly Scale plan.
 
 ### Step 3: Set Up Webhooks
