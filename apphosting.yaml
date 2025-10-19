@@ -84,3 +84,8 @@ env:
     secret: projects/vinylogix-v1/secrets/STRIPE_SCALE_YEARLY_PRICE_ID/versions/latest
     availability:
       - RUNTIME
+  - variable: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+    secret: projects/vinylogix-v1/secrets/NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY/versions/latest
+    availability:
+      - BUILD
+      - RUNTIME
