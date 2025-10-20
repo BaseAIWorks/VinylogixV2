@@ -4,7 +4,7 @@
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, UseFormReturn } from "react-hook-form";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -41,6 +41,49 @@ const steps = [
   { label: "Your Details", icon: User },
   { label: "Subscribe", icon: Key },
 ];
+
+// Moved StepContent outside the main component to prevent re-rendering issues.
+const StepContent = ({ activeStep, form, initialTier, initialBilling, isLoading }: { 
+    activeStep: number; 
+    form: UseFormReturn<OnboardingFormValues>;
+    initialTier: SubscriptionTier;
+    initialBilling: string;
+    isLoading: boolean;
+}) => {
+    switch (activeStep) {
+        case 0:
+            return (
+                <div className="space-y-4">
+                    <FormField control={form.control} name="companyName" render={({ field }) => (<FormItem><FormLabel>Company Name</FormLabel><FormControl><Input {...field} placeholder="Your Record Store B.V." /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="kvkNumber" render={({ field }) => (<FormItem><FormLabel>KVK Number (or equivalent)</FormLabel><FormControl><Input {...field} placeholder="12345678" /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="vatNumber" render={({ field }) => (<FormItem><FormLabel>VAT Number</FormLabel><FormControl><Input {...field} placeholder="NL001234567B01" /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="website" render={({ field }) => (<FormItem><FormLabel>Website</FormLabel><FormControl><Input {...field} placeholder="https://yourstore.com" /></FormControl><FormMessage /></FormItem>)} />
+                </div>
+            );
+        case 1:
+            return (
+                <div className="space-y-4">
+                    <FormField control={form.control} name="contactPerson" render={({ field }) => (<FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} placeholder="Jan Jansen" /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email Address</FormLabel><FormControl><Input type="email" {...field} placeholder="you@yourstore.com" /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="password" render={({ field }) => (<FormItem><FormLabel>Password</FormLabel><FormControl><Input type="password" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                </div>
+            );
+        case 2:
+            return (
+                <div className="space-y-4 text-center">
+                    <h3 className="text-lg font-semibold">Ready to Start?</h3>
+                    <p className="text-muted-foreground">You're signing up for the <span className="font-semibold text-primary capitalize">{initialTier}</span> plan, billed {initialBilling}.</p>
+                    <p className="text-sm text-muted-foreground">After registration, you'll be prompted to connect your Stripe account to receive payments from your customers.</p>
+                    <div className="p-4 bg-muted/50 rounded-lg">
+                       <p className="font-bold">7-Day Free Trial Included!</p>
+                       <p className="text-xs">Your first payment will be processed after your trial ends. You can cancel anytime.</p>
+                    </div>
+                </div>
+            );
+        default:
+            return null;
+    }
+};
 
 export default function RegisterPage() {
     const { loading: authLoading, isFinalizing, registrationError } = useAuth();
@@ -151,43 +194,6 @@ export default function RegisterPage() {
             </Card>
         );
     }
-    
-    const StepContent = () => {
-        switch (activeStep) {
-            case 0:
-                return (
-                    <div className="space-y-4">
-                        <FormField control={form.control} name="companyName" render={({ field }) => (<FormItem><FormLabel>Company Name</FormLabel><FormControl><Input {...field} placeholder="Your Record Store B.V." /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={form.control} name="kvkNumber" render={({ field }) => (<FormItem><FormLabel>KVK Number (or equivalent)</FormLabel><FormControl><Input {...field} placeholder="12345678" /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={form.control} name="vatNumber" render={({ field }) => (<FormItem><FormLabel>VAT Number</FormLabel><FormControl><Input {...field} placeholder="NL001234567B01" /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={form.control} name="website" render={({ field }) => (<FormItem><FormLabel>Website</FormLabel><FormControl><Input {...field} placeholder="https://yourstore.com" /></FormControl><FormMessage /></FormItem>)} />
-                    </div>
-                );
-            case 1:
-                return (
-                    <div className="space-y-4">
-                        <FormField control={form.control} name="contactPerson" render={({ field }) => (<FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} placeholder="Jan Jansen" /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={form.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email Address</FormLabel><FormControl><Input type="email" {...field} placeholder="you@yourstore.com" /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={form.control} name="password" render={({ field }) => (<FormItem><FormLabel>Password</FormLabel><FormControl><Input type="password" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    </div>
-                );
-            case 2:
-                return (
-                    <div className="space-y-4 text-center">
-                        <h3 className="text-lg font-semibold">Ready to Start?</h3>
-                        <p className="text-muted-foreground">You're signing up for the <span className="font-semibold text-primary capitalize">{initialTier}</span> plan, billed {initialBilling}.</p>
-                        <p className="text-sm text-muted-foreground">After registration, you'll be prompted to connect your Stripe account to receive payments from your customers.</p>
-                        <div className="p-4 bg-muted/50 rounded-lg">
-                           <p className="font-bold">7-Day Free Trial Included!</p>
-                           <p className="text-xs">Your first payment will be processed after your trial ends. You can cancel anytime.</p>
-                        </div>
-                    </div>
-                );
-            default:
-                return null;
-        }
-    };
-
 
     return (
         <Card className="w-full max-w-2xl shadow-2xl">
@@ -213,8 +219,13 @@ export default function RegisterPage() {
                 <div className="my-8">
                   <Form {...form}>
                       <form>
-                         <StepContent />
-
+                         <StepContent 
+                           activeStep={activeStep} 
+                           form={form} 
+                           initialTier={initialTier} 
+                           initialBilling={initialBilling} 
+                           isLoading={isLoading} 
+                         />
                           <div className="flex justify-between mt-8">
                                 <Button type="button" variant="outline" onClick={goToPrevious} disabled={activeStep === 0}>
                                     Back

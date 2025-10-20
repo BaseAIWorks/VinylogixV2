@@ -39,50 +39,62 @@ env:
   - variable: RESEND_API_KEY # The name your application expects to find
     secret: projects/vinylogix-v1/secrets/RESEND_API_KEY/versions/latest # Reference to the secret for sending emails
     availability:
+      - BUILD
       - RUNTIME
   - variable: STRIPE_SECRET_KEY
     secret: projects/vinylogix-v1/secrets/STRIPE_SECRET_KEY/versions/latest
     availability:
+      - BUILD
       - RUNTIME
   - variable: STRIPE_WEBHOOK_SECRET
     secret: projects/vinylogix-v1/secrets/STRIPE_WEBHOOK_SECRET/versions/latest
     availability:
+      - BUILD
       - RUNTIME
   - variable: STRIPE_ESSENTIAL_MONTHLY_PRICE_ID
     secret: projects/vinylogix-v1/secrets/STRIPE_ESSENTIAL_MONTHLY_PRICE_ID/versions/latest
     availability:
+      - BUILD
       - RUNTIME
   - variable: STRIPE_ESSENTIAL_3MONTHS_PRICE_ID
     secret: projects/vinylogix-v1/secrets/STRIPE_ESSENTIAL_3MONTHS_PRICE_ID/versions/latest
     availability:
+      - BUILD
       - RUNTIME
   - variable: STRIPE_ESSENTIAL_YEARLY_PRICE_ID
     secret: projects/vinylogix-v1/secrets/STRIPE_ESSENTIAL_YEARLY_PRICE_ID/versions/latest
     availability:
+      - BUILD
       - RUNTIME
   - variable: STRIPE_GROWTH_MONTHLY_PRICE_ID
     secret: projects/vinylogix-v1/secrets/STRIPE_GROWTH_MONTHLY_PRICE_ID/versions/latest
     availability:
+      - BUILD
       - RUNTIME
   - variable: STRIPE_GROWTH_3MONTHS_PRICE_ID
     secret: projects/vinylogix-v1/secrets/STRIPE_GROWTH_3MONTHS_PRICE_ID/versions/latest
     availability:
+      - BUILD
       - RUNTIME
   - variable: STRIPE_GROWTH_YEARLY_PRICE_ID
     secret: projects/vinylogix-v1/secrets/STRIPE_GROWTH_YEARLY_PRICE_ID/versions/latest
     availability:
+      - BUILD
       - RUNTIME
   - variable: STRIPE_SCALE_MONTHLY_PRICE_ID
     secret: projects/vinylogix-v1/secrets/STRIPE_SCALE_MONTHLY_PRICE_ID/versions/latest
     availability:
+      - BUILD
       - RUNTIME
   - variable: STRIPE_SCALE_3MONTHS_PRICE_ID
     secret: projects/vinylogix-v1/secrets/STRIPE_SCALE_3MONTHS_PRICE_ID/versions/latest
     availability:
+      - BUILD
       - RUNTIME
   - variable: STRIPE_SCALE_YEARLY_PRICE_ID
     secret: projects/vinylogix-v1/secrets/STRIPE_SCALE_YEARLY_PRICE_ID/versions/latest
     availability:
+      - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
     secret: projects/vinylogix-v1/secrets/NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY/versions/latest
