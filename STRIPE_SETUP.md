@@ -62,16 +62,17 @@ The application's code in `src/app/api/stripe/checkout-session/route.ts` expects
 
 ### Step 3: Set Up Webhooks
 
-Webhooks are essential for Stripe to communicate back to your application about payment events (e.g., successful payments, subscription updates).
+Webhooks are essential for Stripe to communicate back to your application about payment events (e.g., successful payments, subscription updates). A single webhook endpoint can handle events for both platform subscriptions and marketplace payments.
 
 1.  Navigate to **Developers > Webhooks** in your Stripe Dashboard.
 2.  Click **+ Add an endpoint**.
-3.  For the "Endpoint URL", you will need to create an API route in your application to handle these events. A common URL would be `https://<your-app-domain>/api/stripe/webhook`.
+3.  For the "Endpoint URL", use `https://<your-app-domain>/api/stripe/webhook`.
 4.  For "Events to send", at a minimum, you must listen for:
     -   `checkout.session.completed`: To fulfill the purchase after a successful checkout.
     -   `invoice.payment_succeeded`: To confirm ongoing subscription payments.
     -   `customer.subscription.updated`: To handle plan changes.
     -   `customer.subscription.deleted`: To handle cancellations.
+    -   **`account.updated`**: **(Crucial for Connect)** To monitor the status of your distributors' connected accounts.
 5.  After creating the endpoint, Stripe will reveal a **"Signing secret"** (starts with `whsec_...`). This is your `STRIPE_WEBHOOK_SECRET`. Add it to your environment variables.
 
 ---
@@ -90,12 +91,12 @@ This part enables clients to pay your distributors directly. The platform can op
 
 Your application needs a flow where your distributors (the "sellers") can connect their own Stripe accounts to your platform.
 
-1.  **Create a "Connect to Stripe" Button:** In the distributor's settings or dashboard area, you'll need a button that initiates the Stripe Connect onboarding process.
-2.  **Create an API Endpoint for Onboarding:** This endpoint on your server will:
+1.  **"Connect to Stripe" Button:** In the distributor's settings or dashboard area, you'll need a button that initiates the Stripe Connect onboarding process.
+2.  **API Endpoint for Onboarding:** This endpoint on your server will:
     -   Use the Stripe Node.js library (`stripe.accountLinks.create`).
     -   Create an `account_link` for the distributor's Stripe Account ID (which you'll need to create and store first if it doesn't exist).
     -   The `refresh_url` and `return_url` should point back to your application so you can handle the success or failure of the onboarding process.
-3.  **Store the Stripe Account ID:** When a distributor successfully completes the onboarding, Stripe will redirect them back to your `return_url`. You must capture the event, retrieve the distributor's Stripe Account ID (`acct_...`), and save it to their profile in your Firestore database.
+3.  **Store the Stripe Account ID:** When a distributor successfully completes the onboarding, Stripe will redirect them back to your `return_url`. You must capture the event, retrieve the distributor's Stripe Account ID (`acct_...`), and save it to their profile in your Firestore database. The `account.updated` webhook will then keep the status of this account in sync.
 
 ### Step 3: Implement the Payment Flow
 
@@ -113,12 +114,12 @@ This ensures the client's payment is routed directly to the distributor's Stripe
 
 ## Summary of Code Files to Check/Implement
 
--   **Subscriptions:**
+-   **Subscriptions & Webhooks:**
     -   `src/app/api/stripe/checkout-session/route.ts`: Contains the logic for creating subscription checkout sessions.
     -   `src/app/register/page.tsx`: The page that calls the checkout session endpoint.
-    -   `(New file)` `src/app/api/stripe/webhook/route.ts`: The endpoint to handle incoming webhooks from Stripe.
+    -   `src/app/api/stripe/webhook/route.ts`: **(Crucial)** The single endpoint to handle incoming webhooks from Stripe for both Billing and Connect.
 -   **Marketplace (Connect):**
-    -   `(New file)` `src/app/api/stripe/connect/onboard/route.ts`: To create account links for distributor onboarding.
+    -   `src/app/api/stripe/connect/onboard/route.ts`: To create account links for distributor onboarding.
     -   `(New file)` `src/app/api/stripe/connect/checkout/route.ts`: To create checkout sessions for client orders, routing payment to the distributor.
     -   `src/app/(app)/settings/page.tsx`: Where you would add the "Connect to Stripe" button for distributors.
     -   `src/app/checkout/page.tsx`: The page that would call the Connect checkout endpoint.
