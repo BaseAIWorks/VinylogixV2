@@ -42,8 +42,10 @@ export async function POST(req: NextRequest) {
              return NextResponse.json({ error: `Price ID for tier '${tier}' (${billing}) is not configured in the environment variables.` }, { status: 500 });
         }
         
-        const successUrl = `${req.nextUrl.origin}/register?stripe_session_id={CHECKOUT_SESSION_ID}`;
-        const cancelUrl = `${req.nextUrl.origin}/pricing`;
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
+
+        const successUrl = `${siteUrl}/register?stripe_session_id={CHECKOUT_SESSION_ID}`;
+        const cancelUrl = `${siteUrl}/pricing`;
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],

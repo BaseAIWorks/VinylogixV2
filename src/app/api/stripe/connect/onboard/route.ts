@@ -31,10 +31,12 @@ export async function POST(req: NextRequest) {
       // Save the new account ID to the distributor's document in Firestore
       await updateDistributor(distributorId, { stripeAccountId: accountId, stripeAccountStatus: 'pending' });
     }
+    
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
 
     // 2. Create an account link for the onboarding flow
-    const returnUrl = `${req.nextUrl.origin}/settings?stripe_onboard=success`;
-    const refreshUrl = `${req.nextUrl.origin}/settings?stripe_onboard=refresh`;
+    const returnUrl = `${siteUrl}/settings?stripe_onboard=success`;
+    const refreshUrl = `${siteUrl}/settings?stripe_onboard=refresh`;
 
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
