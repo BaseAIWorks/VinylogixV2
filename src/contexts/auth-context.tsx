@@ -1070,8 +1070,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             'master', 
             distributor.id,
             { 
-              firstName: onboardingData.contactPerson.split(' ')[0],
-              lastName: onboardingData.contactPerson.split(' ').slice(1).join(' '),
+              firstName: onboardingData.firstName,
+              lastName: onboardingData.lastName,
               companyName: onboardingData.companyName,
             }
         );

@@ -68,7 +68,8 @@ export async function POST(req: NextRequest) {
             // Add metadata to the session itself to securely retrieve registration data later.
             metadata: {
                 userEmail: onboardingData.email,
-                contactPerson: onboardingData.contactPerson,
+                firstName: onboardingData.firstName,
+                lastName: onboardingData.lastName,
                 companyName: onboardingData.companyName,
             },
             success_url: successUrl,

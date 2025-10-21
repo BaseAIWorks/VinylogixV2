@@ -25,12 +25,18 @@ const companySchema = z.object({
   website: z.string().url("Please enter a valid URL (e.g., https://example.com)").optional().or(z.literal("")),
 });
 
-// Step 2: Personal Details
+// Step 2: Personal Details with new fields
 const personSchema = z.object({
-  contactPerson: z.string().min(2, "Contact person name is required"),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
+  confirmPassword: z.string(),
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
 });
+
 
 // Combined Schema for validation before payment step
 const formSchema = companySchema.merge(personSchema);
@@ -63,9 +69,13 @@ const StepContent = ({ activeStep, form, initialTier, initialBilling, isLoading 
         case 1:
             return (
                 <div className="space-y-4">
-                    <FormField control={form.control} name="contactPerson" render={({ field }) => (<FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} placeholder="Jan Jansen" /></FormControl><FormMessage /></FormItem>)} />
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField control={form.control} name="firstName" render={({ field }) => (<FormItem><FormLabel>First Name</FormLabel><FormControl><Input {...field} placeholder="Jan" /></FormControl><FormMessage /></FormItem>)} />
+                      <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} placeholder="Jansen" /></FormControl><FormMessage /></FormItem>)} />
+                    </div>
                     <FormField control={form.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email Address</FormLabel><FormControl><Input type="email" {...field} placeholder="you@yourstore.com" /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="password" render={({ field }) => (<FormItem><FormLabel>Password</FormLabel><FormControl><Input type="password" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="confirmPassword" render={({ field }) => (<FormItem><FormLabel>Confirm Password</FormLabel><FormControl><Input type="password" {...field} /></FormControl><FormMessage /></FormItem>)} />
                 </div>
             );
         case 2:
@@ -106,16 +116,18 @@ export default function RegisterPage() {
             kvkNumber: "",
             vatNumber: "",
             website: "",
-            contactPerson: "",
+            firstName: "",
+            lastName: "",
             email: "",
             password: "",
+            confirmPassword: "",
         },
     });
 
     const triggerValidation = async () => {
         let fieldsToValidate: (keyof OnboardingFormValues)[] = [];
         if (activeStep === 0) fieldsToValidate = ["companyName", "kvkNumber", "vatNumber", "website"];
-        if (activeStep === 1) fieldsToValidate = ["contactPerson", "email", "password"];
+        if (activeStep === 1) fieldsToValidate = ["firstName", "lastName", "email", "password", "confirmPassword"];
         
         const isValid = await form.trigger(fieldsToValidate);
         if (isValid) {

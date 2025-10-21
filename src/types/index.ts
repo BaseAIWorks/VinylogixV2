@@ -7,9 +7,11 @@ export interface OnboardingFormValues {
   kvkNumber?: string;
   vatNumber?: string;
   website?: string;
-  contactPerson: string;
+  firstName: string;
+  lastName: string;
   email: string;
   password?: string;
+  confirmPassword?: string;
 }
 
 export interface FirestoreCartItem {
