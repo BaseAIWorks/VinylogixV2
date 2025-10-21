@@ -4,15 +4,15 @@
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, Controller, UseFormReturn } from "react-hook-form";
+import { useForm, UseFormReturn } from "react-hook-form";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Stepper, Step, StepIndicator, StepStatus, StepNumber, StepTitle, StepDescription, StepSeparator, useSteps, StepIcon } from "@/components/ui/stepper";
+import { Stepper, Step, StepIndicator, StepStatus, StepNumber, StepTitle, useSteps, StepIcon } from "@/components/ui/stepper";
 import { Check, Loader2, Building, User, Key, ArrowRight, AlertTriangle } from "lucide-react";
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import type { SubscriptionTier } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -37,14 +37,13 @@ const personSchema = z.object({
   path: ["confirmPassword"],
 });
 
-
-// Combined Schema for validation before payment step
+// Combined Schema for validation
 const formSchema = companySchema.merge(personSchema);
 export type OnboardingFormValues = z.infer<typeof formSchema>;
 
 const steps = [
-  { label: "Company", icon: Building },
-  { label: "Your Details", icon: User },
+  { label: "Company", icon: Building, fields: ["companyName", "kvkNumber", "vatNumber", "website"] as const },
+  { label: "Your Details", icon: User, fields: ["firstName", "lastName", "email", "password", "confirmPassword"] as const },
   { label: "Subscribe", icon: Key },
 ];
 
@@ -121,7 +120,7 @@ export default function RegisterPage() {
     const initialTier = searchParams.get('tier') as SubscriptionTier || 'growth';
     const initialBilling = searchParams.get('billing') || 'monthly';
     
-    const { activeStep, goToNext, goToPrevious, isDisabledStep, isLastStep, isOptionalStep } = useSteps({
+    const { activeStep, goToNext, goToPrevious, isLastStep } = useSteps({
         initialStep: 0,
         steps,
     });
@@ -142,10 +141,12 @@ export default function RegisterPage() {
     });
 
     const triggerValidation = async () => {
-        let fieldsToValidate: (keyof OnboardingFormValues)[] = [];
-        if (activeStep === 0) fieldsToValidate = ["companyName", "kvkNumber", "vatNumber", "website"];
-        if (activeStep === 1) fieldsToValidate = ["firstName", "lastName", "email", "password", "confirmPassword"];
-        
+        const fieldsToValidate = steps[activeStep].fields;
+        if (!fieldsToValidate) {
+            goToNext();
+            return;
+        }
+
         const isValid = await form.trigger(fieldsToValidate);
         if (isValid) {
             goToNext();
@@ -155,26 +156,21 @@ export default function RegisterPage() {
     async function handleSubscription() {
         setIsLoading(true);
         const values = form.getValues();
-        // Prepend https:// to website if it's not empty and doesn't already have it
-        const websiteValue = values.website ? (values.website.startsWith('https://') ? values.website : `https://${values.website}`) : '';
-
+        const websiteValue = values.website ? (values.website.startsWith('https://') ? values.website : `https://${values.website}`) : undefined;
+        
         const onboardingData = { ...values, website: websiteValue };
 
         try {
-            // Before redirecting, we store form data in localStorage
-            // so we can retrieve it after the redirect from Stripe.
             localStorage.setItem('onboarding_data', JSON.stringify(onboardingData));
 
             const response = await fetch('/api/stripe/checkout-session', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     tier: initialTier, 
                     billing: initialBilling,
-                    email: values.email, // Pass email for pre-filling
-                    onboardingData: onboardingData, // Pass all data to Stripe metadata
+                    email: values.email,
+                    onboardingData: onboardingData,
                 }),
             });
 
@@ -185,7 +181,7 @@ export default function RegisterPage() {
 
             const { url } = await response.json();
             if (url) {
-                window.location.href = url; // Redirect to Stripe
+                window.location.href = url;
             } else {
                 throw new Error("Stripe checkout URL not found.");
             }
@@ -193,7 +189,6 @@ export default function RegisterPage() {
         } catch (error) {
             console.error("Subscription error:", error);
             toast({ title: "Subscription Error", description: (error as Error).message, variant: "destructive" });
-        } finally {
             setIsLoading(false);
         }
     }
