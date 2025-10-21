@@ -22,7 +22,7 @@ const companySchema = z.object({
   companyName: z.string().min(2, "Company name is required"),
   kvkNumber: z.string().optional(), // KVK or equivalent chamber of commerce number
   vatNumber: z.string().optional(),
-  website: z.string().url("Please enter a valid URL (e.g., https://example.com)").optional().or(z.literal("")),
+  website: z.string().optional(),
 });
 
 // Step 2: Personal Details with new fields
@@ -48,13 +48,9 @@ const steps = [
   { label: "Subscribe", icon: Key },
 ];
 
-// Moved StepContent outside the main component to prevent re-rendering issues.
-const StepContent = ({ activeStep, form, initialTier, initialBilling, isLoading }: { 
+const StepContent = ({ activeStep, form }: { 
     activeStep: number; 
     form: UseFormReturn<OnboardingFormValues>;
-    initialTier: SubscriptionTier;
-    initialBilling: string;
-    isLoading: boolean;
 }) => {
     switch (activeStep) {
         case 0:
@@ -63,7 +59,24 @@ const StepContent = ({ activeStep, form, initialTier, initialBilling, isLoading 
                     <FormField control={form.control} name="companyName" render={({ field }) => (<FormItem><FormLabel>Company Name</FormLabel><FormControl><Input {...field} placeholder="Your Record Store B.V." /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="kvkNumber" render={({ field }) => (<FormItem><FormLabel>KVK Number (or equivalent)</FormLabel><FormControl><Input {...field} placeholder="12345678" /></FormControl><FormMessage /></FormItem>)} />
                     <FormField control={form.control} name="vatNumber" render={({ field }) => (<FormItem><FormLabel>VAT Number</FormLabel><FormControl><Input {...field} placeholder="NL001234567B01" /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="website" render={({ field }) => (<FormItem><FormLabel>Website</FormLabel><FormControl><Input {...field} placeholder="https://yourstore.com" /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField
+                      control={form.control}
+                      name="website"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Website</FormLabel>
+                          <div className="flex items-center">
+                            <span className="text-sm text-muted-foreground rounded-l-md border border-r-0 bg-muted px-3 h-10 flex items-center">
+                              https://
+                            </span>
+                            <FormControl>
+                               <Input {...field} placeholder="yourstore.com" className="rounded-l-none" />
+                            </FormControl>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                 </div>
             );
         case 1:
@@ -79,10 +92,14 @@ const StepContent = ({ activeStep, form, initialTier, initialBilling, isLoading 
                 </div>
             );
         case 2:
+           const { getValues } = form;
+           const values = getValues();
+           const tier = useSearchParams().get('tier') || 'growth';
+           const billing = useSearchParams().get('billing') || 'monthly';
             return (
                 <div className="space-y-4 text-center">
                     <h3 className="text-lg font-semibold">Ready to Start?</h3>
-                    <p className="text-muted-foreground">You're signing up for the <span className="font-semibold text-primary capitalize">{initialTier}</span> plan, billed {initialBilling}.</p>
+                    <p className="text-muted-foreground">You're signing up for the <span className="font-semibold text-primary capitalize">{tier}</span> plan, billed {billing}.</p>
                     <p className="text-sm text-muted-foreground">After registration, you'll be prompted to connect your Stripe account to receive payments from your customers.</p>
                     <div className="p-4 bg-muted/50 rounded-lg">
                        <p className="font-bold">7-Day Free Trial Included!</p>
@@ -138,10 +155,15 @@ export default function RegisterPage() {
     async function handleSubscription() {
         setIsLoading(true);
         const values = form.getValues();
+        // Prepend https:// to website if it's not empty and doesn't already have it
+        const websiteValue = values.website && !values.website.startsWith('https://') 
+            ? `https://${values.website}`
+            : values.website;
+
         try {
             // Before redirecting, we store form data in localStorage
             // so we can retrieve it after the redirect from Stripe.
-            localStorage.setItem('onboarding_data', JSON.stringify(values));
+            localStorage.setItem('onboarding_data', JSON.stringify({...values, website: websiteValue}));
 
             const response = await fetch('/api/stripe/checkout-session', {
                 method: 'POST',
@@ -152,7 +174,7 @@ export default function RegisterPage() {
                     tier: initialTier, 
                     billing: initialBilling,
                     email: values.email, // Pass email for pre-filling
-                    onboardingData: values, // Pass all data for metadata
+                    onboardingData: {...values, website: websiteValue},
                 }),
             });
 
@@ -234,9 +256,6 @@ export default function RegisterPage() {
                          <StepContent 
                            activeStep={activeStep} 
                            form={form} 
-                           initialTier={initialTier} 
-                           initialBilling={initialBilling} 
-                           isLoading={isLoading} 
                          />
                           <div className="flex justify-between mt-8">
                                 <Button type="button" variant="outline" onClick={goToPrevious} disabled={activeStep === 0}>
