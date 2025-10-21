@@ -11,7 +11,7 @@ import { SubscriptionTiers } from "@/types";
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { getSubscriptionTiers, updateSubscriptionTiers, getWeightOptions, updateWeightOptions } from "@/services/subscription-service";
+import { getSubscriptionTiers, updateSubscriptionTiers, getWeightOptions, updateWeightOptions } from "@/services/client-subscription-service";
 import { useRouter } from "next/navigation";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -285,7 +285,7 @@ export default function PlatformSettingsPage() {
                             <CardDescription>Configure payment providers and platform transaction fees.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <Accordion type="single" collapsible className="w-full">
+                            <Accordion type="single" collapsible className="w-full" defaultValue="stripe">
                                 <AccordionItem value="stripe">
                                     <AccordionTrigger>
                                         <div className="flex items-center justify-between w-full pr-4">

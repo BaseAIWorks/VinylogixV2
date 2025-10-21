@@ -1,9 +1,10 @@
 
-"use client";
+"use server"; // This is now a server-only module
 
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { getAdminDb } from '@/lib/firebase-admin';
 import type { SubscriptionInfo, SubscriptionTier, WeightOption } from '@/types';
+import { db } from '@/lib/firebase'; // Keep client db for client functions if any were left
 
 const SETTINGS_COLLECTION = 'settings';
 const SUBSCRIPTION_TIERS_DOC_ID = 'subscriptionTiers';
@@ -60,82 +61,30 @@ const defaultWeightOptions: WeightOption[] = [
 ];
 
 
-export async function getSubscriptionTiers(): Promise<Record<SubscriptionTier, SubscriptionInfo>> {
-    const docRef = doc(db, SETTINGS_COLLECTION, SUBSCRIPTION_TIERS_DOC_ID);
-    try {
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-            const dbTiers = docSnap.data() as Partial<Record<SubscriptionTier, SubscriptionInfo>>;
-            // Merge with defaults to ensure all fields are present, especially if some are new
-            const mergedTiers: Record<SubscriptionTier, SubscriptionInfo> = {
-                essential: { ...defaultTiers.essential, ...dbTiers.essential },
-                growth: { ...defaultTiers.growth, ...dbTiers.growth },
-                scale: { ...defaultTiers.scale, ...dbTiers.scale },
-            };
-            return mergedTiers;
-        } else {
-            // Document doesn't exist, create it with default values for future admin edits.
-            await setDoc(docRef, defaultTiers);
-            return defaultTiers;
-        }
-    } catch (error) {
-        console.error("SubscriptionService: Error fetching subscription tiers:", error);
-        // Fallback to defaults in case of error (e.g., permissions issue)
-        return defaultTiers;
-    }
-}
-
-
-export async function updateSubscriptionTiers(tiers: Record<SubscriptionTier, SubscriptionInfo>): Promise<boolean> {
-  const docRef = doc(db, SETTINGS_COLLECTION, SUBSCRIPTION_TIERS_DOC_ID);
+export async function getSubscriptionTiersOnServer(): Promise<Record<SubscriptionTier, SubscriptionInfo>> {
+  const adminDb = getAdminDb();
+  if (!adminDb) {
+    console.warn("Admin SDK not available. Falling back to default tiers on server.");
+    return defaultTiers;
+  }
+  const docRef = adminDb.collection(SETTINGS_COLLECTION).doc(SUBSCRIPTION_TIERS_DOC_ID);
   try {
-    // Using setDoc with merge true will create the doc if it doesn't exist, or update it if it does.
-    await setDoc(docRef, tiers, { merge: true });
-    return true;
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
+      const dbTiers = docSnap.data() as Partial<Record<SubscriptionTier, SubscriptionInfo>>;
+      return {
+        essential: { ...defaultTiers.essential, ...dbTiers.essential },
+        growth: { ...defaultTiers.growth, ...dbTiers.growth },
+        scale: { ...defaultTiers.scale, ...dbTiers.scale },
+      };
+    }
+    return defaultTiers;
   } catch (error) {
-    console.error("SubscriptionService: Error updating subscription tiers:", error);
-    return false;
+    console.error("SubscriptionService [SERVER]: Error fetching subscription tiers:", error);
+    return defaultTiers;
   }
 }
 
-export async function getWeightOptions(): Promise<WeightOption[]> {
-    const docRef = doc(db, SETTINGS_COLLECTION, PLATFORM_SETTINGS_DOC_ID);
-     try {
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            // This is the corrected logic: it now correctly returns the database value if it exists,
-            // or an empty array if the field is missing, instead of falling back to defaults.
-            if (data && Array.isArray(data.weightOptions)) {
-                return data.weightOptions.map((opt: any, index: number) => ({
-                    ...opt,
-                    id: opt.id || `db_opt_${index}_${new Date().getTime()}`
-                }));
-            }
-            // If the document exists but has no weightOptions array, return empty.
-            return [];
-        } else {
-            // Document doesn't exist at all, create it with default values.
-            await setDoc(docRef, { weightOptions: defaultWeightOptions }, { merge: true });
-            return defaultWeightOptions.map((opt, index) => ({
-                ...opt,
-                id: opt.id || `default_opt_${index}`
-            }));
-        }
-    } catch (error) {
-        console.error("SubscriptionService: Error fetching weight options:", error);
-        // Fallback to defaults ONLY if there's an actual error fetching the document.
-        return defaultWeightOptions;
-    }
-}
-
-export async function updateWeightOptions(options: WeightOption[]): Promise<boolean> {
-  const docRef = doc(db, SETTINGS_COLLECTION, PLATFORM_SETTINGS_DOC_ID);
-  try {
-    await setDoc(docRef, { weightOptions: options }, { merge: true });
-    return true;
-  } catch (error) {
-    console.error("SubscriptionService: Error updating weight options:", error);
-    return false;
-  }
-}
+// Client-side functions will be moved to a new file.
+// The functions getSubscriptionTiers, updateSubscriptionTiers, getWeightOptions, updateWeightOptions
+// will be moved to a new client-specific service file.

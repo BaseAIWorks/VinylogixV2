@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { User } from "@/types";
-import { getClientsByDistributorId, inviteClient } from "@/services/user-service";
+import { getClientsByDistributorId } from "@/services/user-service";
+import { inviteClient } from "@/services/client-user-service"; // Corrected import
 import Link from "next/link";
 import {
   DropdownMenu,

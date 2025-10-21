@@ -107,8 +107,6 @@ export async function getClientsByDistributorId(distributorId: string): Promise<
     console.log(`getClientsByDistributorId: Executing query for distributorId: ${distributorId}`);
     const usersCollectionRef = collection(db, USERS_COLLECTION);
     try {
-        // This specific query structure (`array-contains` with other clauses) often requires a composite index.
-        // Restructuring the query slightly can help Firestore generate the correct error message with the index creation link.
         let q = query(usersCollectionRef);
         q = query(q, where("accessibleDistributorIds", "array-contains", distributorId));
         
@@ -116,9 +114,8 @@ export async function getClientsByDistributorId(distributorId: string): Promise<
         console.log(`getClientsByDistributorId: Found ${querySnapshot.docs.length} clients.`);
         return querySnapshot.docs.map(docSnap => processUserTimestamps({ ...docSnap.data(), uid: docSnap.id }));
     } catch (error: any) {
-        // Log the specific error to the console, which should include the index creation link.
         console.error(`UserService: Error fetching clients for distributor ${distributorId}. This may be due to a missing Firestore index. Please check the browser console for an index creation link.`, error);
-        throw error; // Re-throw the error so the UI can catch it.
+        throw error; 
     }
 }
 
@@ -146,8 +143,6 @@ export async function getMasterUserByDistributorId(distributorId: string): Promi
 }
 
 
-// This function is now correctly implemented to use the Admin SDK,
-// allowing a master user to modify another user's access rights.
 export async function updateUserDistributorAccess(viewerEmail: string, distributorId: string, action: 'grant' | 'revoke'): Promise<void> {
     const adminDb = getAdminDb();
     if (!adminDb) {
@@ -184,29 +179,4 @@ export async function updateUserDistributorAccess(viewerEmail: string, distribut
         console.error(`UserService (Admin): Error updating access for ${viewerEmail}:`, error);
         throw error;
     }
-}
-
-
-// New function to be called from the client-side
-export async function inviteClient(email: string, distributorId: string, invitedBy: string): Promise<{ success: boolean, message: string }> {
-  try {
-    const response = await fetch('/api/clients/invite', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email, distributorId, invitedBy }),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || 'An unknown error occurred');
-    }
-
-    return result;
-  } catch (error) {
-    console.error("Error in inviteClient service:", error);
-    throw error;
-  }
 }

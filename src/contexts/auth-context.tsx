@@ -25,7 +25,7 @@ import { getBrandingSettings } from '@/services/settings-service';
 import { getDistributorById, updateDistributor, addDistributor as addDistributorService, getDistributorsByIds } from '@/services/distributor-service';
 import { getMasterUserByDistributorId, getClientsByDistributorId, updateUserDistributorAccess, getUsersByDistributorId as fetchUsersByDistributorId } from '@/services/user-service';
 import { verifyDiscogsUser, fetchAllDiscogsInventory } from '@/services/discogs-user-service';
-import { getWeightOptions as fetchWeightOptions } from '@/services/subscription-service';
+import { getWeightOptions as fetchWeightOptions } from '@/services/client-subscription-service';
 import { getAllUsers } from '@/services/admin-user-service';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getRecordById, searchRecordsByTerm as searchRecords } from '@/services/record-service';
