@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { getSubscriptionTiers } from "@/services/subscription-service";
+import { getSubscriptionTiers } from "@/services/client-subscription-service";
 import type { SubscriptionInfo, SubscriptionTier } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
@@ -376,7 +376,7 @@ export default function PricingPage() {
                         </div>
                         <h2 className="text-3xl font-bold tracking-tight text-primary sm:text-4xl">Transparent Transaction Fees</h2>
                         <p className="mt-4 text-lg text-muted-foreground">
-                            We believe in clear pricing. Beyond your subscription, you only pay for what you sell, and you&apos;ll still keep more of your money compared to other platforms.
+                            We believe in clear pricing. Beyond your subscription, you only pay for what you sell, and you'll still keep more of your money compared to other platforms.
                         </p>
                     </div>
 
