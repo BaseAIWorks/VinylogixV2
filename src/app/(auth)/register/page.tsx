@@ -17,7 +17,7 @@ import type { SubscriptionTier } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-// Step 1: Company Information
+// --- Form Schemas ---
 const companySchema = z.object({
   companyName: z.string().min(2, "Company name is required"),
   kvkNumber: z.string().optional(),
@@ -25,22 +25,23 @@ const companySchema = z.object({
   website: z.string().optional(),
 });
 
-// Step 2: Personal Details
 const personSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: z.string(),
-}).refine(data => data.password === data.confirmPassword, {
+});
+
+// Create a single combined schema for the whole form
+const formSchema = companySchema.merge(personSchema).refine(data => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
 });
 
-// Combined Schema for validation
-const formSchema = companySchema.merge(personSchema);
 export type OnboardingFormValues = z.infer<typeof formSchema>;
 
+// --- Step Definitions ---
 const steps = [
   { label: "Company", icon: Building, fields: ["companyName", "kvkNumber", "vatNumber", "website"] as const },
   { label: "Your Details", icon: User, fields: ["firstName", "lastName", "email", "password", "confirmPassword"] as const },
@@ -141,13 +142,13 @@ export default function RegisterPage() {
     });
 
     const triggerValidation = async () => {
-        const fieldsToValidate = steps[activeStep].fields;
-        if (!fieldsToValidate) {
+        const currentStepFields = steps[activeStep].fields;
+        if (!currentStepFields) {
             goToNext();
             return;
         }
 
-        const isValid = await form.trigger(fieldsToValidate);
+        const isValid = await form.trigger(currentStepFields);
         if (isValid) {
             goToNext();
         }
