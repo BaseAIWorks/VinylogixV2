@@ -29,6 +29,9 @@ const processDistributorTimestamps = (distributorData: any): Distributor => {
   if (processed.slugLastUpdatedAt && processed.slugLastUpdatedAt instanceof Timestamp) {
     processed.slugLastUpdatedAt = processed.slugLastUpdatedAt.toDate().toISOString();
   }
+  if (processed.subscription && processed.subscription.status) {
+    // This is just a string, no conversion needed unless it was a timestamp
+  }
   return processed as Distributor;
 };
 
@@ -187,6 +190,7 @@ export async function updateDistributor(
     const updateKeys = Object.keys(updatedData);
     const isOnlyCounterUpdate = updateKeys.length === 1 && updateKeys[0] === 'orderCounter';
     
+    // Looser permission for server actions like webhook handlers
     if (!isSuperAdmin && !isCorrectMasterUser && !isOnlyCounterUpdate && !isServerAction) {
         throw new Error("Permission Denied: You do not have permission to update this distributor.");
     }

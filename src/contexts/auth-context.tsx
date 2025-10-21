@@ -603,7 +603,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
     return () => unsubscribe();
   }, [fetchUserRole, toast, isImpersonating, setActiveDistributorId, loadCartFromFirestore, loadActiveDistributorData]);
-
+  
   const login = async (email: string, password?: string) => {
     if (!password) {
       toast({ title: "Login Failed", description: "Password is required.", variant: "destructive" });
@@ -1061,6 +1061,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             isSubscriptionExempt: false,
             stripeCustomerId: typeof session.customer === 'string' ? session.customer : undefined,
             subscriptionId: typeof session.subscription === 'string' ? session.subscription : undefined,
+            subscriptionStatus: 'trialing', // Start with trialing status
         });
 
         // Create the Master user
@@ -1081,7 +1082,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         // Link master user to distributor
-        await updateDistributor(distributor.id, { masterUserUid: newMasterUid }, user!);
+        await updateDistributor(distributor.id, { masterUserUid: newMasterUid });
 
         // Clean up
         localStorage.removeItem('onboarding_data');
@@ -1095,7 +1096,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } finally {
         setIsFinalizing(false);
     }
-  }, [toast, addUser, user, login]);
+  }, [toast, addUser, login]);
 
 
   useEffect(() => {

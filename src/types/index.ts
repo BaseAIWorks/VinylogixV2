@@ -1,5 +1,4 @@
 
-
 import { DocumentSnapshot } from 'firebase/firestore';
 // Add this new export at the top of the file
 export interface OnboardingFormValues {
@@ -156,6 +155,7 @@ export interface Distributor {
   stripeAccountStatus?: 'pending' | 'verified' | 'restricted' | 'details_needed';
   stripeCustomerId?: string; // For Stripe Billing
   subscriptionId?: string; // For Stripe Billing
+  subscriptionStatus?: SubscriptionStatus; // For Stripe Billing
 }
 
 export interface BrandingSettings {
