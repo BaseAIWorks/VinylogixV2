@@ -20,12 +20,12 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 // Step 1: Company Information
 const companySchema = z.object({
   companyName: z.string().min(2, "Company name is required"),
-  kvkNumber: z.string().optional(), // KVK or equivalent chamber of commerce number
+  kvkNumber: z.string().optional(),
   vatNumber: z.string().optional(),
   website: z.string().optional(),
 });
 
-// Step 2: Personal Details with new fields
+// Step 2: Personal Details
 const personSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
@@ -156,14 +156,14 @@ export default function RegisterPage() {
         setIsLoading(true);
         const values = form.getValues();
         // Prepend https:// to website if it's not empty and doesn't already have it
-        const websiteValue = values.website && !values.website.startsWith('https://') 
-            ? `https://${values.website}`
-            : values.website;
+        const websiteValue = values.website ? (values.website.startsWith('https://') ? values.website : `https://${values.website}`) : '';
+
+        const onboardingData = { ...values, website: websiteValue };
 
         try {
             // Before redirecting, we store form data in localStorage
             // so we can retrieve it after the redirect from Stripe.
-            localStorage.setItem('onboarding_data', JSON.stringify({...values, website: websiteValue}));
+            localStorage.setItem('onboarding_data', JSON.stringify(onboardingData));
 
             const response = await fetch('/api/stripe/checkout-session', {
                 method: 'POST',
@@ -174,7 +174,7 @@ export default function RegisterPage() {
                     tier: initialTier, 
                     billing: initialBilling,
                     email: values.email, // Pass email for pre-filling
-                    onboardingData: {...values, website: websiteValue},
+                    onboardingData: onboardingData, // Pass all data to Stripe metadata
                 }),
             });
 
