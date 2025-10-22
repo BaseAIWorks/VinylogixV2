@@ -21,9 +21,10 @@ export default function ChangelogPage() {
         setIsLoading(true);
         try {
             const fetchedChangelogs = await getChangelogs();
+            // Sort here to ensure order
             const sortedChangelogs = fetchedChangelogs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
             setChangelogs(sortedChangelogs);
-            // Mark as read when the user visits the page
+            
             if (user?.unreadChangelogs) {
                 markChangelogsAsRead();
             }
@@ -56,12 +57,10 @@ export default function ChangelogPage() {
                        <Accordion type="single" collapsible className="w-full">
                             {changelogs.map(entry => (
                                 <AccordionItem value={entry.id} key={entry.id}>
-                                    <AccordionTrigger>
-                                        <div className="flex flex-1 justify-between items-center pr-4 text-left">
-                                            <div>
-                                                <h3 className="text-lg font-semibold">{entry.title} <span className="text-base font-medium text-muted-foreground ml-2">(v{entry.version})</span></h3>
-                                                <p className="text-sm text-muted-foreground">{format(new Date(entry.createdAt), 'PPP')}</p>
-                                            </div>
+                                    <AccordionTrigger className="text-left">
+                                        <div>
+                                            <h3 className="text-lg font-semibold">{entry.title} <span className="text-base font-medium text-muted-foreground ml-2">(v{entry.version})</span></h3>
+                                            <p className="text-sm text-muted-foreground">{format(new Date(entry.createdAt), 'PPP')}</p>
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent>
@@ -81,3 +80,5 @@ export default function ChangelogPage() {
         </div>
     );
 }
+
+    

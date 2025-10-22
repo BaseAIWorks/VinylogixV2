@@ -165,18 +165,18 @@ export default function AdminChangelogPage() {
                            <Accordion type="single" collapsible className="w-full">
                                 {changelogs.map(entry => (
                                     <AccordionItem value={entry.id} key={entry.id}>
-                                        <AccordionTrigger>
-                                            <div className="flex flex-1 justify-between items-center pr-4">
-                                                <div className="text-left">
+                                        <div className="flex justify-between items-center pr-4">
+                                            <AccordionTrigger className="flex-1 text-left pr-4">
+                                                <div>
                                                     <h3 className="text-lg font-semibold">{entry.title} <span className="text-base font-medium text-muted-foreground ml-2">(v{entry.version})</span></h3>
                                                     <p className="text-sm text-muted-foreground">{format(new Date(entry.createdAt), 'PPP')}</p>
                                                 </div>
-                                                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                                                    <Button variant="outline" size="icon" onClick={() => openEditDialog(entry)}><Edit className="h-4 w-4"/></Button>
-                                                    <Button variant="destructive" size="icon" onClick={() => {setEntryToDelete(entry); setIsDeleteDialogOpen(true);}}><Trash2 className="h-4 w-4"/></Button>
-                                                </div>
+                                            </AccordionTrigger>
+                                            <div className="flex gap-2 shrink-0">
+                                                <Button variant="outline" size="icon" onClick={() => openEditDialog(entry)}><Edit className="h-4 w-4"/></Button>
+                                                <Button variant="destructive" size="icon" onClick={() => {setEntryToDelete(entry); setIsDeleteDialogOpen(true);}}><Trash2 className="h-4 w-4"/></Button>
                                             </div>
-                                        </AccordionTrigger>
+                                        </div>
                                         <AccordionContent>
                                             <div className="prose prose-sm dark:prose-invert max-w-none pt-2 whitespace-pre-wrap">{entry.notes}</div>
                                         </AccordionContent>
@@ -253,3 +253,5 @@ export default function AdminChangelogPage() {
         </>
     );
 }
+
+    
