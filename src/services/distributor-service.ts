@@ -183,26 +183,40 @@ export async function updateDistributor(
   const distributorDocRef = doc(db, DISTRIBUTORS_COLLECTION, id);
   
   try {
+    const docSnap = await getDoc(distributorDocRef);
+    if (!docSnap.exists()) {
+      throw new Error("Distributor document not found.");
+    }
+    const currentData = docSnap.data() as Distributor;
+
+    // Define allowed update scenarios
     const isSuperAdmin = actingUser?.role === 'superadmin';
     const isCorrectMasterUser = actingUser?.role === 'master' && actingUser.distributorId === id;
-    const isServerAction = actingUser?.email === 'server-action';
+    const isServerAction = actingUser?.email === 'server-action'; // For webhooks
+    const isOnlyCounterUpdate = Object.keys(updatedData).length === 1 && 'orderCounter' in updatedData;
     
-    const updateKeys = Object.keys(updatedData);
-    const isOnlyCounterUpdate = updateKeys.length === 1 && updateKeys[0] === 'orderCounter';
-    
-    // Looser permission for server actions like webhook handlers
-    if (!isSuperAdmin && !isCorrectMasterUser && !isOnlyCounterUpdate && !isServerAction) {
+    // Special case for initial master user linking during registration
+    const isInitialMasterUserLink = 
+        Object.keys(updatedData).length === 1 && 
+        'masterUserUid' in updatedData &&
+        !currentData.masterUserUid; // The field must not be set yet
+
+    if (
+        !isSuperAdmin &&
+        !isCorrectMasterUser &&
+        !isServerAction &&
+        !isOnlyCounterUpdate &&
+        !isInitialMasterUserLink // <-- ADD THIS EXCEPTION
+    ) {
         throw new Error("Permission Denied: You do not have permission to update this distributor.");
     }
+    
 
     if (updatedData.slug) {
         const initialSlug = createSlug(updatedData.slug);
         const uniqueSlug = await ensureUniqueSlug(initialSlug);
         updatedData.slug = uniqueSlug;
         
-        const docSnap = await getDoc(distributorDocRef);
-        const currentData = docSnap.data() as Distributor;
-
         if (!isSuperAdmin && currentData.slugLastUpdatedAt) {
             const lastUpdate = new Date(currentData.slugLastUpdatedAt);
             const oneMonthAgo = new Date();
@@ -246,3 +260,4 @@ export async function deleteDistributor(id: string): Promise<boolean> {
     throw error;
   }
 }
+
