@@ -36,7 +36,7 @@ const processUserTimestamps = (userData: any): any => {
   
 // This is a secure, server-side function to delete a user from Authentication.
 // It can only be called by authenticated users with a 'master' or 'superadmin' role.
-export const deleteAuthUser = onCall({ region: "europe-west4", enforceAppCheck: false }, async (request) => {
+export const deleteAuthUser = onCall({ region: "europe-west4", enforceAppCheck: false, cors: true }, async (request) => {
   // CRITICAL: Check if the user is authenticated.
   if (!request.auth) {
     logger.warn("deleteAuthUser was called by an unauthenticated user.");
@@ -83,7 +83,7 @@ export const deleteAuthUser = onCall({ region: "europe-west4", enforceAppCheck: 
 
 // This is a secure, server-side function to fetch all users.
 // It can only be called by authenticated users.
-export const getAllUsers = onCall({ region: "europe-west4" }, async (request) => {
+export const getAllUsers = onCall({ region: "europe-west4", cors: true }, async (request) => {
   // CRITICAL: Check if the user is authenticated FIRST.
   if (!request.auth) {
     logger.warn("getAllUsers was called by an unauthenticated user.");
