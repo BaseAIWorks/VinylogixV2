@@ -30,6 +30,7 @@ import { getAllUsers } from '@/services/admin-user-service';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getRecordById, searchRecordsByTerm as searchRecords } from '@/services/record-service';
 import { getSuppliersByDistributorId } from '@/services/supplier-service';
+import { getSubscriptionTiersOnServer } from '@/services/subscription-service';
 
 
 interface AuthContextType {
@@ -426,6 +427,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           discogsUserId: userData.discogsUserId,
           permissions: userData.permissions,
           profileComplete: userData.profileComplete || false,
+          unreadChangelogs: userData.unreadChangelogs || false,
         };
       } else {
         if (!firebaseUser.email) return null;
@@ -1062,8 +1064,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             throw new Error("Session email does not match registration email. Please try registering again.");
         }
         
-        const subscriptionTiers = await getSubscriptionTiers();
-        const chosenTier = subscriptionTiers[session.metadata.tier as UserRole];
+        const subscriptionTiers = await getSubscriptionTiersOnServer();
+        const chosenTier = subscriptionTiers[session.metadata.tier as SubscriptionTier];
+
+        if (!chosenTier) {
+            throw new Error(`The selected subscription tier '${session.metadata.tier}' is invalid. Please start the registration process again.`);
+        }
 
         // Create the distributor
         const distributor = await addDistributorService({

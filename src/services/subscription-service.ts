@@ -52,15 +52,6 @@ const defaultTiers: Record<SubscriptionTier, SubscriptionInfo> = {
   },
 };
 
-const defaultWeightOptions: WeightOption[] = [
-    { id: 'default_1', label: "Single LP (12\")", weight: 280, isFixed: true },
-    { id: 'default_2', label: "Single LP (180g)", weight: 340, isFixed: true },
-    { id: 'default_3', label: "Double LP (2x12\")", weight: 480, isFixed: true },
-    { id: 'default_4', label: "7\" Single", weight: 120, isFixed: true },
-    { id: 'default_5', label: "CD Album", weight: 100, isFixed: true },
-];
-
-
 export async function getSubscriptionTiersOnServer(): Promise<Record<SubscriptionTier, SubscriptionInfo>> {
   const adminDb = getAdminDb();
   if (!adminDb) {
