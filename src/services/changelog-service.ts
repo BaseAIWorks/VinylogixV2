@@ -15,6 +15,7 @@ import {
   orderBy,
   writeBatch,
   where,
+  getDoc,
 } from 'firebase/firestore';
 
 const CHANGELOG_COLLECTION = 'changelog';
