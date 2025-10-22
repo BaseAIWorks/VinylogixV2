@@ -34,7 +34,7 @@ import {
   DropdownMenuPortal,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, ScanLine, BarChart3, Settings, LogOut, Menu, Heart, Package, ShoppingCart, Boxes, Library, ListChecks, Bell, Building, Check, Key, X, Shapes, Users, Briefcase, FileUp, Palette, Disc3, DollarSign, HardHat, Activity, FilePenLine, Store, ChevronsUpDown, Truck, Settings2 } from 'lucide-react';
+import { LayoutDashboard, ScanLine, BarChart3, Settings, LogOut, Menu, Heart, Package, ShoppingCart, Boxes, Library, ListChecks, Bell, Building, Check, Key, X, Shapes, Users, Briefcase, FileUp, Palette, Disc3, DollarSign, HardHat, Activity, FilePenLine, Store, ChevronsUpDown, Truck, Settings2, CreditCard } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import Image from 'next/image';
@@ -432,6 +432,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
                         </DropdownMenuSubContent>
                       </DropdownMenuPortal>
                     </DropdownMenuSub>
+                     {user.role === 'master' && (
+                      <DropdownMenuItem onClick={() => router.push('/subscription')}>
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        <span>Subscription</span>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onClick={() => router.push('/settings')}>
                       <Settings2 className="mr-2 h-4 w-4" />
                       <span>Settings</span>
