@@ -15,7 +15,7 @@ import { getDistributorById, updateDistributor, deleteDistributor } from "@/serv
 import { getUsersByDistributorId } from "@/services/user-service";
 import { getRecordsByDistributorId } from "@/services/record-service";
 import { getOrdersByDistributorId } from "@/services/order-service";
-import { getSubscriptionTiers } from "@/services/subscription-service";
+import { getSubscriptionTiers } from "@/services/client-subscription-service";
 import { useParams, useRouter } from "next/navigation";
 import { format } from 'date-fns';
 import {

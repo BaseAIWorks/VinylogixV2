@@ -12,7 +12,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { getDistributors, addDistributor, updateDistributor, deleteDistributor } from "@/services/distributor-service";
-import { getSubscriptionTiers } from "@/services/subscription-service";
+import { getSubscriptionTiers } from "@/services/client-subscription-service";
 import { useRouter } from "next/navigation";
 import { format } from 'date-fns';
 import {
