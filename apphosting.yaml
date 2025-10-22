@@ -36,6 +36,11 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  - variable: NEXT_PUBLIC_DISCOGS_API_TOKEN
+    secret: projects/vinylogix-v1/secrets/NEXT_PUBLIC_DISCOGS_API_TOKEN/versions/latest
+    availability:
+      - BUILD
+      - RUNTIME
   - variable: RESEND_API_KEY # The name your application expects to find
     secret: projects/vinylogix-v1/secrets/RESEND_API_KEY/versions/latest # Reference to the secret for sending emails
     availability:
