@@ -83,7 +83,7 @@ export const deleteAuthUser = onCall({ region: "europe-west4", enforceAppCheck: 
 
 // This is a secure, server-side function to fetch all users.
 // It can only be called by authenticated users.
-export const getAllUsers = onCall({ region: "europe-west4" }, async (request) => {
+export const getAllUsers = onCall({ region: "europe-west4", cors: true }, async (request) => {
   // CRITICAL: Check if the user is authenticated FIRST.
   if (!request.auth) {
     logger.warn("getAllUsers was called by an unauthenticated user.");
@@ -182,6 +182,14 @@ export const setCustomUserClaimsOnUserWrite = onDocumentWritten('users/{userId}'
         newClaims.accessibleDistributorIds = accessibleDistributorIds;
     } else if (newClaims.accessibleDistributorIds !== undefined) { // Als array nu ontbreekt in Firestore, verwijder uit claims
         delete newClaims.accessibleDistributorIds;
+    }
+
+    // ** NIEUW ** Controleer en update de 'unreadChangelogs' claim
+    const unreadChangelogs = afterData.unreadChangelogs;
+    if (typeof unreadChangelogs === 'boolean') {
+        newClaims.unreadChangelogs = unreadChangelogs;
+    } else if (newClaims.unreadChangelogs !== undefined) { // Als veld nu ontbreekt, verwijder uit claims
+        delete newClaims.unreadChangelogs;
     }
     
     // Controleer of de nieuwe claims daadwerkelijk verschillen van de huidige claims

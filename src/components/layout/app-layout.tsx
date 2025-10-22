@@ -313,6 +313,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             {availableNavItems.map((item) => {
               const label = (user?.role === 'viewer' && item.href === '/inventory') ? 'Catalog' : item.label;
               const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+              const showChangelogBadge = (item.href === '/changelog' || item.href === '/admin/changelog') && user?.unreadChangelogs;
 
               return (
               <SidebarMenuItem key={item.href} onClick={handleNavItemClick}>
@@ -336,9 +337,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 )}
                  {item.href === '/notifications' && unreadNotificationsCount > 0 && (
                   <SidebarMenuBadge>{unreadNotificationsCount}</SidebarMenuBadge>
-                )}
-                 {(item.href === '/changelog' || item.href === '/admin/changelog') && user?.unreadChangelogs && (
-                  <SidebarMenuBadge>New</SidebarMenuBadge>
+                 )}
+                 {showChangelogBadge && (
+                    <SidebarMenuBadge>New</SidebarMenuBadge>
                  )}
               </SidebarMenuItem>
               )
