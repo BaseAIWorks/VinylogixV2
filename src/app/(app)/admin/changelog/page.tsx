@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, PlusCircle, Newspaper, Edit, Trash2 } from "lucide-react";
+import { Loader2, PlusCircle, Newspaper, Edit, Trash2, CalendarIcon } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import type { ChangelogEntry } from "@/types";
 import { getChangelogs, addChangelog, updateChangelog, deleteChangelog } from "@/services/changelog-service";
@@ -32,11 +32,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 
-const emptyFormState: Omit<ChangelogEntry, 'id' | 'date'> = {
+
+const emptyFormState: Omit<ChangelogEntry, 'id'> = {
     version: "",
     title: "",
-    content: ""
+    notes: "",
+    createdAt: new Date().toISOString(),
 };
 
 export default function AdminChangelogPage() {
@@ -76,6 +81,12 @@ export default function AdminChangelogPage() {
         setFormState(prev => ({ ...prev, [e.target.id]: e.target.value }));
     };
 
+    const handleDateChange = (date: Date | undefined) => {
+        if (date) {
+            setFormState(prev => ({...prev, createdAt: date.toISOString()}));
+        }
+    }
+
     const openAddDialog = () => {
         setEditingEntry(null);
         setFormState(emptyFormState);
@@ -87,13 +98,14 @@ export default function AdminChangelogPage() {
         setFormState({
             version: entry.version,
             title: entry.title,
-            content: entry.content
+            notes: entry.notes,
+            createdAt: entry.createdAt
         });
         setIsDialogOpen(true);
     };
 
     const handleFormSubmit = async () => {
-        if (!formState.version || !formState.title || !formState.content) {
+        if (!formState.version || !formState.title || !formState.notes) {
             toast({ title: "Validation Error", description: "All fields are required.", variant: "destructive" });
             return;
         }
@@ -156,7 +168,7 @@ export default function AdminChangelogPage() {
                                             <div className="flex flex-1 justify-between items-center pr-4">
                                                 <div className="text-left">
                                                     <h3 className="text-lg font-semibold">{entry.title} <span className="text-base font-medium text-muted-foreground ml-2">(v{entry.version})</span></h3>
-                                                    <p className="text-sm text-muted-foreground">{format(new Date(entry.date), 'PPP')}</p>
+                                                    <p className="text-sm text-muted-foreground">{format(new Date(entry.createdAt), 'PPP')}</p>
                                                 </div>
                                                 <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                                                     <Button variant="outline" size="icon" onClick={() => openEditDialog(entry)}><Edit className="h-4 w-4"/></Button>
@@ -165,7 +177,7 @@ export default function AdminChangelogPage() {
                                             </div>
                                         </AccordionTrigger>
                                         <AccordionContent>
-                                            <div className="prose prose-sm dark:prose-invert max-w-none pt-2 whitespace-pre-wrap">{entry.content}</div>
+                                            <div className="prose prose-sm dark:prose-invert max-w-none pt-2 whitespace-pre-wrap">{entry.notes}</div>
                                         </AccordionContent>
                                     </AccordionItem>
                                 ))}
@@ -188,7 +200,29 @@ export default function AdminChangelogPage() {
                     <div className="grid gap-4 py-4">
                         <div className="space-y-2"><Label htmlFor="version">Version</Label><Input id="version" value={formState.version} onChange={handleFormChange} placeholder="e.g., 1.0.1" /></div>
                         <div className="space-y-2"><Label htmlFor="title">Title</Label><Input id="title" value={formState.title} onChange={handleFormChange} placeholder="e.g., New Feature Release" /></div>
-                        <div className="space-y-2"><Label htmlFor="content">Content (Markdown supported)</Label><Textarea id="content" value={formState.content} onChange={handleFormChange} className="min-h-[200px]" placeholder="Describe the changes..."/></div>
+                         <div className="space-y-2">
+                             <Label htmlFor="createdAt">Date</Label>
+                             <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                    variant={"outline"}
+                                    className={cn("w-full justify-start text-left font-normal", !formState.createdAt && "text-muted-foreground")}
+                                    >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {formState.createdAt ? format(new Date(formState.createdAt), "PPP") : <span>Pick a date</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                        mode="single"
+                                        selected={formState.createdAt ? new Date(formState.createdAt) : undefined}
+                                        onSelect={handleDateChange}
+                                        initialFocus
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                        <div className="space-y-2"><Label htmlFor="notes">Content (Markdown supported)</Label><Textarea id="notes" value={formState.notes} onChange={handleFormChange} className="min-h-[200px]" placeholder="Describe the changes..."/></div>
                     </div>
                     <DialogFooter>
                         <DialogClose asChild><Button type="button" variant="ghost">Cancel</Button></DialogClose>

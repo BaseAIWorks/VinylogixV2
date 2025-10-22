@@ -19,8 +19,8 @@ const CHANGELOG_COLLECTION = 'changelog';
 
 const processChangelogTimestamps = (entryData: any): ChangelogEntry => {
   const processed = { ...entryData };
-  if (processed.date && processed.date instanceof Timestamp) {
-    processed.date = processed.date.toDate().toISOString();
+  if (processed.createdAt && processed.createdAt instanceof Timestamp) {
+    processed.createdAt = processed.createdAt.toDate().toISOString();
   }
   return processed as ChangelogEntry;
 };
@@ -28,7 +28,7 @@ const processChangelogTimestamps = (entryData: any): ChangelogEntry => {
 export async function getChangelogs(): Promise<ChangelogEntry[]> {
   const changelogCollectionRef = collection(db, CHANGELOG_COLLECTION);
   try {
-    const q = query(changelogCollectionRef, orderBy("date", "desc"));
+    const q = query(changelogCollectionRef, orderBy("createdAt", "desc"));
     const querySnapshot = await getDocs(q);
     const entries = querySnapshot.docs.map(docSnap => 
       processChangelogTimestamps({ ...docSnap.data(), id: docSnap.id })
@@ -41,12 +41,11 @@ export async function getChangelogs(): Promise<ChangelogEntry[]> {
 }
 
 export async function addChangelog(
-  entryData: Omit<ChangelogEntry, 'id' | 'date'>
+  entryData: Omit<ChangelogEntry, 'id'>
 ): Promise<ChangelogEntry> {
-  const now = new Date();
   const dataToSave = {
     ...entryData,
-    date: Timestamp.fromDate(now),
+    createdAt: Timestamp.fromDate(new Date(entryData.createdAt)),
   };
 
   try {
@@ -65,14 +64,16 @@ export async function addChangelog(
 
 export async function updateChangelog(
   id: string,
-  updatedData: Partial<Omit<ChangelogEntry, 'id' | 'date'>>,
+  updatedData: Partial<Omit<ChangelogEntry, 'id'>>,
 ): Promise<ChangelogEntry | null> {
   const changelogDocRef = doc(db, CHANGELOG_COLLECTION, id);
+  const dataToUpdate: { [key: string]: any } = { ...updatedData };
+  if (updatedData.createdAt) {
+      dataToUpdate.createdAt = Timestamp.fromDate(new Date(updatedData.createdAt));
+  }
+
   try {
-    await updateDoc(changelogDocRef, {
-        ...updatedData,
-        date: Timestamp.now(), // Always update the date on edit
-    });
+    await updateDoc(changelogDocRef, dataToUpdate);
     const updatedDocSnap = await getDoc(changelogDocRef);
     if (updatedDocSnap.exists()) {
       return processChangelogTimestamps({ ...updatedDocSnap.data(), id: updatedDocSnap.id });

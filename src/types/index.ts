@@ -443,11 +443,11 @@ export interface AppNotification {
 }
 
 export interface ChangelogEntry {
-  id: string; // Firestore document ID
-  version: string; // e.g., "1.0.1"
-  date: string; // ISO date string
+  id: string;
+  version: string;
+  createdAt: string; // ISO date string
   title: string;
-  content: string; // Markdown content
+  notes: string; // Markdown content
 }
 
 
@@ -575,4 +575,3 @@ export interface ApiLog {
     timestamp: string; // ISO string
     distributorId?: string;
 }
-
