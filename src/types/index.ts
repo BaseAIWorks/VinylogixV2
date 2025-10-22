@@ -1,4 +1,5 @@
 
+
 import { DocumentSnapshot } from 'firebase/firestore';
 // Add this new export at the top of the file
 export interface OnboardingFormValues {
@@ -208,6 +209,7 @@ export type User = {
   subscriptionStatus?: SubscriptionStatus;
   subscriptionTier?: SubscriptionTier;
   profileComplete?: boolean; // New flag for client onboarding
+  unreadChangelogs?: boolean;
 };
 
 export type MediaCondition = "Mint (M)" | "Near Mint (NM)" | "Very Good Plus (VG+)" | "Very Good (VG)" | "Good Plus (G+)" | "Good (G)" | "Fair (F)" | "Poor (P)";
@@ -440,6 +442,14 @@ export interface AppNotification {
   customerEmail?: string;
 }
 
+export interface ChangelogEntry {
+  id: string; // Firestore document ID
+  version: string; // e.g., "1.0.1"
+  date: string; // ISO date string
+  title: string;
+  content: string; // Markdown content
+}
+
 
 // ===================================
 // Discogs Marketplace
@@ -565,3 +575,4 @@ export interface ApiLog {
     timestamp: string; // ISO string
     distributorId?: string;
 }
+

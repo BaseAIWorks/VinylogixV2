@@ -1,12 +1,216 @@
 
 "use client";
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Loader2, PlusCircle, Newspaper, Edit, Trash2 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import type { ChangelogEntry } from "@/types";
+import { getChangelogs, addChangelog, updateChangelog, deleteChangelog } from "@/services/changelog-service";
+import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+const emptyFormState: Omit<ChangelogEntry, 'id' | 'date'> = {
+    version: "",
+    title: "",
+    content: ""
+};
 
 export default function AdminChangelogPage() {
+    const { user, loading: authLoading } = useAuth();
+    const { toast } = useToast();
+    
+    const [changelogs, setChangelogs] = useState<ChangelogEntry[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [editingEntry, setEditingEntry] = useState<ChangelogEntry | null>(null);
+    const [formState, setFormState] = useState(emptyFormState);
+
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [entryToDelete, setEntryToDelete] = useState<ChangelogEntry | null>(null);
+
+    const fetchChangelogs = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const fetchedChangelogs = await getChangelogs();
+            setChangelogs(fetchedChangelogs);
+        } catch (error) {
+            toast({ title: "Error", description: "Could not fetch changelog entries.", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
+    }, [toast]);
+
+    useEffect(() => {
+        if (user?.role === 'superadmin') {
+            fetchChangelogs();
+        }
+    }, [user, fetchChangelogs]);
+
+    const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        setFormState(prev => ({ ...prev, [e.target.id]: e.target.value }));
+    };
+
+    const openAddDialog = () => {
+        setEditingEntry(null);
+        setFormState(emptyFormState);
+        setIsDialogOpen(true);
+    };
+
+    const openEditDialog = (entry: ChangelogEntry) => {
+        setEditingEntry(entry);
+        setFormState({
+            version: entry.version,
+            title: entry.title,
+            content: entry.content
+        });
+        setIsDialogOpen(true);
+    };
+
+    const handleFormSubmit = async () => {
+        if (!formState.version || !formState.title || !formState.content) {
+            toast({ title: "Validation Error", description: "All fields are required.", variant: "destructive" });
+            return;
+        }
+        setIsSaving(true);
+        try {
+            if (editingEntry) {
+                await updateChangelog(editingEntry.id, formState);
+            } else {
+                await addChangelog(formState);
+            }
+            toast({ title: `Entry ${editingEntry ? 'Updated' : 'Added'}`, description: `Version ${formState.version} has been saved.` });
+            setIsDialogOpen(false);
+            fetchChangelogs();
+        } catch (error) {
+            toast({ title: "Error", description: `Could not save the entry. ${(error as Error).message}`, variant: "destructive" });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+    
+    const handleDeleteEntry = async () => {
+        if (!entryToDelete) return;
+        setIsSaving(true);
+        try {
+            await deleteChangelog(entryToDelete.id);
+            toast({ title: "Entry Deleted", description: `Version ${entryToDelete.version} has been deleted.` });
+            fetchChangelogs();
+        } catch (error) {
+            toast({ title: "Error", description: `Failed to delete entry. ${(error as Error).message}`, variant: "destructive" });
+        } finally {
+            setEntryToDelete(null);
+            setIsDeleteDialogOpen(false);
+            setIsSaving(false);
+        }
+    };
+
+    if (authLoading || isLoading) {
+        return <div className="flex justify-center items-center h-48"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    }
+    
     return (
-        <div>
-            <h1 className="text-2xl font-bold">Manage Changelog</h1>
-            <p className="text-muted-foreground">This is where the superadmin will manage changelog entries.</p>
-        </div>
+        <>
+            <div className="space-y-6">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle className="flex items-center gap-3"><Newspaper className="h-6 w-6 text-primary"/>Changelog Management</CardTitle>
+                            <CardDescription>Create, edit, and delete changelog entries for your application.</CardDescription>
+                        </div>
+                        <Button onClick={openAddDialog}>
+                            <PlusCircle className="mr-2 h-4 w-4"/> Add New Entry
+                        </Button>
+                    </CardHeader>
+                    <CardContent>
+                        {changelogs.length > 0 ? (
+                            <div className="space-y-8">
+                                {changelogs.map(entry => (
+                                    <div key={entry.id} className="p-4 border rounded-lg">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <h3 className="text-xl font-bold">{entry.title} <span className="text-base font-medium text-muted-foreground ml-2">(v{entry.version})</span></h3>
+                                                <p className="text-sm text-muted-foreground">{format(new Date(entry.date), 'PPP')}</p>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button variant="outline" size="icon" onClick={() => openEditDialog(entry)}><Edit className="h-4 w-4"/></Button>
+                                                <Button variant="destructive" size="icon" onClick={() => {setEntryToDelete(entry); setIsDeleteDialogOpen(true);}}><Trash2 className="h-4 w-4"/></Button>
+                                            </div>
+                                        </div>
+                                        <div className="prose prose-sm dark:prose-invert max-w-none mt-4 whitespace-pre-wrap">{entry.content}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                             <div className="text-center py-12 text-muted-foreground">
+                                <p className="text-lg">No changelog entries found.</p>
+                                <p className="text-sm">Click "Add New Entry" to get started.</p>
+                           </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+            
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{editingEntry ? 'Edit Entry' : 'Add New Entry'}</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="space-y-2"><Label htmlFor="version">Version</Label><Input id="version" value={formState.version} onChange={handleFormChange} placeholder="e.g., 1.0.1" /></div>
+                        <div className="space-y-2"><Label htmlFor="title">Title</Label><Input id="title" value={formState.title} onChange={handleFormChange} placeholder="e.g., New Feature Release" /></div>
+                        <div className="space-y-2"><Label htmlFor="content">Content (Markdown supported)</Label><Textarea id="content" value={formState.content} onChange={handleFormChange} className="min-h-[200px]" placeholder="Describe the changes..."/></div>
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild><Button type="button" variant="ghost">Cancel</Button></DialogClose>
+                        <Button type="submit" onClick={handleFormSubmit} disabled={isSaving}>
+                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                            {editingEntry ? 'Save Changes' : 'Add Entry'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                  <AlertDialogDescription>This will permanently delete version {entryToDelete?.version}. This action cannot be undone.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => setEntryToDelete(null)}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteEntry} disabled={isSaving} className="bg-destructive hover:bg-destructive/90">
+                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 }
+
