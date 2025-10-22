@@ -208,7 +208,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const navItems = [
     // Superadmin
     { href: '/admin/dashboard', label: 'Distributors', title: 'Platform Dashboard', icon: Building, roles: ['superadmin']},
-    { href: '/admin/accounts', label: 'All Users', title: 'User Management', icon: Users, roles: ['superadmin']},
+    { href: '/admin/accounts', label: 'All Accounts', title: 'User Management', icon: Users, roles: ['superadmin']},
     { href: '/admin/statistics', label: 'Platform Stats', title: 'Platform Statistics', icon: BarChart3, roles: ['superadmin']},
     { href: '/admin/settings', label: 'Platform Settings', title: 'Platform Settings', icon: Shapes, roles: ['superadmin']},
     { href: '/admin/changelog', label: 'Manage Changelog', title: 'Changelog Management', icon: Newspaper, roles: ['superadmin']},
@@ -240,8 +240,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
     { href: '/import', label: 'Import/Export', title: 'Import / Export Data', icon: FileUp, roles: ['master'] },
     { href: '/inventory/batch-edit', label: 'Batch Edit', title: 'Batch Edit Inventory', icon: FilePenLine, roles: ['master']},
     
-    // Public Changelog for all users
-    { href: '/changelog', label: 'Changelog', title: 'Changelog', icon: Newspaper, roles: ['master', 'worker', 'viewer'] },
+    // Changelog for master/worker
+    { href: '/changelog', label: 'Changelog', title: 'Changelog', icon: Newspaper, roles: ['master', 'worker'] },
 
     // Settings for all
     { href: '/settings', label: 'Settings', title: 'Settings', icon: Settings, roles: ['master', 'worker', 'viewer', 'superadmin'] },

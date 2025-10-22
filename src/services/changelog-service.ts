@@ -12,10 +12,13 @@ import {
   deleteDoc,
   Timestamp,
   query,
-  orderBy
+  orderBy,
+  writeBatch,
+  where,
 } from 'firebase/firestore';
 
 const CHANGELOG_COLLECTION = 'changelog';
+const USERS_COLLECTION = 'users';
 
 const processChangelogTimestamps = (entryData: any): ChangelogEntry => {
   const processed = { ...entryData };
@@ -51,6 +54,17 @@ export async function addChangelog(
   try {
     const changelogCollectionRef = collection(db, CHANGELOG_COLLECTION);
     const docRef = await addDoc(changelogCollectionRef, dataToSave);
+    
+    // After successfully adding, trigger notifications for all relevant users
+    const usersQuery = query(collection(db, USERS_COLLECTION), where("role", "in", ["master", "worker"]));
+    const usersSnapshot = await getDocs(usersQuery);
+    const batch = writeBatch(db);
+    usersSnapshot.forEach(userDoc => {
+        const userRef = doc(db, USERS_COLLECTION, userDoc.id);
+        batch.update(userRef, { unreadChangelogs: true });
+    });
+    await batch.commit();
+    
     const newDocSnap = await getDoc(docRef);
     if (newDocSnap.exists()) {
       return processChangelogTimestamps({ ...newDocSnap.data(), id: newDocSnap.id });
