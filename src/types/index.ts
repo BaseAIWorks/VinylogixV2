@@ -209,7 +209,7 @@ export type User = {
   subscriptionStatus?: SubscriptionStatus;
   subscriptionTier?: SubscriptionTier;
   profileComplete?: boolean; // New flag for client onboarding
-  unreadChangelogs?: boolean;
+  unreadChangelogs?: boolean; // New flag for changelog notifications
 };
 
 export type MediaCondition = "Mint (M)" | "Near Mint (NM)" | "Very Good Plus (VG+)" | "Very Good (VG)" | "Good Plus (G+)" | "Good (G)" | "Fair (F)" | "Poor (P)";

@@ -56,6 +56,7 @@ interface AuthContextType {
   notifications: AppNotification[];
   unreadNotificationsCount: number;
   markNotificationRead: (notificationId: string) => Promise<void>;
+  markChangelogsAsRead: () => Promise<void>;
   platformBranding: BrandingSettings | null;
   displayBranding: BrandingSettings | null;
   activeDistributor: Distributor | null;
@@ -287,6 +288,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       );
     }
   };
+
+  const markChangelogsAsRead = async () => {
+    if (!user) return;
+    try {
+        const userDocRef = doc(db, 'users', user.uid);
+        await updateDoc(userDocRef, { unreadChangelogs: false });
+        setUser(prev => prev ? { ...prev, unreadChangelogs: false } : null);
+    } catch(e) {
+        console.error("Failed to mark changelogs as read", e);
+    }
+  };
+
 
   const syncCartToFirestore = async (cartToSync: CartItem[]) => {
       if (!user) return;
@@ -1137,6 +1150,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     notifications,
     unreadNotificationsCount,
     markNotificationRead,
+    markChangelogsAsRead,
     platformBranding,
     displayBranding,
     activeDistributor,

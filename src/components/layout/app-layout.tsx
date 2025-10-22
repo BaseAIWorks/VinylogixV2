@@ -208,10 +208,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const navItems = [
     // Superadmin
     { href: '/admin/dashboard', label: 'Distributors', title: 'Platform Dashboard', icon: Building, roles: ['superadmin']},
-    { href: '/admin/accounts', label: 'Users', title: 'User Management', icon: Users, roles: ['superadmin']},
+    { href: '/admin/accounts', label: 'All Users', title: 'User Management', icon: Users, roles: ['superadmin']},
     { href: '/admin/statistics', label: 'Platform Stats', title: 'Platform Statistics', icon: BarChart3, roles: ['superadmin']},
     { href: '/admin/settings', label: 'Platform Settings', title: 'Platform Settings', icon: Shapes, roles: ['superadmin']},
-    { href: '/admin/changelog', label: 'Changelog', title: 'Changelog', icon: Newspaper, roles: ['superadmin']},
+    { href: '/admin/changelog', label: 'Manage Changelog', title: 'Changelog Management', icon: Newspaper, roles: ['superadmin']},
     
     // All Roles
     { href: '/dashboard', label: 'Dashboard', title: 'Dashboard', icon: LayoutDashboard, roles: ['master', 'worker', 'viewer'] },
@@ -239,6 +239,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
     { href: '/stats', label: 'Statistics', title: 'Distributor Statistics', icon: BarChart3, roles: ['master'] },
     { href: '/import', label: 'Import/Export', title: 'Import / Export Data', icon: FileUp, roles: ['master'] },
     { href: '/inventory/batch-edit', label: 'Batch Edit', title: 'Batch Edit Inventory', icon: FilePenLine, roles: ['master']},
+    
+    // Public Changelog for all users
+    { href: '/changelog', label: 'Changelog', title: 'Changelog', icon: Newspaper, roles: ['master', 'worker', 'viewer'] },
 
     // Settings for all
     { href: '/settings', label: 'Settings', title: 'Settings', icon: Settings, roles: ['master', 'worker', 'viewer', 'superadmin'] },
@@ -334,7 +337,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                  {item.href === '/notifications' && unreadNotificationsCount > 0 && (
                   <SidebarMenuBadge>{unreadNotificationsCount}</SidebarMenuBadge>
                 )}
-                 {item.href === '/admin/changelog' && user?.unreadChangelogs && (
+                 {(item.href === '/changelog' || item.href === '/admin/changelog') && user?.unreadChangelogs && (
                   <SidebarMenuBadge>New</SidebarMenuBadge>
                  )}
               </SidebarMenuItem>
