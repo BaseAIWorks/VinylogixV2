@@ -31,6 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const emptyFormState: Omit<ChangelogEntry, 'id' | 'date'> = {
     version: "",
@@ -148,23 +149,27 @@ export default function AdminChangelogPage() {
                     </CardHeader>
                     <CardContent>
                         {changelogs.length > 0 ? (
-                            <div className="space-y-8">
+                           <Accordion type="single" collapsible className="w-full">
                                 {changelogs.map(entry => (
-                                    <div key={entry.id} className="p-4 border rounded-lg">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <h3 className="text-xl font-bold">{entry.title} <span className="text-base font-medium text-muted-foreground ml-2">(v{entry.version})</span></h3>
-                                                <p className="text-sm text-muted-foreground">{format(new Date(entry.date), 'PPP')}</p>
+                                    <AccordionItem value={entry.id} key={entry.id}>
+                                        <AccordionTrigger>
+                                            <div className="flex flex-1 justify-between items-center pr-4">
+                                                <div className="text-left">
+                                                    <h3 className="text-lg font-semibold">{entry.title} <span className="text-base font-medium text-muted-foreground ml-2">(v{entry.version})</span></h3>
+                                                    <p className="text-sm text-muted-foreground">{format(new Date(entry.date), 'PPP')}</p>
+                                                </div>
+                                                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                                                    <Button variant="outline" size="icon" onClick={() => openEditDialog(entry)}><Edit className="h-4 w-4"/></Button>
+                                                    <Button variant="destructive" size="icon" onClick={() => {setEntryToDelete(entry); setIsDeleteDialogOpen(true);}}><Trash2 className="h-4 w-4"/></Button>
+                                                </div>
                                             </div>
-                                            <div className="flex gap-2">
-                                                <Button variant="outline" size="icon" onClick={() => openEditDialog(entry)}><Edit className="h-4 w-4"/></Button>
-                                                <Button variant="destructive" size="icon" onClick={() => {setEntryToDelete(entry); setIsDeleteDialogOpen(true);}}><Trash2 className="h-4 w-4"/></Button>
-                                            </div>
-                                        </div>
-                                        <div className="prose prose-sm dark:prose-invert max-w-none mt-4 whitespace-pre-wrap">{entry.content}</div>
-                                    </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <div className="prose prose-sm dark:prose-invert max-w-none pt-2 whitespace-pre-wrap">{entry.content}</div>
+                                        </AccordionContent>
+                                    </AccordionItem>
                                 ))}
-                            </div>
+                            </Accordion>
                         ) : (
                              <div className="text-center py-12 text-muted-foreground">
                                 <p className="text-lg">No changelog entries found.</p>
