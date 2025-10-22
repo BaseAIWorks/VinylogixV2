@@ -63,7 +63,8 @@ export default function AdminChangelogPage() {
         setIsLoading(true);
         try {
             const fetchedChangelogs = await getChangelogs();
-            setChangelogs(fetchedChangelogs);
+            const sortedChangelogs = fetchedChangelogs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            setChangelogs(sortedChangelogs);
         } catch (error) {
             toast({ title: "Error", description: "Could not fetch changelog entries.", variant: "destructive" });
         } finally {

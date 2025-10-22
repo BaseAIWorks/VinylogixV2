@@ -21,7 +21,8 @@ export default function ChangelogPage() {
         setIsLoading(true);
         try {
             const fetchedChangelogs = await getChangelogs();
-            setChangelogs(fetchedChangelogs);
+            const sortedChangelogs = fetchedChangelogs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            setChangelogs(sortedChangelogs);
             // Mark as read when the user visits the page
             if (user?.unreadChangelogs) {
                 markChangelogsAsRead();
@@ -80,4 +81,3 @@ export default function ChangelogPage() {
         </div>
     );
 }
-
