@@ -34,7 +34,7 @@ import {
   DropdownMenuPortal,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, ScanLine, BarChart3, Settings, LogOut, Menu, Heart, Package, ShoppingCart, Boxes, Library, ListChecks, Bell, Building, Check, Key, X, Shapes, Users, Briefcase, FileUp, Palette, Disc3, DollarSign, HardHat, Activity, FilePenLine, Store, ChevronsUpDown, Truck, Settings2, CreditCard } from 'lucide-react';
+import { LayoutDashboard, ScanLine, BarChart3, Settings, LogOut, Menu, Heart, Package, ShoppingCart, Boxes, Library, ListChecks, Bell, Building, Check, Key, X, Shapes, Users, Briefcase, FileUp, Palette, Disc3, DollarSign, HardHat, Activity, FilePenLine, Store, ChevronsUpDown, Truck, Settings2, CreditCard, Newspaper } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import Image from 'next/image';
@@ -207,10 +207,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   const navItems = [
     // Superadmin
-    { href: '/admin/dashboard', label: 'Admin Dashboard', title: 'Platform Dashboard', icon: Building, roles: ['superadmin']},
+    { href: '/admin/dashboard', label: 'Distributors', title: 'Platform Dashboard', icon: Building, roles: ['superadmin']},
+    { href: '/admin/accounts', label: 'Users', title: 'User Management', icon: Users, roles: ['superadmin']},
     { href: '/admin/statistics', label: 'Platform Stats', title: 'Platform Statistics', icon: BarChart3, roles: ['superadmin']},
-    { href: '/admin/accounts', label: 'Accounts & Billing', title: 'Accounts & Billing', icon: DollarSign, roles: ['superadmin']},
     { href: '/admin/settings', label: 'Platform Settings', title: 'Platform Settings', icon: Shapes, roles: ['superadmin']},
+    { href: '/admin/changelog', label: 'Changelog', title: 'Changelog', icon: Newspaper, roles: ['superadmin']},
     
     // All Roles
     { href: '/dashboard', label: 'Dashboard', title: 'Dashboard', icon: LayoutDashboard, roles: ['master', 'worker', 'viewer'] },
@@ -333,6 +334,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
                  {item.href === '/notifications' && unreadNotificationsCount > 0 && (
                   <SidebarMenuBadge>{unreadNotificationsCount}</SidebarMenuBadge>
                 )}
+                 {item.href === '/admin/changelog' && user?.unreadChangelogs && (
+                  <SidebarMenuBadge>New</SidebarMenuBadge>
+                 )}
               </SidebarMenuItem>
               )
             })}
