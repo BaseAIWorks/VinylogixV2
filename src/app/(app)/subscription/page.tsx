@@ -7,6 +7,7 @@ import { Loader2, AlertTriangle, ArrowLeft, CreditCard, CheckCircle, XCircle, Sh
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { formatPriceForDisplay } from "@/lib/utils";
+import { formatDistanceToNowStrict } from "date-fns";
 
 const subscriptionStatusColors: Record<string, string> = {
     active: 'text-green-500',
@@ -46,6 +47,24 @@ export default function SubscriptionPage() {
     }
 
     const subscription = activeDistributor?.subscription;
+    
+    const getTrialDaysLeft = () => {
+        if (!activeDistributor?.createdAt || subscription?.status !== 'trialing') {
+            return null;
+        }
+        const createdAt = new Date(activeDistributor.createdAt);
+        const trialEndDate = new Date(createdAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const now = new Date();
+        const daysLeft = formatDistanceToNowStrict(trialEndDate, { unit: 'day' });
+
+        if (now > trialEndDate) {
+            return "Trial has expired.";
+        }
+        return `~${daysLeft} left`;
+    };
+    
+    const trialDaysLeft = getTrialDaysLeft();
+
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
@@ -71,7 +90,10 @@ export default function SubscriptionPage() {
                             <div className="space-y-4">
                                <h3 className="text-lg font-semibold">Current Plan</h3>
                                <p className="text-4xl font-bold text-primary capitalize">{subscription.tier}</p>
-                               <p className={`text-lg font-semibold capitalize ${subscriptionStatusColors[subscription.status] || ''}`}>{subscription.status?.replace('_', ' ')}</p>
+                               <div className="flex items-center gap-2">
+                                <p className={`text-lg font-semibold capitalize ${subscriptionStatusColors[subscription.status] || ''}`}>{subscription.status?.replace('_', ' ')}</p>
+                                {trialDaysLeft && <Badge variant="secondary">{trialDaysLeft}</Badge>}
+                               </div>
                                <Button onClick={() => router.push('/pricing')}>Change Plan</Button>
                             </div>
                             <div className="p-4 border rounded-lg bg-muted/50">

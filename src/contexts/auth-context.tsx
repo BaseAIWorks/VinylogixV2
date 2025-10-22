@@ -25,7 +25,7 @@ import { getBrandingSettings } from '@/services/settings-service';
 import { getDistributorById, updateDistributor, addDistributor as addDistributorService, getDistributorsByIds } from '@/services/distributor-service';
 import { getMasterUserByDistributorId, getClientsByDistributorId, updateUserDistributorAccess, getUsersByDistributorId as fetchUsersByDistributorId } from '@/services/user-service';
 import { verifyDiscogsUser, fetchAllDiscogsInventory } from '@/services/discogs-user-service';
-import { getWeightOptions as fetchWeightOptions } from '@/services/client-subscription-service';
+import { getWeightOptions as fetchWeightOptions, getSubscriptionTiers } from '@/services/client-subscription-service';
 import { getAllUsers } from '@/services/admin-user-service';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getRecordById, searchRecordsByTerm as searchRecords } from '@/services/record-service';
@@ -1045,9 +1045,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         const onboardingData: OnboardingFormValues = JSON.parse(onboardingDataString);
 
-        if (session.customer_details?.email !== onboardingData.email) {
+        if (session.metadata?.userEmail !== onboardingData.email) {
             throw new Error("Session email does not match registration email. Please try registering again.");
         }
+        
+        const subscriptionTiers = await getSubscriptionTiers();
+        const chosenTier = subscriptionTiers[session.metadata.tier as UserRole];
 
         // Create the distributor
         const distributor = await addDistributorService({
@@ -1061,7 +1064,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             isSubscriptionExempt: false,
             stripeCustomerId: typeof session.customer === 'string' ? session.customer : undefined,
             subscriptionId: typeof session.subscription === 'string' ? session.subscription : undefined,
-            subscriptionStatus: 'trialing', // Start with trialing status
+            subscriptionStatus: 'trialing',
+            subscription: chosenTier, // Save the full subscription object
         });
 
         // Create the Master user
