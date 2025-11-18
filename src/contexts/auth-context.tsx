@@ -1,3 +1,4 @@
+
 "use client";
 
 import type {
@@ -58,6 +59,7 @@ import {
   QuerySnapshot,
   arrayRemove,
   DocumentSnapshot,
+  onSnapshot,
 } from 'firebase/firestore';
 import { getOrders, getOrdersByViewerId } from '@/services/order-service';
 import {
@@ -677,6 +679,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     },
     [toast]
   );
+  
+  // Real-time listener for distributor data
+  useEffect(() => {
+    if (!activeDistributorId) {
+      setActiveDistributor(null);
+      return;
+    }
+
+    const distributorDocRef = doc(db, 'distributors', activeDistributorId);
+    
+    const unsubscribe = onSnapshot(distributorDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setActiveDistributor(prev => {
+          const newData = { ...docSnap.data(), id: docSnap.id } as Distributor;
+          // Preserve fetched sub-collections if they exist on the previous state
+          const preservedData = {
+              weightOptions: prev?.weightOptions,
+              suppliers: prev?.suppliers,
+          };
+          return { ...preservedData, ...newData };
+        });
+      } else {
+        console.warn(`Distributor with ID ${activeDistributorId} not found.`);
+        setActiveDistributor(null);
+      }
+    }, (error) => {
+      console.error(`Error listening to distributor ${activeDistributorId}:`, error);
+    });
+
+    return () => unsubscribe(); // Cleanup listener on unmount
+  }, [activeDistributorId]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
