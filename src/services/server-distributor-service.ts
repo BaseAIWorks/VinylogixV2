@@ -7,22 +7,23 @@ import { Timestamp } from 'firebase-admin/firestore';
 
 const DISTRIBUTORS_COLLECTION = 'distributors';
 
-// Helper function to process timestamps for consistency on the server
+// Helper function to process timestamps for consistency (if needed on server)
 const processDistributorTimestampsServer = (distributorData: any): Distributor => {
   const processed = { ...distributorData };
-  if (processed.createdAt && processed.createdAt instanceof Timestamp) {
+  if (processed.createdAt instanceof Timestamp) {
     processed.createdAt = processed.createdAt.toDate().toISOString();
   }
-  if (processed.slugLastUpdatedAt && processed.slugLastUpdatedAt instanceof Timestamp) {
+  if (processed.slugLastUpdatedAt instanceof Timestamp) {
     processed.slugLastUpdatedAt = processed.slugLastUpdatedAt.toDate().toISOString();
   }
+  // No need to handle subscription status here if it's always a string
   return processed as Distributor;
 };
 
-export async function findDistributorByStripeCustomerIdServer(customerId: string): Promise<Distributor | null> {
+export async function findDistributorByStripeCustomerId(customerId: string): Promise<Distributor | null> {
   const adminDb = getAdminDb();
   if (!adminDb) {
-      throw new Error("Admin SDK is not initialized.");
+      throw new Error("Admin DB not initialized on server.");
   }
   const distributorsCollectionRef = adminDb.collection(DISTRIBUTORS_COLLECTION);
   try {
@@ -39,23 +40,26 @@ export async function findDistributorByStripeCustomerIdServer(customerId: string
   }
 }
 
-export async function updateDistributorServer(
+export async function updateDistributor(
   id: string,
   updatedData: Partial<Omit<Distributor, 'id' | 'createdAt' | 'creatorUid'>>
 ): Promise<Distributor | null> {
   const adminDb = getAdminDb();
   if (!adminDb) {
-      throw new Error("Admin SDK is not initialized.");
+      throw new Error("Admin DB not initialized on server.");
   }
   const distributorDocRef = adminDb.collection(DISTRIBUTORS_COLLECTION).doc(id);
 
   try {
-    const dataToUpdate: {[key: string]: any} = { ...updatedData };
-    if (updatedData.slugLastUpdatedAt) {
-        dataToUpdate.slugLastUpdatedAt = Timestamp.fromDate(new Date(updatedData.slugLastUpdatedAt));
-    }
-    
-    await distributorDocRef.update(dataToUpdate);
+    // Note: The permission checks in your original updateDistributor function are client-side specific.
+    // On the server, using the Admin SDK, you generally bypass client-side security rules.
+    // Ensure that any necessary permission checks are implemented *before* calling this function
+    // or by adding specific server-side authorization logic here.
+
+    await distributorDocRef.update({
+      ...updatedData,
+      ...(updatedData.slugLastUpdatedAt ? { slugLastUpdatedAt: Timestamp.fromDate(new Date(updatedData.slugLastUpdatedAt)) } : {})
+    });
 
     const updatedDocSnap = await distributorDocRef.get();
     if (updatedDocSnap.exists) {

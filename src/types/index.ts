@@ -157,6 +157,7 @@ export interface Distributor {
   stripeCustomerId?: string; // For Stripe Billing
   subscriptionId?: string; // For Stripe Billing
   subscriptionStatus?: SubscriptionStatus; // For Stripe Billing
+  subscriptionTier?: SubscriptionTier; // <- add this
 }
 
 export interface BrandingSettings {
@@ -346,7 +347,6 @@ export interface DiscogsReleaseSearchResult {
   thumb?: string;
 }
 
-// User data stored in Firestore 'users' collection
 export interface FirestoreUser {
   email: string;
   role: UserRole;
@@ -382,7 +382,9 @@ export interface FirestoreUser {
   subscriptionStatus?: SubscriptionStatus;
   subscriptionTier?: SubscriptionTier;
   profileComplete?: boolean; // New flag for client onboarding
+  unreadChangelogs?: boolean; // Flag for changelog notifications
 }
+
 
 // ===================================
 // Sales/Orders
