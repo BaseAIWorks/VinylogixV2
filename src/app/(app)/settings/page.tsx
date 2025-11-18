@@ -1,4 +1,5 @@
 
+
 "use client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +61,7 @@ const brandingFormSchema = z.object({
 
 const distributorSettingsSchema = z.object({
   slug: z.string().min(3, "Slug must be at least 3 characters").regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug can only contain lowercase letters, numbers, and hyphens, and cannot start or end with a hyphen."),
+  profileComplete: z.boolean().optional(),
 });
 
 
@@ -172,6 +174,8 @@ export default function SettingsPage() {
   const [storageLocations, setStorageLocations] = useState<string[]>([]);
   const [isSavingLocations, setIsSavingLocations] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
+  const [isProfileCompletionDialogOpen, setIsProfileCompletionDialogOpen] = useState(false);
+
 
   const { toast } = useToast();
   const router = useRouter();
@@ -291,6 +295,10 @@ export default function SettingsPage() {
             ...defaultClientMenuSettings,
             ...(activeDistributor.clientMenuSettings || {}),
         });
+        
+        if (activeDistributor.profileComplete === false) {
+          setIsProfileCompletionDialogOpen(true);
+        }
     }
   }, [activeDistributor, notificationsForm, distributorSettingsForm, cardDisplayForm, clientMenuForm]);
 
@@ -300,6 +308,11 @@ export default function SettingsPage() {
 
   const handleProfileUpdate = async (values: ProfileFormValues) => {
     await updateUserProfile(values);
+  };
+  
+  const handleProfileCompletion = async (values: DistributorSettingsValues) => {
+    await updateMyDistributorSettings({ ...values, profileComplete: true });
+    setIsProfileCompletionDialogOpen(false);
   };
 
   const handleBrandingUpdate = async (values: BrandingFormValues) => {
@@ -367,7 +380,7 @@ export default function SettingsPage() {
   };
 
   const handleExportCSV = async () => {
-    if (!user || user.role !== 'master') {
+    if (!user || user.role !== 'master' || !user.distributorId) {
       toast({ title: "Permission Denied", description: "Only master users can export data.", variant: "destructive" });
       return;
     }
@@ -375,7 +388,7 @@ export default function SettingsPage() {
     toast({ title: "Exporting Data", description: "Preparing your CSV file..." });
 
     try {
-      const { records } = await getInventoryRecords(user, {});
+      const { records } = await getInventoryRecords(user, { distributorId: user.distributorId });
       if (records.length === 0) {
         toast({ title: "No Data", description: "There are no records to export.", variant: "default" });
         setIsExportingCSV(false);
@@ -491,6 +504,53 @@ export default function SettingsPage() {
   
   return (
     <div className="space-y-8 max-w-3xl mx-auto">
+        {user?.role === 'master' && (
+          <Dialog open={isProfileCompletionDialogOpen}>
+            <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()} hideCloseButton>
+              <DialogHeader>
+                  <DialogTitle>Welcome! Complete Your Business Profile</DialogTitle>
+                  <DialogDescription>
+                      To ensure your customers have all the necessary details and for invoicing purposes, please complete your business profile.
+                  </DialogDescription>
+              </DialogHeader>
+              <Form {...profileForm}>
+                <form onSubmit={profileForm.handleSubmit(handleProfileCompletion)} className="space-y-4 max-h-[70vh] overflow-y-auto pr-4">
+                  {/* Reuse the profile form fields, but wrap them in the new form context */}
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField control={profileForm.control} name="companyName" render={({ field }) => (
+                          <FormItem><FormLabel>Company Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                       <FormField control={profileForm.control} name="phoneNumber" render={({ field }) => (
+                          <FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                  </div>
+                  <FormField control={profileForm.control} name="addressLine1" render={({ field }) => (
+                      <FormItem><FormLabel>Address Line 1</FormLabel><FormControl><Input placeholder="Street and number" {...field} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField control={profileForm.control} name="postcode" render={({ field }) => (
+                          <FormItem><FormLabel>Postcode</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={profileForm.control} name="city" render={({ field }) => (
+                          <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                  </div>
+                  <FormField control={profileForm.control} name="country" render={({ field }) => (
+                     <FormItem><FormLabel>Country</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a country" /></SelectTrigger></FormControl><SelectContent>{countries.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                  )} />
+
+                  <DialogFooter className="pt-4 border-t sticky bottom-0 bg-background py-4">
+                      <Button type="submit" disabled={profileForm.formState.isSubmitting}>
+                          {profileForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                          Save Business Details
+                      </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        )}
+        
         {(user?.role === 'superadmin' || user?.role === 'master') && (
           <Card>
             <CardHeader>
@@ -558,7 +618,7 @@ export default function SettingsPage() {
                         <FormItem>
                           <FormLabel>Public URL Slug</FormLabel>
                           <div className="flex items-center">
-                            <span className="text-sm text-muted-foreground rounded-l-md border border-r-0 bg-muted px-3 py-2 h-10">
+                            <span className="text-sm text-muted-foreground rounded-l-md border border-r-0 bg-muted px-3 py-2 h-10 flex items-center">
                               vinylogix.com/
                             </span>
                             <FormControl>

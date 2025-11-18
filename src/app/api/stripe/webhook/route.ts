@@ -1,7 +1,7 @@
 import { stripe } from '@/lib/stripe';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { findDistributorByStripeCustomerId, updateDistributor } from '@/services/server-distributor-service';
+import { updateDistributor, findDistributorByStripeCustomerId } from '@/services/server-distributor-service';
 import type { SubscriptionTier, SubscriptionStatus } from '@/types';
 
 // This is your Stripe CLI webhook secret for testing your endpoint locally.
@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
         try {
           // 1) Try to get tier directly from session metadata
           let tier = session.metadata?.tier as SubscriptionTier | undefined;
+          const billingCycle = session.metadata?.billing as 'monthly' | 'quarterly' | 'yearly' | undefined;
 
           // 2) Fetch the subscription from Stripe for status + fallback metadata
           let subscription: Stripe.Subscription | null = null;
@@ -91,6 +92,9 @@ export async function POST(req: NextRequest) {
                 `Session metadata: ${JSON.stringify(session.metadata)}`
             );
           }
+          
+          const periodEnd = subscription?.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : undefined;
+
 
           const subscriptionStatus: SubscriptionStatus =
             (subscription?.status as SubscriptionStatus) ?? 'active';
@@ -101,8 +105,9 @@ export async function POST(req: NextRequest) {
             await updateDistributor(distributor.id, {
               subscriptionId,
               subscriptionStatus,
-              // If we still don't have a tier, keep whatever is in Firestore (if any)
               subscriptionTier: tier ?? distributor.subscriptionTier ?? undefined,
+              billingCycle: billingCycle ?? distributor.billingCycle ?? undefined,
+              subscriptionCurrentPeriodEnd: periodEnd,
             });
             console.log(
               `Updated distributor ${distributor.id} with subscription ${subscriptionId}, ` +
@@ -139,6 +144,9 @@ export async function POST(req: NextRequest) {
 
       const tier = resolveTierFromSubscription(subscription);
       const status = subscription.status as SubscriptionStatus;
+      const billingCycle = subscription.metadata?.billing as 'monthly' | 'quarterly' | 'yearly' | undefined;
+      const periodEnd = new Date(subscription.current_period_end * 1000).toISOString();
+
 
       const distributor = await findDistributorByStripeCustomerId(customerId);
 
@@ -146,6 +154,8 @@ export async function POST(req: NextRequest) {
         await updateDistributor(distributor.id, {
           subscriptionStatus: status,
           subscriptionTier: tier ?? distributor.subscriptionTier ?? undefined,
+          billingCycle: billingCycle ?? distributor.billingCycle ?? undefined,
+          subscriptionCurrentPeriodEnd: periodEnd,
         });
         console.log(
           `Updated subscription for distributor ${distributor.id}: ` +
@@ -175,8 +185,7 @@ export async function POST(req: NextRequest) {
         await updateDistributor(distributor.id, {
           subscriptionStatus: 'canceled',
           subscriptionId: undefined,
-          // decide yourself if you want to also clear subscriptionTier:
-          // subscriptionTier: undefined,
+          subscriptionCurrentPeriodEnd: undefined,
         });
         console.log(`Cancelled subscription for distributor ${distributor.id}`);
       } else {

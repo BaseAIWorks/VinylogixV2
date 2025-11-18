@@ -157,7 +157,10 @@ export interface Distributor {
   stripeCustomerId?: string; // For Stripe Billing
   subscriptionId?: string; // For Stripe Billing
   subscriptionStatus?: SubscriptionStatus; // For Stripe Billing
-  subscriptionTier?: SubscriptionTier; // <- add this
+  subscriptionTier?: SubscriptionTier;
+  billingCycle?: 'monthly' | 'quarterly' | 'yearly'; // <- Add this
+  subscriptionCurrentPeriodEnd?: string; // ISO date string
+  profileComplete?: boolean;
 }
 
 export interface BrandingSettings {

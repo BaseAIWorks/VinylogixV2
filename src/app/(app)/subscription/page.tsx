@@ -17,10 +17,11 @@ import {
   CheckCircle,
   XCircle,
   ShieldCheck,
+  ExternalLink,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-import { formatDistanceToNowStrict } from "date-fns";
+import { formatDistanceToNowStrict, format } from "date-fns";
 import type { SubscriptionInfo, SubscriptionTier, SubscriptionStatus } from "@/types";
 
 const subscriptionStatusColors: Record<string, string> = {
@@ -42,7 +43,7 @@ const DetailItem = ({
   return (
     <div className="flex justify-between items-center py-2 border-b">
       <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="text-sm font-medium text-foreground">{value}</p>
+      <div className="text-sm font-medium text-foreground text-right">{value}</div>
     </div>
   );
 };
@@ -82,8 +83,8 @@ const getDefaultTierConfig = (tier: SubscriptionTier): Omit<SubscriptionInfo, "s
     case "scale":
       return {
         tier: "scale",
-        maxRecords: -1,
-        maxUsers: -1,
+        maxRecords: -1, // -1 for unlimited
+        maxUsers: -1, // -1 for unlimited
         allowOrders: true,
         allowAiFeatures: true,
         price: 79,
@@ -123,45 +124,24 @@ export default function SubscriptionPage() {
     );
   }
 
-  // Old field (static config on distributor, if any)
-  const subscriptionFromDistributor = activeDistributor?.subscription;
+  // Use the new Stripe-synced fields first
+  const distributorTier = activeDistributor?.subscriptionTier;
+  const distributorStatus = activeDistributor?.subscriptionStatus;
+  const billingCycle = activeDistributor?.billingCycle;
+  const periodEnd = activeDistributor?.subscriptionCurrentPeriodEnd;
 
-  // Stripe-backed fields we wired via webhook
-  const distributorTier = activeDistributor?.subscriptionTier as
-    | SubscriptionTier
-    | undefined;
-  const distributorStatus = activeDistributor?.subscriptionStatus as
-    | SubscriptionStatus
-    | undefined;
-
-  // Build a SubscriptionInfo object either from existing distributor.subscription
-  // OR from Stripe-backed tier + status.
-  const effectiveSubscription: SubscriptionInfo | null = (() => {
-    if (subscriptionFromDistributor) {
-      return subscriptionFromDistributor;
-    }
-
-    if (!distributorTier) return null;
-
-    const base = getDefaultTierConfig(distributorTier);
-    return {
-      ...base,
-      status: distributorStatus ?? "active",
-    };
-  })();
+  const effectiveSubscription: SubscriptionInfo | null = distributorTier
+    ? {
+        ...getDefaultTierConfig(distributorTier),
+        status: distributorStatus ?? "incomplete",
+      }
+    : activeDistributor?.subscription ?? null;
 
   const getTrialDaysLeft = () => {
-    if (
-      !activeDistributor?.createdAt ||
-      effectiveSubscription?.status !== "trialing"
-    ) {
+    if (distributorStatus !== "trialing" || !periodEnd) {
       return null;
     }
-
-    const createdAt = new Date(activeDistributor.createdAt);
-    const trialEndDate = new Date(
-      createdAt.getTime() + 7 * 24 * 60 * 60 * 1000
-    );
+    const trialEndDate = new Date(periodEnd);
     const now = new Date();
     const daysLeft = formatDistanceToNowStrict(trialEndDate, { unit: "day" });
 
@@ -172,6 +152,13 @@ export default function SubscriptionPage() {
   };
 
   const trialDaysLeft = getTrialDaysLeft();
+
+  const handleManageSubscription = () => {
+    // This will redirect the user to a pre-built Stripe page to manage their subscription.
+    // Replace with your actual Stripe Customer Portal link from your Stripe dashboard settings.
+    window.location.href = 'https://billing.stripe.com/p/login/YOUR_PORTAL_ID';
+  }
+
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -217,13 +204,25 @@ export default function SubscriptionPage() {
                     <Badge variant="secondary">{trialDaysLeft}</Badge>
                   )}
                 </div>
-                <Button onClick={() => router.push("/pricing")}>
-                  Change Plan
-                </Button>
+                <div className="space-x-2">
+                   <Button onClick={handleManageSubscription}>
+                      Manage Billing <ExternalLink className="ml-2 h-4 w-4" />
+                   </Button>
+                   <Button onClick={() => router.push("/pricing")} variant="outline">
+                     Change Plan
+                   </Button>
+                </div>
               </div>
               <div className="p-4 border rounded-lg bg-muted/50">
                 <h4 className="font-semibold mb-3">Plan Details</h4>
                 <div className="space-y-2">
+                   {billingCycle && <DetailItem label="Billing Cycle" value={<span className="capitalize">{billingCycle}</span>} />}
+                   {periodEnd && effectiveSubscription.status !== 'canceled' && (
+                     <DetailItem 
+                        label={effectiveSubscription.status === 'trialing' ? 'Trial Ends' : 'Next Billing Date'} 
+                        value={format(new Date(periodEnd), 'PPP')} 
+                     />
+                   )}
                   <DetailItem
                     label="Max Records"
                     value={
@@ -274,18 +273,6 @@ export default function SubscriptionPage() {
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Billing & Invoices</CardTitle>
-          <CardDescription>Your payment history and details.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="p-8 border-2 border-dashed rounded-lg text-center text-muted-foreground">
-            <p>Payment history and invoice management is coming soon.</p>
-          </div>
         </CardContent>
       </Card>
     </div>

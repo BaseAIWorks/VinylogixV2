@@ -1523,107 +1523,140 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     [discogsInventory]
   );
 
-   // Effect to handle post-Stripe registration
-   const finalizeRegistration = useCallback(async (sessionId: string) => {
-    setIsFinalizing(true);
-    setRegistrationError(null);
-    try {
-        const response = await fetch(`/api/stripe/retrieve-session?session_id=${sessionId}`);
-        if (!response.ok) {
+    // Effect to handle post-Stripe registration
+    const finalizeRegistration = useCallback(
+      async (sessionId: string) => {
+        setIsFinalizing(true);
+        setRegistrationError(null);
+  
+        try {
+          const response = await fetch(
+            `/api/stripe/retrieve-session?session_id=${sessionId}`
+          );
+  
+          if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to retrieve Stripe session');
-        }
-        const session = await response.json();
-        const onboardingDataString = localStorage.getItem('onboarding_data');
-        
-        if (!onboardingDataString) {
-            throw new Error("Onboarding data not found in your browser. Please try registering again.");
-        }
-        
-        const onboardingData: OnboardingFormValues = JSON.parse(onboardingDataString);
-
-        if (session.metadata?.userEmail !== onboardingData.email) {
-            throw new Error("Session email does not match registration email. Please try registering again.");
-        }
-        
-        const subscriptionTiers = await getSubscriptionTiersOnServer();
-        const chosenTier = subscriptionTiers[session.metadata.tier as SubscriptionTier];
-
-        if (!chosenTier) {
             throw new Error(
-              `The selected subscription tier '${session.metadata.tier}' is invalid. ` +
-              `Please start the registration process again.`
+              errorData.error || 'Failed to retrieve Stripe session'
             );
-        }
-
-        // --- ✅ Stripe IDs veilig ophalen (geen undefined in object stoppen) ---
-        const stripeCustomerId =
-          typeof session.customer === 'string' ? session.customer : undefined;
-
-        const stripeSubscriptionId =
-          typeof session.subscription === 'string' ? session.subscription : undefined;
-
-        // --- ✅ Distributor payload ZONDER undefined velden opbouwen ---
-        const distributorPayload: any = {
-          name: onboardingData.companyName,
-          companyName: onboardingData.companyName,
-          contactEmail: onboardingData.email,
-          status: 'active',
-          website: onboardingData.website,
-          vatNumber: onboardingData.vatNumber,
-          chamberOfCommerce: onboardingData.kvkNumber,
-          isSubscriptionExempt: false,
-          subscriptionStatus: 'trialing',
-          subscription: chosenTier, // volledige tier config opslaan
-        };
-
-        if (stripeCustomerId) {
-          distributorPayload.stripeCustomerId = stripeCustomerId;
-        }
-        if (stripeSubscriptionId) {
-          distributorPayload.subscriptionId = stripeSubscriptionId;
-        }
-
-        // Create the distributor
-        const distributor = await addDistributorService(distributorPayload);
-
-        // Create the Master user
-        const newMasterUid = await addUser(
-            onboardingData.email, 
-            onboardingData.password || 'defaultPassword', 
-            'master', 
+          }
+  
+          const session = await response.json();
+          const onboardingDataString = localStorage.getItem('onboarding_data');
+  
+          if (!onboardingDataString) {
+            throw new Error(
+              'Onboarding data not found in your browser. Please try registering again.'
+            );
+          }
+  
+          const onboardingData: OnboardingFormValues = JSON.parse(
+            onboardingDataString
+          );
+  
+          if (session.metadata?.userEmail !== onboardingData.email) {
+            throw new Error(
+              'Session email does not match registration email. Please try registering again.'
+            );
+          }
+  
+          // -------------------------------
+          // 🔹 Resolve tier from metadata
+          // -------------------------------
+          const rawTier = (session.metadata?.tier as string | undefined) || '';
+          const normalizedTier = rawTier.toLowerCase() as SubscriptionTier;
+  
+          const subscriptionTiers = await getSubscriptionTiersOnServer();
+          const tiersRecord = subscriptionTiers as Record<
+            string,
+            (typeof subscriptionTiers)[keyof typeof subscriptionTiers]
+          >;
+  
+          const chosenTier = tiersRecord[normalizedTier];
+  
+          if (!normalizedTier || !chosenTier) {
+            console.error('Stripe session metadata:', session.metadata);
+            throw new Error(
+              `The selected subscription tier '${session.metadata?.tier}' is invalid. ` +
+                `Please start the registration process again.`
+            );
+          }
+  
+          // --- ✅ Stripe IDs veilig ophalen (geen undefined in object stoppen) ---
+          const stripeCustomerId =
+            typeof session.customer === 'string'
+              ? session.customer
+              : undefined;
+  
+          const stripeSubscriptionId =
+            typeof session.subscription === 'string'
+              ? session.subscription
+              : undefined;
+  
+          // --- ✅ Distributor payload ZONDER undefined velden opbouwen ---
+          const distributorPayload: any = {
+            name: onboardingData.companyName,
+            companyName: onboardingData.companyName,
+            contactEmail: onboardingData.email,
+            status: 'active',
+            website: onboardingData.website,
+            vatNumber: onboardingData.vatNumber,
+            chamberOfCommerce: onboardingData.kvkNumber,
+            isSubscriptionExempt: false,
+            subscriptionStatus: 'trialing' as SubscriptionStatus,
+            subscription: chosenTier, // volledige tier config opslaan
+          };
+  
+          if (stripeCustomerId) {
+            distributorPayload.stripeCustomerId = stripeCustomerId;
+          }
+          if (stripeSubscriptionId) {
+            distributorPayload.subscriptionId = stripeSubscriptionId;
+          }
+  
+          // Create the distributor
+          const distributor = await addDistributorService(distributorPayload);
+  
+          // Create the Master user
+          const newMasterUid = await addUser(
+            onboardingData.email,
+            onboardingData.password || 'defaultPassword',
+            'master',
             distributor.id,
-            { 
+            {
               firstName: onboardingData.firstName,
               lastName: onboardingData.lastName,
               companyName: onboardingData.companyName,
             }
-        );
-
-        if (!newMasterUid) {
-            throw new Error("Failed to create master user account.");
+          );
+  
+          if (!newMasterUid) {
+            throw new Error('Failed to create master user account.');
+          }
+  
+          // Link master user to distributor
+          await updateDistributor(distributor.id, {
+            masterUserUid: newMasterUid,
+          });
+  
+          // Clean up
+          localStorage.removeItem('onboarding_data');
+  
+          // Log the new user in
+          await login(onboardingData.email, onboardingData.password);
+          toast({
+            title: 'Registration Successful!',
+            description: `Welcome, ${onboardingData.companyName}! Your account is ready.`,
+          });
+        } catch (error) {
+          setRegistrationError((error as Error).message);
+        } finally {
+          setIsFinalizing(false);
         }
-
-        // Link master user to distributor
-        await updateDistributor(distributor.id, { masterUserUid: newMasterUid });
-
-        // Clean up
-        localStorage.removeItem('onboarding_data');
-
-        // Log the new user in
-        await login(onboardingData.email, onboardingData.password);
-        toast({
-          title: "Registration Successful!",
-          description: `Welcome, ${onboardingData.companyName}! Your account is ready.`,
-        });
-
-    } catch (error) {
-        setRegistrationError((error as Error).message);
-    } finally {
-        setIsFinalizing(false);
-    }
-  }, [toast, addUser, login]);
-
+      },
+      [toast, addUser, login]
+    );
+  
 
 
   useEffect(() => {
