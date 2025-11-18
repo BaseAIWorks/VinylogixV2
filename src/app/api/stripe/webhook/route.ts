@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
                 // Update distributor with subscription details
                 await updateDistributor(distributor.id, {
                     subscriptionId: subscriptionId,
-                    subscriptionStatus: 'active', // Assuming it's active right away
+                    // The status will be 'trialing' or 'active', which is handled by the subscription.created/updated events.
                 });
                 console.log(`Updated distributor ${distributor.id} with new subscription ${subscriptionId}`);
             } else {
@@ -63,7 +63,8 @@ export async function POST(req: NextRequest) {
       }
       break;
     }
-    
+
+    case 'customer.subscription.created':
     case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription;
         const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
@@ -75,7 +76,9 @@ export async function POST(req: NextRequest) {
                 // You might also want to update the tier if plan changes are allowed
                 // 'subscription.items.data[0].price.id' can be used to find the new tier.
             });
-             console.log(`Updated subscription status for distributor ${distributor.id} to ${subscription.status}`);
+             console.log(`Updated subscription status for distributor ${distributor.id} to ${subscription.status} from event ${event.type}`);
+        } else {
+             console.warn(`Could not find distributor for Stripe customer ID: ${customerId} from event ${event.type}`);
         }
         break;
     }
