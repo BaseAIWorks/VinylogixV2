@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-import { formatDistanceToNowStrict, format, isFuture } from "date-fns";
+import { formatDistanceToNowStrict, format, isFuture, isPast } from "date-fns";
 import type { SubscriptionInfo, SubscriptionTier, SubscriptionStatus, Distributor, User, VinylRecord } from "@/types";
 import { useState, useEffect, useCallback } from "react";
 import { getSubscriptionTiers } from "@/services/client-subscription-service";
@@ -123,18 +123,22 @@ export default function SubscriptionPage() {
     status: activeDistributor?.subscriptionStatus ?? "incomplete",
   } : activeDistributor?.subscription ?? null;
 
-  const getTrialDaysLeft = () => {
-    if (activeDistributor?.subscriptionStatus !== "trialing" || !activeDistributor?.subscriptionCurrentPeriodEnd) {
-      return null;
+  const getTrialStatusNode = () => {
+    if (activeDistributor?.subscriptionStatus !== "trialing") {
+      return <Badge variant="secondary">Not in trial</Badge>;
+    }
+    if (!activeDistributor?.subscriptionCurrentPeriodEnd) {
+       return <Badge variant="secondary">Not in trial</Badge>;
     }
     const trialEndDate = new Date(activeDistributor.subscriptionCurrentPeriodEnd);
-    if (!isFuture(trialEndDate)) {
-      return "Trial has expired.";
+    if (isPast(trialEndDate)) {
+      return <Badge variant="destructive">Trial has expired</Badge>;
     }
-    return `~${formatDistanceToNowStrict(trialEndDate, { unit: "day" })} left`;
+    return <Badge variant="outline" className="text-blue-500 border-blue-500/50">{`~${formatDistanceToNowStrict(trialEndDate, { unit: "day" })} left`}</Badge>;
   };
+  
+  const trialStatusNode = getTrialStatusNode();
 
-  const trialDaysLeft = getTrialDaysLeft();
 
   const handleManageSubscription = () => {
     window.location.href = 'https://billing.stripe.com/p/login/YOUR_PORTAL_ID';
@@ -181,9 +185,6 @@ export default function SubscriptionPage() {
                   >
                     {effectiveSubscription.status?.replace("_", " ")}
                   </p>
-                  {trialDaysLeft && (
-                    <Badge variant="secondary">{trialDaysLeft}</Badge>
-                  )}
                 </div>
                 <div className="space-x-2">
                    <Button onClick={handleManageSubscription}>
@@ -197,6 +198,7 @@ export default function SubscriptionPage() {
               <div className="p-4 border rounded-lg bg-muted/50">
                 <h4 className="font-semibold mb-3">Plan Details & Usage</h4>
                 <div className="space-y-2">
+                   <DetailItem label="Trial Status" value={trialStatusNode} />
                    {activeDistributor?.billingCycle && <DetailItem label="Billing Cycle" value={<span className="capitalize">{activeDistributor.billingCycle}</span>} />}
                    {activeDistributor?.subscriptionCurrentPeriodEnd && effectiveSubscription.status !== 'canceled' && (
                      <DetailItem 
