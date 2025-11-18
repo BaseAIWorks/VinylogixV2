@@ -2,7 +2,7 @@
 import { stripe } from '@/lib/stripe';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { findDistributorByStripeCustomerId, updateDistributor } from '@/services/distributor-service'; 
+import { findDistributorByStripeCustomerIdServer, updateDistributorServer } from '@/services/server-distributor-service'; 
 import { getAdminAuth } from '@/lib/firebase-admin';
 
 // This is your Stripe CLI webhook secret for testing your endpoint locally.
@@ -29,10 +29,8 @@ export async function POST(req: NextRequest) {
 
   // Handle the event
   switch (event.type) {
-    // --- STRIPE BILLING (DISTRIBUTOR SUBSCRIPTIONS) ---
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
-      // This is for the initial subscription checkout.
       if (session.mode === 'subscription' && session.subscription && session.customer) {
         
         const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
@@ -41,23 +39,19 @@ export async function POST(req: NextRequest) {
         console.log(`Checkout session completed for subscription ${subscriptionId}`);
 
         try {
-            // Find distributor by the customer ID created during checkout
-            const distributor = await findDistributorByStripeCustomerId(customerId);
+            const distributor = await findDistributorByStripeCustomerIdServer(customerId);
 
             if (distributor) {
-                // Update distributor with subscription details
-                await updateDistributor(distributor.id, {
+                await updateDistributorServer(distributor.id, {
                     subscriptionId: subscriptionId,
-                    // The status will be 'trialing' or 'active', which is handled by the subscription.created/updated events.
                 });
                 console.log(`Updated distributor ${distributor.id} with new subscription ${subscriptionId}`);
             } else {
-                 console.warn(`Could not find distributor for Stripe customer ID: ${customerId}`);
+                 console.warn(`Could not find distributor for Stripe customer ID: ${customerId}. This may be expected if the user is being created.`);
             }
 
         } catch (error) {
              console.error('Error handling checkout.session.completed:', error);
-             // Optionally, return a 500 status to have Stripe retry the webhook
              return NextResponse.json({ error: 'Internal server error in webhook handler' }, { status: 500 });
         }
       }
@@ -68,13 +62,11 @@ export async function POST(req: NextRequest) {
     case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription;
         const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
-        const distributor = await findDistributorByStripeCustomerId(customerId);
+        const distributor = await findDistributorByStripeCustomerIdServer(customerId);
 
         if (distributor) {
-            await updateDistributor(distributor.id, {
+            await updateDistributorServer(distributor.id, {
                 subscriptionStatus: subscription.status,
-                // You might also want to update the tier if plan changes are allowed
-                // 'subscription.items.data[0].price.id' can be used to find the new tier.
             });
              console.log(`Updated subscription status for distributor ${distributor.id} to ${subscription.status} from event ${event.type}`);
         } else {
@@ -86,10 +78,10 @@ export async function POST(req: NextRequest) {
     case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
         const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
-        const distributor = await findDistributorByStripeCustomerId(customerId);
+        const distributor = await findDistributorByStripeCustomerIdServer(customerId);
 
         if (distributor) {
-            await updateDistributor(distributor.id, {
+            await updateDistributorServer(distributor.id, {
                 subscriptionStatus: 'cancelled',
                 subscriptionId: undefined,
             });
@@ -98,7 +90,6 @@ export async function POST(req: NextRequest) {
         break;
     }
 
-    // --- STRIPE CONNECT (MARKETPLACE) ---
     case 'account.updated': {
       const account = event.data.object as Stripe.Account;
       const distributorId = account.metadata?.distributorId;
@@ -113,7 +104,7 @@ export async function POST(req: NextRequest) {
             }
         }
         
-        await updateDistributor(distributorId, {
+        await updateDistributorServer(distributorId, {
             stripeAccountStatus: status,
         });
         console.log(`Updated Stripe Connect account status for distributor ${distributorId} to ${status}`);
@@ -123,11 +114,9 @@ export async function POST(req: NextRequest) {
       break;
     }
 
-    // ... handle other event types
     default:
       console.log(`Unhandled event type ${event.type}`);
   }
 
-  // Return a 200 response to acknowledge receipt of the event
   return NextResponse.json({ received: true });
 }
