@@ -2,7 +2,7 @@
 import { stripe } from '@/lib/stripe';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { findDistributorByStripeCustomerId, updateDistributor } from '@/services/server-distributor-service'; 
+import { findDistributorByStripeCustomerId, updateDistributor } from '@/services/distributor-service'; 
 import { getAdminAuth } from '@/lib/firebase-admin';
 
 // This is your Stripe CLI webhook secret for testing your endpoint locally.

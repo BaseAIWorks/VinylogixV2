@@ -260,4 +260,3 @@ export async function deleteDistributor(id: string): Promise<boolean> {
     throw error;
   }
 }
-
