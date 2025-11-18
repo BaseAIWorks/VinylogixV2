@@ -242,8 +242,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
     
     // Changelog for master/worker
     { href: '/changelog', label: 'Changelog', title: 'Changelog', icon: Newspaper, roles: ['master', 'worker'] },
-
-    // Settings for all
+    
+    // Settings & Subscription
+    { href: '/subscription', label: 'Subscription', title: 'Subscription', icon: CreditCard, roles: ['master']},
     { href: '/settings', label: 'Settings', title: 'Settings', icon: Settings, roles: ['master', 'worker', 'viewer', 'superadmin'] },
   ];
   
@@ -440,12 +441,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
                         </DropdownMenuSubContent>
                       </DropdownMenuPortal>
                     </DropdownMenuSub>
-                     {user.role === 'master' && (
-                      <DropdownMenuItem onClick={() => router.push('/subscription')}>
-                        <CreditCard className="mr-2 h-4 w-4" />
-                        <span>Subscription</span>
-                      </DropdownMenuItem>
-                    )}
                     <DropdownMenuItem onClick={() => router.push('/settings')}>
                       <Settings2 className="mr-2 h-4 w-4" />
                       <span>Settings</span>
