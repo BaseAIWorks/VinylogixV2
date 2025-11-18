@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -21,8 +22,12 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-import { formatDistanceToNowStrict, format } from "date-fns";
-import type { SubscriptionInfo, SubscriptionTier, SubscriptionStatus } from "@/types";
+import { formatDistanceToNowStrict, format, isFuture } from "date-fns";
+import type { SubscriptionInfo, SubscriptionTier, SubscriptionStatus, Distributor, User, VinylRecord } from "@/types";
+import { useState, useEffect, useCallback } from "react";
+import { getSubscriptionTiers } from "@/services/client-subscription-service";
+import { getAllInventoryRecords } from "@/services/record-service";
+import { getUsersByDistributorId } from "@/services/user-service";
 
 const subscriptionStatusColors: Record<string, string> = {
   active: "text-green-500",
@@ -48,60 +53,46 @@ const DetailItem = ({
   );
 };
 
-// Local mirror of your default tiers so the UI can still work
-// even if subscription object isn't stored directly.
-const getDefaultTierConfig = (tier: SubscriptionTier): Omit<SubscriptionInfo, "status"> => {
-  switch (tier) {
-    case "essential":
-      return {
-        tier: "essential",
-        maxRecords: 100,
-        maxUsers: 2,
-        allowOrders: false,
-        allowAiFeatures: false,
-        price: 9,
-        quarterlyPrice: 25,
-        yearlyPrice: 90,
-        description: "For personal collectors and enthusiasts getting started.",
-        features:
-          "Up to 100 records\nPersonal collection tracking\nWishlist management",
-      };
-    case "growth":
-      return {
-        tier: "growth",
-        maxRecords: 1000,
-        maxUsers: 10,
-        allowOrders: true,
-        allowAiFeatures: false,
-        price: 29,
-        quarterlyPrice: 79,
-        yearlyPrice: 290,
-        description: "Ideal for small shops and growing businesses.",
-        features:
-          "Up to 1,000 records\nOrder Management\nClient Accounts\nBasic Analytics",
-      };
-    case "scale":
-      return {
-        tier: "scale",
-        maxRecords: -1, // -1 for unlimited
-        maxUsers: -1, // -1 for unlimited
-        allowOrders: true,
-        allowAiFeatures: true,
-        price: 79,
-        quarterlyPrice: 220,
-        yearlyPrice: 790,
-        description: "For established distributors and power users.",
-        features:
-          "Unlimited records\nAI-powered descriptions\nAdvanced Analytics\nPriority Support",
-      };
-  }
-};
 
 export default function SubscriptionPage() {
   const { user, loading: authLoading, activeDistributor } = useAuth();
   const router = useRouter();
 
-  if (authLoading) {
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [recordCount, setRecordCount] = useState(0);
+  const [userCount, setUserCount] = useState(0);
+  const [subscriptionTiers, setSubscriptionTiers] = useState<Record<SubscriptionTier, SubscriptionInfo> | null>(null);
+
+  const fetchUsageData = useCallback(async () => {
+    if (!user || user.role !== "master" || !user.distributorId) {
+      setIsLoadingStats(false);
+      return;
+    }
+    setIsLoadingStats(true);
+    try {
+      const [records, users, tiers] = await Promise.all([
+        getAllInventoryRecords(user, user.distributorId),
+        getUsersByDistributorId(user.distributorId),
+        getSubscriptionTiers()
+      ]);
+      setRecordCount(records.length);
+      setUserCount(users.length);
+      setSubscriptionTiers(tiers);
+    } catch (error) {
+      console.error("Failed to fetch usage stats for subscription page:", error);
+    } finally {
+      setIsLoadingStats(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!authLoading) {
+        fetchUsageData();
+    }
+  }, [authLoading, fetchUsageData]);
+
+
+  if (authLoading || isLoadingStats) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -123,32 +114,25 @@ export default function SubscriptionPage() {
       </div>
     );
   }
+  
+  // Get the server-side tier info for defaults, then override with distributor-specific info
+  const distributorTierName = activeDistributor?.subscriptionTier;
+  const serverTierInfo = distributorTierName && subscriptionTiers ? subscriptionTiers[distributorTierName] : null;
 
-  // Use the new Stripe-synced fields first
-  const distributorTier = activeDistributor?.subscriptionTier;
-  const distributorStatus = activeDistributor?.subscriptionStatus;
-  const billingCycle = activeDistributor?.billingCycle;
-  const periodEnd = activeDistributor?.subscriptionCurrentPeriodEnd;
-
-  const effectiveSubscription: SubscriptionInfo | null = distributorTier
-    ? {
-        ...getDefaultTierConfig(distributorTier),
-        status: distributorStatus ?? "incomplete",
-      }
-    : activeDistributor?.subscription ?? null;
+  const effectiveSubscription: SubscriptionInfo | null = serverTierInfo ? {
+    ...serverTierInfo,
+    status: activeDistributor?.subscriptionStatus ?? "incomplete",
+  } : activeDistributor?.subscription ?? null;
 
   const getTrialDaysLeft = () => {
-    if (distributorStatus !== "trialing" || !periodEnd) {
+    if (activeDistributor?.subscriptionStatus !== "trialing" || !activeDistributor?.subscriptionCurrentPeriodEnd) {
       return null;
     }
-    const trialEndDate = new Date(periodEnd);
-    const now = new Date();
-    const daysLeft = formatDistanceToNowStrict(trialEndDate, { unit: "day" });
-
-    if (now > trialEndDate) {
+    const trialEndDate = new Date(activeDistributor.subscriptionCurrentPeriodEnd);
+    if (!isFuture(trialEndDate)) {
       return "Trial has expired.";
     }
-    return `~${daysLeft} left`;
+    return `~${formatDistanceToNowStrict(trialEndDate, { unit: "day" })} left`;
   };
 
   const trialDaysLeft = getTrialDaysLeft();
@@ -214,29 +198,37 @@ export default function SubscriptionPage() {
                 </div>
               </div>
               <div className="p-4 border rounded-lg bg-muted/50">
-                <h4 className="font-semibold mb-3">Plan Details</h4>
+                <h4 className="font-semibold mb-3">Plan Details & Usage</h4>
                 <div className="space-y-2">
-                   {billingCycle && <DetailItem label="Billing Cycle" value={<span className="capitalize">{billingCycle}</span>} />}
-                   {periodEnd && effectiveSubscription.status !== 'canceled' && (
+                   {activeDistributor?.billingCycle && <DetailItem label="Billing Cycle" value={<span className="capitalize">{activeDistributor.billingCycle}</span>} />}
+                   {activeDistributor?.subscriptionCurrentPeriodEnd && effectiveSubscription.status !== 'canceled' && (
                      <DetailItem 
                         label={effectiveSubscription.status === 'trialing' ? 'Trial Ends' : 'Next Billing Date'} 
-                        value={format(new Date(periodEnd), 'PPP')} 
+                        value={format(new Date(activeDistributor.subscriptionCurrentPeriodEnd), 'PPP')} 
                      />
                    )}
                   <DetailItem
-                    label="Max Records"
+                    label="Records"
                     value={
-                      effectiveSubscription.maxRecords === -1
-                        ? "Unlimited"
-                        : effectiveSubscription.maxRecords.toLocaleString()
+                      <span>
+                        {recordCount.toLocaleString()} /{' '}
+                        {effectiveSubscription.maxRecords === -1
+                            ? "Unlimited"
+                            : effectiveSubscription.maxRecords.toLocaleString()
+                        }
+                      </span>
                     }
                   />
                   <DetailItem
-                    label="Max Users"
-                    value={
-                      effectiveSubscription.maxUsers === -1
-                        ? "Unlimited"
-                        : effectiveSubscription.maxUsers.toLocaleString()
+                    label="Users (Operators)"
+                     value={
+                      <span>
+                        {userCount.toLocaleString()} /{' '}
+                        {effectiveSubscription.maxUsers === -1
+                            ? "Unlimited"
+                            : effectiveSubscription.maxUsers.toLocaleString()
+                        }
+                      </span>
                     }
                   />
                   <DetailItem
