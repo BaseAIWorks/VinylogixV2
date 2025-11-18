@@ -115,7 +115,6 @@ export default function SubscriptionPage() {
     );
   }
   
-  // Get the server-side tier info for defaults, then override with distributor-specific info
   const distributorTierName = activeDistributor?.subscriptionTier;
   const serverTierInfo = distributorTierName && subscriptionTiers ? subscriptionTiers[distributorTierName] : null;
 
@@ -138,8 +137,6 @@ export default function SubscriptionPage() {
   const trialDaysLeft = getTrialDaysLeft();
 
   const handleManageSubscription = () => {
-    // This will redirect the user to a pre-built Stripe page to manage their subscription.
-    // Replace with your actual Stripe Customer Portal link from your Stripe dashboard settings.
     window.location.href = 'https://billing.stripe.com/p/login/YOUR_PORTAL_ID';
   }
 

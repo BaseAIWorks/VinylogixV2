@@ -253,7 +253,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
     if (user.role === 'worker' && item.href === '/orders' && !user.permissions?.canManageOrders) return false;
     if (user.role === 'worker' && item.href === '/fulfillment' && !user.permissions?.canManageOrders) return false;
     if (user.role === 'viewer' && item.setting === false) return false;
-    // Hide inventory from viewer menu if it's already shown as catalog
     if (user.role === 'viewer' && item.href === '/inventory' && item.label === 'Inventory') return false; 
     return true;
   });
@@ -426,6 +425,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
+                     <DropdownMenuItem onClick={() => router.push('/subscription')}>
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        <span>Subscription</span>
+                    </DropdownMenuItem>
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger>
                         <Palette className="mr-2 h-4 w-4" />

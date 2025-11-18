@@ -336,27 +336,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [user]);
 
   useEffect(() => {
-    if (user && (user.role === 'master' || user.role === 'worker')) {
-      const fetchOperatorOrders = async () => {
-        try {
-          const orders = await getOrders(user);
-          const pendingCount = orders.filter((o) => o.status === 'pending').length;
-          setOperatorPendingOrdersCount(pendingCount);
-        } catch (error) {
-          console.error(
-            'AuthContext: Failed to fetch operator orders for count',
-            error
-          );
-          setOperatorPendingOrdersCount(0);
-        }
-      };
-      fetchOperatorOrders();
-    } else {
-      setOperatorPendingOrdersCount(0);
-    }
-  }, [user, activeDistributorId]);
-
-  useEffect(() => {
     fetchUserNotifications();
   }, [fetchUserNotifications]);
 
@@ -486,9 +465,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         const userDocSnap = await getDoc(userDocRef);
 
-        // ============================
-        // 1) Existing Firestore user
-        // ============================
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data() as FirestoreUser;
 
@@ -539,9 +515,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           };
         }
 
-        // ============================
-        // 2) First-time login → create Firestore user
-        // ============================
         if (!firebaseUser.email) return null;
 
         const newTimestamp = Timestamp.now();
@@ -680,7 +653,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     [toast]
   );
   
-  // Real-time listener for distributor data
   useEffect(() => {
     if (!activeDistributorId) {
       setActiveDistributor(null);
@@ -691,14 +663,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     const unsubscribe = onSnapshot(distributorDocRef, (docSnap) => {
       if (docSnap.exists()) {
-        setActiveDistributor(prev => {
-          const newData = { ...docSnap.data(), id: docSnap.id } as Distributor;
-          // Preserve fetched sub-collections if they exist on the previous state
-          const preservedData = {
-              weightOptions: prev?.weightOptions,
-              suppliers: prev?.suppliers,
-          };
-          return { ...preservedData, ...newData };
+        const newDistributorData = { ...docSnap.data(), id: docSnap.id } as Distributor;
+        
+        setActiveDistributor(prevDistributor => {
+            // If the listener fires, it means db data changed.
+            // We want to merge it with any existing non-db data we have (like suppliers).
+            const preservedData = {
+                weightOptions: prevDistributor?.weightOptions,
+                suppliers: prevDistributor?.suppliers,
+            };
+            return { ...preservedData, ...newDistributorData };
         });
       } else {
         console.warn(`Distributor with ID ${activeDistributorId} not found.`);
@@ -708,8 +682,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error(`Error listening to distributor ${activeDistributorId}:`, error);
     });
 
-    return () => unsubscribe(); // Cleanup listener on unmount
+    return () => unsubscribe();
   }, [activeDistributorId]);
+
+  useEffect(() => {
+    if (user && user.distributorId && (user.role === 'master' || user.role === 'worker')) {
+      const fetchInitialDistributor = async () => {
+        const fullDistributorData = await loadActiveDistributorData(user.distributorId!, []);
+        if (fullDistributorData) {
+          setActiveDistributor(fullDistributorData);
+          setActiveDistributorId(user.distributorId!);
+        }
+      };
+      fetchInitialDistributor();
+    }
+  }, [user, loadActiveDistributorData, setActiveDistributorId]);
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -721,8 +709,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (userWithRole) {
           await loadCartFromFirestore(userWithRole.cart || []);
-          let distributorIdToLoad: string | undefined =
-            userWithRole.distributorId;
+          let distributorIdToLoad: string | undefined = userWithRole.distributorId;
           let accessibleDistributorData: Distributor[] = [];
 
           if (
@@ -760,25 +747,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
 
           if (distributorIdToLoad) {
-            const fullDistributorData =
-              await loadActiveDistributorData(
-                distributorIdToLoad,
-                accessibleDistributorData
-              );
-            if (fullDistributorData) {
-              setActiveDistributor(fullDistributorData);
-              _setActiveDistributorId(distributorIdToLoad);
-            } else {
-              await firebaseSignOut(auth);
-              setUser(null);
-              setActiveDistributor(null);
-              setActiveDistributorId(null);
-              setLoading(false);
-              return;
-            }
+             _setActiveDistributorId(distributorIdToLoad);
           } else {
             setActiveDistributor(null);
-            setActiveDistributorId(null);
+            _setActiveDistributorId(null);
           }
 
           setUser(userWithRole);
@@ -822,22 +794,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               loginUpdateError
             );
           }
-
-          if (userWithRole.role === 'viewer') {
-            const fetchPendingOrdersCount = async (uid: string) => {
-              try {
-                const orders = await getOrdersByViewerId(uid);
-                const pendingCount = orders.filter(
-                  (o) =>
-                    o.status !== 'paid' && o.status !== 'cancelled'
-                ).length;
-                setClientPendingOrdersCount(pendingCount);
-              } catch (error) {
-                setClientPendingOrdersCount(0);
-              }
-            };
-            fetchPendingOrdersCount(firebaseUser.uid);
-          }
         } else {
           toast({
             title: 'Access Issue',
@@ -849,12 +805,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           await firebaseSignOut(auth);
           setUser(null);
           setActiveDistributor(null);
-          setActiveDistributorId(null);
+          _setActiveDistributorId(null);
         }
       } else {
         setUser(null);
         setActiveDistributor(null);
-        setActiveDistributorId(null);
+        _setActiveDistributorId(null);
         setAccessibleDistributors([]);
         setClientPendingOrdersCount(0);
         setNotifications([]);
@@ -866,10 +822,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     fetchUserRole,
     toast,
     isImpersonating,
-    setActiveDistributorId,
     loadCartFromFirestore,
     loadActiveDistributorData,
   ]);
+  
+  useEffect(() => {
+    if (user?.role === 'master' || (user?.role === 'worker' && user.permissions?.canManageOrders)) {
+      const fetchOperatorOrders = async () => {
+        try {
+          const orders = await getOrders(user);
+          const pendingCount = orders.filter((o) => o.status === 'pending').length;
+          setOperatorPendingOrdersCount(pendingCount);
+        } catch (error) {
+          setOperatorPendingOrdersCount(0);
+        }
+      };
+      fetchOperatorOrders();
+    } else {
+      setOperatorPendingOrdersCount(0);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user?.role === 'viewer') {
+      const fetchPendingOrdersCount = async (uid: string) => {
+        try {
+          const orders = await getOrdersByViewerId(uid);
+          const pendingCount = orders.filter(
+            (o) => o.status !== 'shipped' && o.status !== 'cancelled'
+          ).length;
+          setClientPendingOrdersCount(pendingCount);
+        } catch (error) {
+          setClientPendingOrdersCount(0);
+        }
+      };
+      fetchPendingOrdersCount(user.uid);
+    } else {
+      setClientPendingOrdersCount(0);
+    }
+  }, [user]);
+  
 
   const login = async (email: string, password?: string) => {
     if (!password) {
@@ -1556,7 +1548,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     [discogsInventory]
   );
 
-    // Effect to handle post-Stripe registration
     const finalizeRegistration = useCallback(
       async (sessionId: string) => {
         setIsFinalizing(true);
@@ -1593,9 +1584,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             );
           }
   
-          // -------------------------------
-          // 🔹 Resolve tier from metadata
-          // -------------------------------
           const rawTier = (session.metadata?.tier as string | undefined) || '';
           const normalizedTier = rawTier.toLowerCase() as SubscriptionTier;
   
@@ -1615,18 +1603,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             );
           }
   
-          // --- ✅ Stripe IDs veilig ophalen (geen undefined in object stoppen) ---
           const stripeCustomerId =
             typeof session.customer === 'string'
               ? session.customer
               : undefined;
   
           const stripeSubscriptionId =
-            typeof session.subscription === 'string'
-              ? session.subscription
+            typeof session.subscriptionId === 'string'
+              ? session.subscriptionId
               : undefined;
   
-          // --- ✅ Distributor payload ZONDER undefined velden opbouwen ---
           const distributorPayload: any = {
             name: onboardingData.companyName,
             companyName: onboardingData.companyName,
@@ -1636,21 +1622,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             vatNumber: onboardingData.vatNumber,
             chamberOfCommerce: onboardingData.kvkNumber,
             isSubscriptionExempt: false,
-            subscriptionStatus: 'trialing' as SubscriptionStatus,
-            subscription: chosenTier, // volledige tier config opslaan
+            subscriptionStatus: session.subscriptionStatus || 'trialing',
+            subscription: chosenTier,
+            subscriptionId: stripeSubscriptionId,
+            stripeCustomerId: stripeCustomerId,
+            billingCycle: session.metadata?.billing,
+            subscriptionCurrentPeriodEnd: session.subscriptionCurrentPeriodEnd,
           };
   
-          if (stripeCustomerId) {
-            distributorPayload.stripeCustomerId = stripeCustomerId;
-          }
-          if (stripeSubscriptionId) {
-            distributorPayload.subscriptionId = stripeSubscriptionId;
-          }
-  
-          // Create the distributor
           const distributor = await addDistributorService(distributorPayload);
   
-          // Create the Master user
           const newMasterUid = await addUser(
             onboardingData.email,
             onboardingData.password || 'defaultPassword',
@@ -1667,15 +1648,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             throw new Error('Failed to create master user account.');
           }
   
-          // Link master user to distributor
           await updateDistributor(distributor.id, {
             masterUserUid: newMasterUid,
           });
   
-          // Clean up
           localStorage.removeItem('onboarding_data');
   
-          // Log the new user in
           await login(onboardingData.email, onboardingData.password);
           toast({
             title: 'Registration Successful!',
@@ -1690,8 +1668,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       [toast, addUser, login]
     );
   
-
-
   useEffect(() => {
     const sessionId = searchParams.get('stripe_session_id');
     if (sessionId && !user && !loading) {
