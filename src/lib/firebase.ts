@@ -32,7 +32,7 @@ const firebaseConfig = {
   appId: "1:709401169654:web:93a83783ae8bfe62e1a6d7",
   
     // Found in Firebase Console: Project settings > General > Your apps > Config
-  measurementId: "G-2X7L1ZB3DW",
+  measurementId: "G-Q91D5J3W1M",
 };
 // =====================================================================================
 // END OF CONFIGURATION TO REPLACE

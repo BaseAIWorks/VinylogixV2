@@ -61,10 +61,10 @@ service cloud.firestore {
       // A master user can update users within their distributorship.
       // A superadmin can update any user.
       // Field-level security: only specific roles can change other specific fields.
-      allow update: if isSuperAdmin() || isOwner(userId) || isMaster();
+      allow update: if isSuperAdmin() || isOwner(userId) || (isMaster() && resource.data.distributorId == request.auth.token.distributorId);
       
       // A master or superadmin can delete a user document.
-      allow delete: if isMaster() || isSuperAdmin();
+      allow delete: if isSuperAdmin() || (isMaster() && resource.data.distributorId == request.auth.token.distributorId);
     }
 
     match /distributors/{distributorId} {
@@ -81,7 +81,14 @@ service cloud.firestore {
 
     match /vinylRecords/{recordId} {
       // Anyone signed in can create a record (for their own collection or inventory).
-      allow create: if isSignedIn();
+      allow create: if isSignedIn()
+                && request.resource.data.ownerUid == request.auth.uid // Must claim self-ownership
+                && (
+                     // If it's a personal record, ensure it's not trying to be an inventory item for a distributor
+                     (request.resource.data.isInventoryItem == false && !exists(request.resource.data.distributorId)) ||
+                     // If it's an inventory item, the user must be an operator of the claimed distributor
+                     (request.resource.data.isInventoryItem == true && isOperatorOf(request.resource.data.distributorId))
+                   );
 
       // Read permissions are more complex:
       // 1. Superadmins can read anything.

@@ -1,33 +1,54 @@
-import { stripe } from '@/lib/stripe';
-import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
-import { updateDistributor, findDistributorByStripeCustomerId } from '@/services/server-distributor-service';
-import type { SubscriptionTier, SubscriptionStatus } from '@/types';
+// src/app/api/stripe/webhook/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
+import { stripe } from "@/lib/stripe";
+import {
+  findDistributorByStripeCustomerId,
+  updateDistributor,
+} from "@/services/server-distributor-service";
+import type { SubscriptionTier, SubscriptionStatus } from "@/types";
 
-// This is your Stripe CLI webhook secret for testing your endpoint locally.
+// Webhook signing secret
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
-// Helper to resolve the subscription tier from a Subscription object
-function resolveTierFromSubscription(sub: Stripe.Subscription): SubscriptionTier | undefined {
-  // 1) Prefer subscription metadata
+// Resolve subscription tier from Stripe Subscription metadata
+function resolveTierFromSubscription(
+  sub: Stripe.Subscription
+): SubscriptionTier | undefined {
+  // 1) Subscription metadata
   const metaTier = sub.metadata?.tier as SubscriptionTier | undefined;
   if (metaTier) return metaTier;
 
-  // 2) Fallback: first subscription item price metadata
+  // 2) First item price metadata
   const firstItem = sub.items?.data?.[0];
-
-  const priceMetaTier = firstItem?.price?.metadata?.tier as SubscriptionTier | undefined;
+  const priceMetaTier = firstItem?.price?.metadata
+    ?.tier as SubscriptionTier | undefined;
   if (priceMetaTier) return priceMetaTier;
 
-  // 3) Legacy / plan metadata, just in case
-  const planMetaTier = (firstItem as any)?.plan?.metadata?.tier as SubscriptionTier | undefined;
+  // 3) Legacy plan metadata fallback
+  const planMetaTier = (firstItem as any)?.plan?.metadata
+    ?.tier as SubscriptionTier | undefined;
   if (planMetaTier) return planMetaTier;
 
   return undefined;
 }
 
+// Safely compute ISO string for current_period_end
+function getCurrentPeriodEndIso(
+  subscription: Stripe.Subscription
+): string | undefined {
+  const ts = subscription.current_period_end;
+  if (typeof ts === "number") {
+    const d = new Date(ts * 1000);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toISOString();
+    }
+  }
+  return undefined;
+}
+
 export async function POST(req: NextRequest) {
-  const sig = req.headers.get('stripe-signature');
+  const sig = req.headers.get("stripe-signature");
   const body = await req.text();
 
   let event: Stripe.Event;
@@ -38,202 +59,229 @@ export async function POST(req: NextRequest) {
     }
     event = stripe.webhooks.constructEvent(body, sig, endpointSecret);
   } catch (err: any) {
-    console.error(`❌ Webhook signature verification failed:`, err.message);
-    return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
+    console.error("❌ Webhook signature verification failed:", err.message);
+    return NextResponse.json(
+      { error: `Webhook Error: ${err.message}` },
+      { status: 400 }
+    );
   }
 
-  // Successfully constructed event.
-  console.log('✅ Stripe Webhook Received:', event.type);
+  console.log("✅ Stripe Webhook Received:", event.type);
 
-  // Handle the event
-  switch (event.type) {
-    // ======================================================
-    // CHECKOUT SESSION COMPLETED (initial subscription start)
-    // ======================================================
-    case 'checkout.session.completed': {
-      const session = event.data.object as Stripe.Checkout.Session;
+  try {
+    switch (event.type) {
+      // ============================================
+      // CHECKOUT SESSION COMPLETED
+      // ============================================
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
 
-      if (session.mode === 'subscription' && session.subscription && session.customer) {
-        const subscriptionId =
-          typeof session.subscription === 'string'
-            ? session.subscription
-            : session.subscription.id;
+        if (session.mode === "subscription" && session.subscription && session.customer) {
+          const subscriptionId =
+            typeof session.subscription === "string"
+              ? session.subscription
+              : session.subscription.id;
+
+          const customerId =
+            typeof session.customer === "string"
+              ? session.customer
+              : session.customer.id;
+
+          console.log(
+            `Checkout session completed for subscription ${subscriptionId}`
+          );
+
+          try {
+            let subscription: Stripe.Subscription | null = null;
+
+            try {
+              subscription = await stripe.subscriptions.retrieve(subscriptionId);
+            } catch (subErr) {
+              console.error(
+                `Error retrieving subscription ${subscriptionId} in checkout.session.completed:`,
+                subErr
+              );
+            }
+
+            // Resolve tier
+            const tier = subscription
+              ? resolveTierFromSubscription(subscription)
+              : (session.metadata?.tier as SubscriptionTier | undefined);
+
+            if (!tier) {
+              console.warn(
+                `No subscription tier found for session ${session.id} / subscription ${subscriptionId}. ` +
+                  `Session metadata: ${JSON.stringify(session.metadata)}`
+              );
+            }
+
+            const subscriptionStatus: SubscriptionStatus =
+              (subscription?.status as SubscriptionStatus) ?? "active";
+
+            const subscriptionCurrentPeriodEnd =
+              subscription ? getCurrentPeriodEndIso(subscription) : undefined;
+
+            const distributor =
+              await findDistributorByStripeCustomerId(customerId);
+
+            if (distributor) {
+              const updatePayload: any = {
+                subscriptionId,
+                subscriptionStatus,
+                subscriptionTier: tier ?? distributor.subscriptionTier ?? undefined,
+              };
+              if (subscriptionCurrentPeriodEnd) {
+                updatePayload.subscriptionCurrentPeriodEnd =
+                  subscriptionCurrentPeriodEnd;
+              }
+
+              await updateDistributor(distributor.id, updatePayload);
+              console.log(
+                `Updated distributor ${distributor.id} with subscription ${subscriptionId}, ` +
+                  `status=${subscriptionStatus}, tier=${tier}, periodEnd=${subscriptionCurrentPeriodEnd}`
+              );
+            } else {
+              console.warn(
+                `Could not find distributor for Stripe customer ID: ${customerId} during checkout.session.completed.`
+              );
+            }
+          } catch (error) {
+            console.error("Error handling checkout.session.completed:", error);
+            return NextResponse.json(
+              { error: "Internal server error in webhook handler" },
+              { status: 500 }
+            );
+          }
+        }
+        break;
+      }
+
+      // ============================================
+      // SUBSCRIPTION CREATED / UPDATED
+      // ============================================
+      case "customer.subscription.created":
+      case "customer.subscription.updated": {
+        const subscription = event.data.object as Stripe.Subscription;
 
         const customerId =
-          typeof session.customer === 'string'
-            ? session.customer
-            : session.customer.id;
+          typeof subscription.customer === "string"
+            ? subscription.customer
+            : subscription.customer.id;
 
-        console.log(`Checkout session completed for subscription ${subscriptionId}`);
+        const tier = resolveTierFromSubscription(subscription);
+        const status = subscription.status as SubscriptionStatus;
+        const subscriptionCurrentPeriodEnd = getCurrentPeriodEndIso(
+          subscription
+        );
 
-        try {
-          // 1) Try to get tier directly from session metadata
-          let tier = session.metadata?.tier as SubscriptionTier | undefined;
-          const billingCycle = session.metadata?.billing as 'monthly' | 'quarterly' | 'yearly' | undefined;
+        const distributor = await findDistributorByStripeCustomerId(
+          customerId
+        );
 
-          // 2) Fetch the subscription from Stripe for status + fallback metadata
-          let subscription: Stripe.Subscription | null = null;
-          try {
-            subscription = await stripe.subscriptions.retrieve(subscriptionId);
-          } catch (subErr) {
-            console.error(
-              `Error retrieving subscription ${subscriptionId} in checkout.session.completed:`,
-              subErr
-            );
+        if (distributor) {
+          const updatePayload: any = {
+            subscriptionStatus: status,
+            subscriptionTier: tier ?? distributor.subscriptionTier ?? undefined,
+          };
+          if (subscriptionCurrentPeriodEnd) {
+            updatePayload.subscriptionCurrentPeriodEnd =
+              subscriptionCurrentPeriodEnd;
           }
 
-          if (!tier && subscription) {
-            tier = resolveTierFromSubscription(subscription);
-          }
-
-          if (!tier) {
-            console.warn(
-              `No subscription tier found for session ${session.id} / subscription ${subscriptionId}. ` +
-                `Session metadata: ${JSON.stringify(session.metadata)}`
-            );
-          }
-          
-          const periodEnd = subscription?.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : undefined;
-
-
-          const subscriptionStatus: SubscriptionStatus =
-            (subscription?.status as SubscriptionStatus) ?? 'active';
-
-          const distributor = await findDistributorByStripeCustomerId(customerId);
-
-          if (distributor) {
-            await updateDistributor(distributor.id, {
-              subscriptionId,
-              subscriptionStatus,
-              subscriptionTier: tier ?? distributor.subscriptionTier ?? undefined,
-              billingCycle: billingCycle ?? distributor.billingCycle ?? undefined,
-              subscriptionCurrentPeriodEnd: periodEnd,
-            });
-            console.log(
-              `Updated distributor ${distributor.id} with subscription ${subscriptionId}, ` +
-                `status=${subscriptionStatus}, tier=${tier}`
-            );
-          } else {
-            console.warn(
-              `Could not find distributor for Stripe customer ID: ${customerId} during checkout.session.completed.`
-            );
-          }
-        } catch (error) {
-          console.error('Error handling checkout.session.completed:', error);
-          return NextResponse.json(
-            { error: 'Internal server error in webhook handler' },
-            { status: 500 }
+          await updateDistributor(distributor.id, updatePayload);
+          console.log(
+            `Updated subscription for distributor ${distributor.id}: ` +
+              `status=${status}, tier=${tier}, periodEnd=${subscriptionCurrentPeriodEnd} from event ${event.type}`
+          );
+        } else {
+          console.warn(
+            `Could not find distributor for Stripe customer ID: ${customerId} from event ${event.type}`
           );
         }
+        break;
       }
-      break;
-    }
 
-    // ======================================================
-    // SUBSCRIPTION CREATED / UPDATED
-    // Keep Firestore in sync with Stripe
-    // ======================================================
-    case 'customer.subscription.created':
-    case 'customer.subscription.updated': {
-      const subscription = event.data.object as Stripe.Subscription;
+      // ============================================
+      // SUBSCRIPTION DELETED / CANCELLED
+      // ============================================
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription;
 
-      const customerId =
-        typeof subscription.customer === 'string'
-          ? subscription.customer
-          : subscription.customer.id;
+        const customerId =
+          typeof subscription.customer === "string"
+            ? subscription.customer
+            : subscription.customer.id;
 
-      const tier = resolveTierFromSubscription(subscription);
-      const status = subscription.status as SubscriptionStatus;
-      const billingCycle = subscription.metadata?.billing as 'monthly' | 'quarterly' | 'yearly' | undefined;
-      const periodEnd = new Date(subscription.current_period_end * 1000).toISOString();
-
-
-      const distributor = await findDistributorByStripeCustomerId(customerId);
-
-      if (distributor) {
-        await updateDistributor(distributor.id, {
-          subscriptionStatus: status,
-          subscriptionTier: tier ?? distributor.subscriptionTier ?? undefined,
-          billingCycle: billingCycle ?? distributor.billingCycle ?? undefined,
-          subscriptionCurrentPeriodEnd: periodEnd,
-        });
-        console.log(
-          `Updated subscription for distributor ${distributor.id}: ` +
-            `status=${status}, tier=${tier} from event ${event.type}`
+        const distributor = await findDistributorByStripeCustomerId(
+          customerId
         );
-      } else {
-        console.warn(
-          `Could not find distributor for Stripe customer ID: ${customerId} from event ${event.type}`
-        );
-      }
-      break;
-    }
 
-    // ======================================================
-    // SUBSCRIPTION DELETED / CANCELLED
-    // ======================================================
-    case 'customer.subscription.deleted': {
-      const subscription = event.data.object as Stripe.Subscription;
-      const customerId =
-        typeof subscription.customer === 'string'
-          ? subscription.customer
-          : subscription.customer.id;
-
-      const distributor = await findDistributorByStripeCustomerId(customerId);
-
-      if (distributor) {
-        await updateDistributor(distributor.id, {
-          subscriptionStatus: 'canceled',
-          subscriptionId: undefined,
-          subscriptionCurrentPeriodEnd: undefined,
-        });
-        console.log(`Cancelled subscription for distributor ${distributor.id}`);
-      } else {
-        console.warn(
-          `Received customer.subscription.deleted for customer ${customerId} but no distributor found.`
-        );
-      }
-      break;
-    }
-
-    // ======================================================
-    // STRIPE CONNECT ACCOUNT UPDATED
-    // ======================================================
-    case 'account.updated': {
-      const account = event.data.object as Stripe.Account;
-      const distributorId = account.metadata?.distributorId;
-
-      if (distributorId) {
-        let status: 'pending' | 'verified' | 'restricted' | 'details_needed' = 'pending';
-
-        if (account.details_submitted) {
-          if (account.charges_enabled && account.payouts_enabled) {
-            status = 'verified';
-          } else {
-            status = 'details_needed';
-          }
+        if (distributor) {
+          await updateDistributor(distributor.id, {
+            subscriptionStatus: "canceled",
+            subscriptionId: undefined,
+            // optional: also clear tier or period end if you want
+            // subscriptionTier: undefined,
+            // subscriptionCurrentPeriodEnd: undefined,
+          });
+          console.log(
+            `Cancelled subscription for distributor ${distributor.id}`
+          );
+        } else {
+          console.warn(
+            `Received customer.subscription.deleted for customer ${customerId} but no distributor found.`
+          );
         }
-
-        await updateDistributor(distributorId, {
-          stripeAccountStatus: status,
-        });
-        console.log(
-          `Updated Stripe Connect account status for distributor ${distributorId} to ${status}`
-        );
-      } else {
-        console.warn(
-          `Received 'account.updated' event for Stripe account ${account.id} but no distributorId was found in metadata.`
-        );
+        break;
       }
-      break;
+
+      // ============================================
+      // STRIPE CONNECT ACCOUNT UPDATED
+      // ============================================
+      case "account.updated": {
+        const account = event.data.object as Stripe.Account;
+        const distributorId = account.metadata?.distributorId;
+
+        if (distributorId) {
+          let status:
+            | "pending"
+            | "verified"
+            | "restricted"
+            | "details_needed" = "pending";
+
+          if (account.details_submitted) {
+            if (account.charges_enabled && account.payouts_enabled) {
+              status = "verified";
+            } else {
+              status = "details_needed";
+            }
+          }
+
+          await updateDistributor(distributorId, {
+            stripeAccountStatus: status,
+          });
+          console.log(
+            `Updated Stripe Connect account status for distributor ${distributorId} to ${status}`
+          );
+        } else {
+          console.warn(
+            `Received 'account.updated' event for Stripe account ${account.id} but no distributorId was found in metadata.`
+          );
+        }
+        break;
+      }
+
+      default: {
+        console.log(`Unhandled event type ${event.type}`);
+      }
     }
 
-    // ======================================================
-    // DEFAULT
-    // ======================================================
-    default:
-      console.log(`Unhandled event type ${event.type}`);
+    return NextResponse.json({ received: true });
+  } catch (err: any) {
+    console.error("Unhandled error in webhook handler:", err);
+    return NextResponse.json(
+      { error: "Webhook handler error" },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({ received: true });
 }

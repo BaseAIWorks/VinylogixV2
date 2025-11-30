@@ -6,9 +6,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard } from "lucide-react";
+import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -27,7 +35,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { FileDown, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 
