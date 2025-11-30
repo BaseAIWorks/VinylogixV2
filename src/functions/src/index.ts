@@ -83,7 +83,12 @@ export const deleteAuthUser = onCall({ region: "europe-west4", enforceAppCheck: 
 
 // This is a secure, server-side function to fetch all users.
 // It can only be called by authenticated users.
-export const getAllUsers = onCall({ region: "europe-west4", cors: true }, async (request) => {
+export const getAllUsers = onCall({
+  region: "europe-west4",
+  enforceAppCheck: false,
+  cors: true,
+}, async (request) => {
+
   // CRITICAL: Check if the user is authenticated FIRST.
   if (!request.auth) {
     logger.warn("getAllUsers was called by an unauthenticated user.");
