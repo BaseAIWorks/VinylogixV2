@@ -41,7 +41,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.setCustomUserClaimsOnUserWrite = exports.getAllUsers = void 0;
+exports.setCustomUserClaimsOnUserWrite = exports.getAllUsers = exports.deleteAuthUser = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore"); // <-- NIEUWE IMPORT
 const logger = __importStar(require("firebase-functions/logger"));
@@ -61,9 +61,48 @@ const processUserTimestamps = (userData) => {
     }
     return processed;
 };
+// This is a secure, server-side function to delete a user from Authentication.
+// It can only be called by authenticated users with a 'master' or 'superadmin' role.
+exports.deleteAuthUser = (0, https_1.onCall)({ region: "europe-west4", enforceAppCheck: false, cors: true }, async (request) => {
+    var _a;
+    // CRITICAL: Check if the user is authenticated.
+    if (!request.auth) {
+        logger.warn("deleteAuthUser was called by an unauthenticated user.");
+        throw new https_1.HttpsError("unauthenticated", "Authentication required to delete a user.");
+    }
+    const actingUid = request.auth.uid;
+    const { uidToDelete } = request.data;
+    if (!uidToDelete) {
+        throw new https_1.HttpsError("invalid-argument", "The function must be called with a 'uidToDelete' argument.");
+    }
+    try {
+        const actingUserDoc = await admin.firestore().collection("users").doc(actingUid).get();
+        const actingUserRole = (_a = actingUserDoc.data()) === null || _a === void 0 ? void 0 : _a.role;
+        if (actingUserRole !== 'master' && actingUserRole !== 'superadmin') {
+            logger.error(`User ${actingUid} with role ${actingUserRole} attempted to delete user ${uidToDelete}.`);
+            throw new https_1.HttpsError("permission-denied", "Permission denied. You must be a master user or superadmin to delete users.");
+        }
+        logger.info(`User ${uidToDelete} is being deleted by ${actingUserRole} user ${actingUid}.`);
+        // Proceed with deleting the user from Firebase Authentication
+        await admin.auth().deleteUser(uidToDelete);
+        logger.info(`Successfully deleted user ${uidToDelete} from Firebase Authentication.`);
+        return { success: true, message: `User ${uidToDelete} has been deleted from authentication.` };
+    }
+    catch (error) {
+        logger.error(`Error deleting user ${uidToDelete} from auth:`, error);
+        if (error instanceof https_1.HttpsError) {
+            throw error;
+        }
+        // Handle auth-specific errors
+        if (error.code === 'auth/user-not-found') {
+            throw new https_1.HttpsError('not-found', 'The user to delete was not found in Firebase Authentication.');
+        }
+        throw new https_1.HttpsError("internal", "An internal error occurred while deleting the user from authentication.");
+    }
+});
 // This is a secure, server-side function to fetch all users.
 // It can only be called by authenticated users.
-exports.getAllUsers = (0, https_1.onCall)({ region: "europe-west4" }, async (request) => {
+exports.getAllUsers = (0, https_1.onCall)({ region: "europe-west4", cors: true }, async (request) => {
     var _a;
     // CRITICAL: Check if the user is authenticated FIRST.
     if (!request.auth) {
@@ -148,6 +187,14 @@ exports.setCustomUserClaimsOnUserWrite = (0, firestore_1.onDocumentWritten)('use
     }
     else if (newClaims.accessibleDistributorIds !== undefined) { // Als array nu ontbreekt in Firestore, verwijder uit claims
         delete newClaims.accessibleDistributorIds;
+    }
+    // ** NIEUW ** Controleer en update de 'unreadChangelogs' claim
+    const unreadChangelogs = afterData.unreadChangelogs;
+    if (typeof unreadChangelogs === 'boolean') {
+        newClaims.unreadChangelogs = unreadChangelogs;
+    }
+    else if (newClaims.unreadChangelogs !== undefined) { // Als veld nu ontbreekt, verwijder uit claims
+        delete newClaims.unreadChangelogs;
     }
     // Controleer of de nieuwe claims daadwerkelijk verschillen van de huidige claims
     const claimsChanged = JSON.stringify(newClaims) !== JSON.stringify(currentClaims);
