@@ -73,7 +73,7 @@ const DiscogsDataView = ({ fetchFunction, username, dataType, distributorId }: {
             }));
         }
         if (dataType === 'inventory' && data.listings) {
-            const grouped = data.listings.reduce((acc: Record<string, UnifiedDisplayItem>, l: DiscogsListing) => {
+            const grouped: Record<string, UnifiedDisplayItem> = data.listings.reduce((acc: Record<string, UnifiedDisplayItem>, l: DiscogsListing) => {
                 const releaseId = l.release.id.toString();
                 if (acc[releaseId]) {
                     acc[releaseId].quantity = (acc[releaseId].quantity || 1) + 1;
@@ -94,7 +94,7 @@ const DiscogsDataView = ({ fetchFunction, username, dataType, distributorId }: {
                     };
                 }
                 return acc;
-            }, {});
+            }, {} as Record<string, UnifiedDisplayItem>);
 
             const getArtistName = (item: UnifiedDisplayItem) => item.basic_information.artists?.[0]?.name || '';
             return Object.values(grouped).sort((a, b) => {

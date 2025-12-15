@@ -2,6 +2,8 @@ import { stripe } from '@/lib/stripe';
 import { getSubscriptionTiersOnServer } from '@/services/subscription-service';
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const { tier, billing, email, onboardingData } = await req.json();

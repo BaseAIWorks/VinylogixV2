@@ -1,0 +1,157 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "isInventoryItem", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "isInventoryItem", "order": "ASCENDING" },
+        { "fieldPath": "added_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "isInventoryItem", "order": "ASCENDING" },
+        { "fieldPath": "title", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "isInventoryItem", "order": "ASCENDING" },
+        { "fieldPath": "title", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "isInventoryItem", "order": "ASCENDING" },
+        { "fieldPath": "stock_shelves", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "isInventoryItem", "order": "ASCENDING" },
+        { "fieldPath": "stock_storage", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "isInventoryItem", "order": "ASCENDING" },
+        { "fieldPath": "year", "order": "ASCENDING" },
+        { "fieldPath": "added_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "isInventoryItem", "order": "ASCENDING" },
+        { "fieldPath": "genre", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "isInventoryItem", "order": "ASCENDING" },
+        { "fieldPath": "formatDetails", "order": "ASCENDING" },
+        { "fieldPath": "added_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "isInventoryItem", "order": "ASCENDING" },
+        { "fieldPath": "media_condition", "order": "ASCENDING" },
+        { "fieldPath": "added_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "isInventoryItem", "order": "ASCENDING" },
+        { "fieldPath": "shelf_locations", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "isWishlist", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "barcode", "order": "ASCENDING" },
+        { "fieldPath": "isInventoryItem", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "supplierId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerUid", "order": "ASCENDING" },
+        { "fieldPath": "isWishlist", "order": "ASCENDING" },
+        { "fieldPath": "discogs_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vinylRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "distributorId", "order": "ASCENDING" },
+        { "fieldPath": "isInventoryItem", "order": "ASCENDING" },
+        { "fieldPath": "added_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "api_calls",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "timestamp", "order": "ASCENDING" },
+        { "fieldPath": "distributorId", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

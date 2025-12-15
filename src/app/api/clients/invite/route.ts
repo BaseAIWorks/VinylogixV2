@@ -5,6 +5,9 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { FirestoreUser } from '@/types';
 import { sendNewAccountInvitationEmail, sendExistingAccountInvitationEmail } from '@/services/email-service';
 
+// Force dynamic rendering to avoid build-time initialization issues
+export const dynamic = 'force-dynamic';
+
 // Generate a secure random password
 function generatePassword(length: number = 12): string {
   const lowercase = 'abcdefghijklmnopqrstuvwxyz';

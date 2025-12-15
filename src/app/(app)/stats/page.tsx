@@ -214,9 +214,9 @@ export default function StatsPage() {
         return sum + shelves + storage;
     }, 0);
     
-    const perms = user?.permissions || {};
-    const canViewPurchasing = user?.role === 'master' || (user?.role === 'worker' && (perms.canViewPurchasingPrice || perms.canEditPurchasingPrice));
-    const canViewSelling = user?.role === 'master' || (user?.role === 'worker' && (perms.canViewSellingPrice || perms.canEditSellingPrice));
+    const perms = user?.permissions;
+    const canViewPurchasing = user?.role === 'master' || (user?.role === 'worker' && (perms?.canViewPurchasingPrice || perms?.canEditPurchasingPrice));
+    const canViewSelling = user?.role === 'master' || (user?.role === 'worker' && (perms?.canViewSellingPrice || perms?.canEditSellingPrice));
 
     const totalPurchasingValue = canViewPurchasing ? inventoryRecords.reduce((sum, r) => {
         const totalStock = Number(r.stock_shelves || 0) + Number(r.stock_storage || 0);

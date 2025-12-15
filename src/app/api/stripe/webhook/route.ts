@@ -8,8 +8,10 @@ import {
 } from "@/services/server-distributor-service";
 import type { SubscriptionTier, SubscriptionStatus } from "@/types";
 
-// Webhook signing secret
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+export const dynamic = 'force-dynamic';
+
+// Webhook signing secret - accessed at runtime only
+const getEndpointSecret = () => process.env.STRIPE_WEBHOOK_SECRET!;
 
 // Resolve subscription tier from Stripe Subscription metadata
 function resolveTierFromSubscription(
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
     if (!sig) {
       throw new Error("Missing 'stripe-signature' header");
     }
-    event = stripe.webhooks.constructEvent(body, sig, endpointSecret);
+    event = stripe.webhooks.constructEvent(body, sig, getEndpointSecret());
   } catch (err: any) {
     console.error("❌ Webhook signature verification failed:", err.message);
     return NextResponse.json(

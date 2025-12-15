@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, UserCircle, ShoppingCart, Library, ListChecks, Loader2, AlertTriangle, Package, Heart, Disc3, Clock, Edit, KeyRound, Mail, Phone, Home, Briefcase, User, CalendarPlus, ShieldCheck, ShieldOff, NotepadText } from "lucide-react";
+import { ArrowLeft, UserCircle, ShoppingCart, Library, ListChecks, Loader2, AlertTriangle, Package, Heart, Disc3, Clock, Edit, KeyRound, Mail, Phone, Home, Briefcase, User as UserIcon, CalendarPlus, ShieldCheck, ShieldOff, NotepadText } from "lucide-react";
 import type { User, VinylRecord, Order, OrderStatus } from "@/types";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -222,7 +222,7 @@ export default function ClientDetailPage() {
                             <DetailItem icon={Home} label="Address" value={<div className="whitespace-pre-wrap">{fullAddress}</div>} />
                             <DetailItem icon={Briefcase} label="Chamber of Commerce" value={client.chamberOfCommerce} />
                              <DetailItem icon={Briefcase} label="EORI Number" value={client.eoriNumber} />
-                            <DetailItem icon={User} label="VAT Number" value={client.vatNumber} />
+                            <DetailItem icon={UserIcon} label="VAT Number" value={client.vatNumber} />
                             {client.createdAt && <DetailItem icon={CalendarPlus} label="Client Since" value={format(new Date(client.createdAt), 'dd MMM yyyy')} />}
                             {client.notes && <DetailItem icon={NotepadText} label="Notes" value={<div className="whitespace-pre-wrap">{client.notes}</div>} />}
                         </CardContent>

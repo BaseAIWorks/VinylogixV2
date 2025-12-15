@@ -89,12 +89,13 @@ export function HeroSection() {
                                 },
                             }}
                             className="absolute inset-0 -z-20">
-                            <img
+                            <Image
                                 src="/Background-2.png"
                                 alt="background"
                                 className="absolute inset-x-0 top-56 -z-20 hidden lg:top-32 dark:block opacity-30"
-                                width="3276"
-                                height="4095"
+                                width={3276}
+                                height={4095}
+                                loading="lazy"
                             />
                         </AnimatedGroup>
                         <div aria-hidden className="absolute inset-0 -z-10 size-full [background:radial-gradient(125%_125%_at_50%_100%,transparent_0%,var(--background)_75%)]" />
@@ -168,21 +169,21 @@ export function HeroSection() {
                                     className="bg-gradient-to-b to-background absolute inset-0 z-10 from-transparent from-35%"
                                 />
                                 <div className="inset-shadow-2xs ring-background dark:inset-shadow-white/20 bg-background relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15 ring-1">
-                                    <img
+                                    <Image
                                         className="bg-background aspect-15/8 relative hidden rounded-2xl dark:block"
                                         src="/Hero-2.png"
                                         alt="app screen dark mode"
-                                        data-ai-hint="app dark mode"
-                                        width="2700"
-                                        height="1440"
+                                        width={2700}
+                                        height={1440}
+                                        priority
                                     />
-                                    <img
+                                    <Image
                                         className="z-2 border-border/25 aspect-15/8 relative rounded-2xl border dark:hidden"
                                         src="/Hero-2.png"
                                         alt="app screen light mode"
-                                        data-ai-hint="app light mode"
-                                        width="2700"
-                                        height="1440"
+                                        width={2700}
+                                        height={1440}
+                                        priority
                                     />
                                 </div>
                             </div>
