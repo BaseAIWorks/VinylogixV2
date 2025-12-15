@@ -3,6 +3,8 @@ import { stripe } from '@/lib/stripe';
 import { NextRequest, NextResponse } from 'next/server';
 import { updateDistributor, getDistributorById } from '@/services/distributor-service';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const { distributorId, distributorEmail } = await req.json();
