@@ -16,6 +16,7 @@ jobs:
       - run: npm ci && npm run build
         env:
           NEXT_PUBLIC_DISCOGS_API_TOKEN: ${{ secrets.NEXT_PUBLIC_DISCOGS_API_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
