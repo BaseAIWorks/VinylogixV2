@@ -3,7 +3,7 @@
 import RecordCard from "@/components/records/record-card";
 import RecordFilters from "@/components/records/record-filters";
 import { Button } from "@/components/ui/button";
-import type { VinylRecord } from "@/types";
+import type { VinylRecord, SortOption } from "@/types";
 import { PlusCircle, Search, Music2, LayoutGrid, List, Edit3, Loader2, Library, Heart, AlertTriangle, ArrowLeft, Check } from "lucide-react"; 
 import Link from "next/link";
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -24,7 +24,7 @@ export default function CollectionPage() {
   const [isLoadingRecords, setIsLoadingRecords] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState<{ location?: string; artist?: string; year?: string; genre?: string; condition?: string }>({});
-  const [sortOption, setSortOption] = useState("recently_added");
+  const [sortOption, setSortOption] = useState<SortOption>("added_at_desc");
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const router = useRouter();
   const { toast } = useToast();
@@ -80,6 +80,7 @@ export default function CollectionPage() {
     const years = new Set<string>();
     const genres = new Set<string>();
     const conditions = new Set<string>();
+    const formats = new Set<string>();
 
     records.forEach(record => {
         if (record.storage_location) locations.add(record.storage_location);
@@ -89,6 +90,7 @@ export default function CollectionPage() {
         if (Array.isArray(record.genre)) {
           record.genre.forEach(g => genres.add(g));
         }
+        if (record.formatDetails) formats.add(record.formatDetails);
     });
 
     const sortAndReturn = (set: Set<string>) => Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
@@ -98,7 +100,8 @@ export default function CollectionPage() {
         artists: sortAndReturn(artists),
         years: Array.from(years).sort((a, b) => parseInt(b, 10) - parseInt(a, 10)),
         genres: sortAndReturn(genres),
-        conditions: sortAndReturn(conditions)
+        conditions: sortAndReturn(conditions),
+        formats: sortAndReturn(formats)
     };
   }, [records]);
 
@@ -120,9 +123,11 @@ export default function CollectionPage() {
     if (filters.genre) currentRecords = currentRecords.filter(r => Array.isArray(r.genre) && r.genre.some(g => g.toLowerCase() === filters.genre!.toLowerCase()));
     if (filters.condition) currentRecords = currentRecords.filter(r => r.media_condition === filters.condition);
 
-    if (sortOption === 'alphabetically') {
+    if (sortOption === 'title_asc') {
       currentRecords.sort((a, b) => a.title.localeCompare(b.title));
-    } else if (sortOption === 'recently_added') {
+    } else if (sortOption === 'title_desc') {
+      currentRecords.sort((a, b) => b.title.localeCompare(a.title));
+    } else if (sortOption === 'added_at_desc') {
       currentRecords.sort((a, b) => new Date(b.added_at).getTime() - new Date(a.added_at).getTime());
     }
     

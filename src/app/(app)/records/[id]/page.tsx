@@ -487,10 +487,10 @@ export default function RecordDetailPage() {
 
   const isFavorite = user?.role === 'viewer' && record && user.favorites?.includes(record.id);
 
-  const perms = user?.permissions || {};
-  const canViewPurchasing = isMaster || (isOperator && (!!perms.canViewPurchasingPrice || !!perms.canEditPurchasingPrice));
-  const canViewSelling = isMaster || (isOperator && (!!perms.canViewSellingPrice || !!perms.canEditSellingPrice));
-  const canViewSupplier = isMaster || (isOperator && !!perms.canEditSuppliers);
+  const perms = user?.permissions;
+  const canViewPurchasing = isMaster || (isOperator && (!!perms?.canViewPurchasingPrice || !!perms?.canEditPurchasingPrice));
+  const canViewSelling = isMaster || (isOperator && (!!perms?.canViewSellingPrice || !!perms?.canEditSellingPrice));
+  const canViewSupplier = isMaster || (isOperator && !!perms?.canEditSuppliers);
 
 
   if (!user && !isLoadingRecord) {

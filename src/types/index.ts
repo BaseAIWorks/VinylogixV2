@@ -216,9 +216,9 @@ export type User = {
   unreadChangelogs?: boolean; // New flag for changelog notifications
 };
 
-export type MediaCondition = "Mint (M)" | "Near Mint (NM)" | "Very Good Plus (VG+)" | "Very Good (VG)" | "Good Plus (G+)" | "Good (G)" | "Fair (F)" | "Poor (P)";
+export const MediaConditions = ["Mint (M)", "Near Mint (NM)", "Very Good Plus (VG+)", "Very Good (VG)", "Good Plus (G+)", "Good (G)", "Fair (F)", "Poor (P)"] as const;
 
-export const MediaConditions: MediaCondition[] = ["Mint (M)", "Near Mint (NM)", "Very Good Plus (VG+)", "Very Good (VG)", "Good Plus (G+)", "Good (G)", "Fair (F)", "Poor (P)"];
+export type MediaCondition = typeof MediaConditions[number];
 
 export interface Track {
   position: string;
