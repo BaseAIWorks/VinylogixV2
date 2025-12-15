@@ -96,6 +96,12 @@ export default function AdminStatisticsPage() {
         
         const tierChartData = Object.entries(tierCounts).map(([name, value], index) => ({ name, value, fill: COLORS[index % COLORS.length] }));
 
+        const tierChartConfig = {
+            essential: { label: "Essential", color: COLORS[0] },
+            growth: { label: "Growth", color: COLORS[1] },
+            scale: { label: "Scale", color: COLORS[2] },
+        };
+
         const inventoryRecordsOnly = allRecords.filter(record => record.isInventoryItem);
 
         const distributorRecordCounts = inventoryRecordsOnly.reduce((acc, record) => {
@@ -136,6 +142,7 @@ export default function AdminStatisticsPage() {
             monthlyRevenue,
             tierCounts,
             tierChartData,
+            tierChartConfig,
             overdueAccounts,
             topDistributorsByRecords,
             distributorGrowthData: sortedGrowthData,
@@ -195,7 +202,7 @@ export default function AdminStatisticsPage() {
                              <CardDescription>Breakdown of active subscription tiers.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                             <ChartContainer config={stats.tierCounts} className="mx-auto aspect-square h-[250px]">
+                             <ChartContainer config={stats.tierChartConfig} className="mx-auto aspect-square h-[250px]">
                                 <RechartsPieChart>
                                     <ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
                                     <Pie data={stats.tierChartData} dataKey="value" nameKey="name" innerRadius={60} strokeWidth={5}>
