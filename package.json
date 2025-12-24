@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack -p 9002",
+    "dev": "next dev -p 9002",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",
     "start": "next start",
@@ -53,7 +53,7 @@
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
     "lucide-react": "^0.475.0",
-    "next": "14.2.5",
+    "next": "14.2.35",
     "papaparse": "^5.4.1",
     "patch-package": "^8.0.0",
     "react": "^18.3.1",
@@ -79,5 +79,10 @@
     "postcss": "^8.4.40",
     "tailwindcss": "^3.4.7",
     "typescript": "^5.5.4"
+  },
+  "overrides": {
+    "@genkit-ai/next": {
+      "next": "$next"
+    }
   }
 }
