@@ -6,7 +6,8 @@
       "https://vinyldb-2b429.firebaseapp.com",
       "https://*.cloudworkstations.dev",
       "https://studio--vinylogix-v1.us-central1.hosted.app",
-      "http://localhost:9002"
+      "http://localhost:9002",
+      "https://vinylogix.com"
     ],
     "method": [
       "GET",
