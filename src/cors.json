@@ -5,9 +5,11 @@
       "https://vinyldb-2b429.web.app",
       "https://vinyldb-2b429.firebaseapp.com",
       "https://*.cloudworkstations.dev",
+      "https://9000-firebase-vinylogix-v1-1757114814172.cluster-oayqgyglpfgseqclbygurw4xd4.cloudworkstations.dev",
       "https://studio--vinylogix-v1.us-central1.hosted.app",
       "http://localhost:9002",
-      "https://vinylogix.com"
+      "https://vinylogix.com",
+      "https://studio.firebase.google.com"
     ],
     "method": [
       "GET",
