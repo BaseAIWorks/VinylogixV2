@@ -1,13 +1,15 @@
 /**
  * Logging utility for Vinylogix
  * Provides structured logging with different levels
- * Can be extended to send logs to external services in production
+ * Integrates with Sentry for error tracking in production
  */
+
+import * as Sentry from "@sentry/nextjs";
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogContext {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 class Logger {
@@ -31,31 +33,70 @@ class Logger {
     if (this.isDevelopment) {
       console.info(this.formatMessage('info', message, context));
     }
+    // Add breadcrumb for info level in production
+    if (!this.isDevelopment) {
+      Sentry.addBreadcrumb({
+        category: 'info',
+        message,
+        data: context,
+        level: 'info',
+      });
+    }
   }
 
   warn(message: string, context?: LogContext): void {
     console.warn(this.formatMessage('warn', message, context));
+    // Send warnings to Sentry as breadcrumbs
+    Sentry.addBreadcrumb({
+      category: 'warning',
+      message,
+      data: context,
+      level: 'warning',
+    });
   }
 
-  error(message: string, error?: Error | any, context?: LogContext): void {
+  error(message: string, error?: Error | unknown, context?: LogContext): void {
     const errorContext = error instanceof Error
-      ? { ...context, error: error.message, stack: error.stack }
+      ? { ...context, errorMessage: error.message }
       : { ...context, error };
 
     console.error(this.formatMessage('error', message, errorContext));
 
-    // In production, you could send to error tracking service here
-    // e.g., Sentry, LogRocket, etc.
+    // Send to Sentry in production
+    if (error instanceof Error) {
+      Sentry.captureException(error, {
+        extra: { message, ...context },
+      });
+    } else {
+      Sentry.captureMessage(message, {
+        level: 'error',
+        extra: errorContext,
+      });
+    }
   }
 
   // Helper for logging service calls
-  service(serviceName: string, method: string, data?: any): void {
+  service(serviceName: string, method: string, data?: LogContext): void {
     this.debug(`${serviceName}.${method}`, data);
   }
 
   // Helper for logging API calls
-  api(method: string, endpoint: string, data?: any): void {
+  api(method: string, endpoint: string, data?: LogContext): void {
     this.debug(`API ${method} ${endpoint}`, data);
+  }
+
+  // Set user context for Sentry
+  setUser(user: { id: string; email?: string; role?: string }): void {
+    Sentry.setUser({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    });
+  }
+
+  // Clear user context (on logout)
+  clearUser(): void {
+    Sentry.setUser(null);
   }
 }
 

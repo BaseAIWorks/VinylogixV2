@@ -19,9 +19,11 @@ These variables are used by the Firebase client-side SDK to connect to your Fire
 These variables are used on the server-side and should NOT be exposed to the client.
 
 -   **`GOOGLE_AI_API_KEY`**: API key for Google's Generative Language API (Gemini), used by Genkit.
--   **`NEXT_PUBLIC_DISCOGS_API_TOKEN`**: Personal access token for the Discogs API. Used for fetching record data.
+-   **`DISCOGS_TOKEN`**: Personal access token for the Discogs API. Used server-side only via the `/api/discogs` proxy endpoint.
 -   **`RESEND_API_KEY`**: API key for the Resend service, used for sending transactional emails (e.g., invitations).
 -   **`NEXT_PUBLIC_SITE_URL`**: The canonical base URL for the deployed application (e.g., `https://vinylogix.com`). Used for generating absolute URLs for redirects and emails.
+-   **`SENTRY_DSN`**: (Optional) Sentry Data Source Name for error tracking and monitoring.
+-   **`SENTRY_AUTH_TOKEN`**: (Optional) Sentry auth token for source map uploads during build.
 
 ## Stripe Configuration (Server-Side and Client-Side)
 

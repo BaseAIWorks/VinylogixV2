@@ -1,22 +1,10 @@
 
 import type { VinylRecord, DiscogsReleaseApiResponse, DiscogsReleaseSearchResult, DiscogsFormat, Track, DiscogsMarketplaceStats } from '@/types';
+import { logger } from '@/lib/logger';
 
-const DISCOGS_API_BASE_URL = 'https://api.discogs.com';
-const USER_AGENT = 'VinylogixApp/1.0'; 
-const DISCOGS_TOKEN = process.env.NEXT_PUBLIC_DISCOGS_API_TOKEN;
-
-interface RequestOptions {
-  method?: string;
-  headers: HeadersInit;
-}
-
-const getRequestOptions = (): RequestOptions => {
-  const headers: HeadersInit = { 'User-Agent': USER_AGENT };
-  if (DISCOGS_TOKEN && DISCOGS_TOKEN !== "YOUR_DISCOGS_TOKEN_HERE") {
-    headers['Authorization'] = `Discogs token=${DISCOGS_TOKEN}`;
-  }
-  return { headers };
-};
+// Use our secure proxy endpoint instead of calling Discogs directly
+// This keeps the API token server-side only
+const DISCOGS_PROXY_URL = '/api/discogs';
 
 function mapDiscogsReleaseToVinylRecord(release: DiscogsReleaseApiResponse): Partial<VinylRecord> {
   let formatDetailsString;
@@ -85,24 +73,37 @@ function mapDiscogsReleaseToVinylRecord(release: DiscogsReleaseApiResponse): Par
 }
 
 async function handleDiscogsError(response: Response, context: string): Promise<never> {
-    const errorBody = await response.text();
-    console.error(`Discogs API error (${context}): ${response.status} ${response.statusText}`, errorBody);
+    let errorBody = '';
+    try {
+      const data = await response.json();
+      errorBody = data.error || JSON.stringify(data);
+    } catch {
+      errorBody = await response.text().catch(() => 'Unknown error');
+    }
+
+    logger.error(`Discogs API error (${context})`, new Error(errorBody), {
+      status: response.status,
+      statusText: response.statusText
+    });
+
     let message: string;
     switch(response.status) {
-        case 401: message = "Discogs API authentication failed. Your token is likely invalid or expired."; break;
-        case 403: message = "Access denied by Discogs. This usually means your API token is invalid/missing OR the user's collection is private. Please double-check your .env.local file and the user's privacy settings on Discogs. Also, ensure your server has been restarted after changing the .env.local file."; break;
+        case 401: message = "Discogs API authentication failed. Please contact support."; break;
+        case 403: message = "Access denied by Discogs. The user's collection may be private."; break;
         case 404: message = "The requested resource was not found on Discogs."; break;
-        case 429: message = "Discogs API rate limit exceeded. Please wait a few minutes before trying again."; break;
-        default: message = `Discogs API returned status ${response.status}. Check console for details.`;
+        case 429: message = "Rate limit exceeded. Please wait a few minutes before trying again."; break;
+        case 500: message = "Discogs service is temporarily unavailable. Please try again."; break;
+        default: message = `Discogs API error: ${response.statusText || 'Unknown error'}`;
     }
     throw new Error(message);
 }
 
 export async function searchDiscogsByBarcode(barcode: string, distributorId?: string): Promise<DiscogsReleaseSearchResult[] | null> {
   const normalizedBarcode = barcode.replace(/[\s-]/g, '');
-  const url = `${DISCOGS_API_BASE_URL}/database/search?barcode=${encodeURIComponent(normalizedBarcode)}&type=release`;
+  const url = `${DISCOGS_PROXY_URL}/database/search?barcode=${encodeURIComponent(normalizedBarcode)}&type=release`;
+
   try {
-    const response = await fetch(url, getRequestOptions());
+    const response = await fetch(url);
     if (!response.ok) {
       await handleDiscogsError(response, `barcode search for ${normalizedBarcode}`);
     }
@@ -112,15 +113,16 @@ export async function searchDiscogsByBarcode(barcode: string, distributorId?: st
     }
     return null;
   } catch (error) {
-    console.error(`Error fetching Discogs data for barcode ${normalizedBarcode}:`, error);
+    logger.error(`Error fetching Discogs data for barcode ${normalizedBarcode}`, error as Error);
     throw error;
   }
 }
 
 export async function searchDiscogsByArtistTitle(artist: string, title: string, distributorId?: string): Promise<DiscogsReleaseSearchResult[] | null> {
-  const url = `${DISCOGS_API_BASE_URL}/database/search?type=release&artist=${encodeURIComponent(artist)}&release_title=${encodeURIComponent(title)}`;
+  const url = `${DISCOGS_PROXY_URL}/database/search?type=release&artist=${encodeURIComponent(artist)}&release_title=${encodeURIComponent(title)}`;
+
   try {
-    const response = await fetch(url, getRequestOptions());
+    const response = await fetch(url);
     if (!response.ok) {
       await handleDiscogsError(response, `text search for ${artist} - ${title}`);
     }
@@ -130,21 +132,21 @@ export async function searchDiscogsByArtistTitle(artist: string, title: string, 
     }
     return null;
   } catch (error) {
-    console.error(`Error fetching Discogs data for ${artist} - ${title}:`, error);
+    logger.error(`Error fetching Discogs data for ${artist} - ${title}`, error as Error);
     throw error;
   }
 }
 
 export async function getDiscogsReleaseDetailsById(discogsId: string, distributorId?: string): Promise<Partial<VinylRecord> | null> {
   if (!discogsId || isNaN(parseInt(discogsId, 10))) {
-    console.error("Invalid Discogs ID provided:", discogsId);
+    logger.warn("Invalid Discogs ID provided", { discogsId });
     return null;
   }
-  
-  const url = `${DISCOGS_API_BASE_URL}/releases/${discogsId}`;
-  
-  const response = await fetch(url, getRequestOptions());
-  
+
+  const url = `${DISCOGS_PROXY_URL}/releases/${discogsId}`;
+
+  const response = await fetch(url);
+
   if (!response.ok) {
     await handleDiscogsError(response, `release details for ID ${discogsId}`);
   }
@@ -156,12 +158,13 @@ export async function getDiscogsReleaseDetailsById(discogsId: string, distributo
 
 
 export async function getDiscogsMarketplaceStats(releaseId: string, distributorId?: string): Promise<DiscogsMarketplaceStats | null> {
-  const url = `${DISCOGS_API_BASE_URL}/marketplace/stats/${releaseId}`;
+  const url = `${DISCOGS_PROXY_URL}/marketplace/stats/${releaseId}`;
+
   try {
-    const response = await fetch(url, getRequestOptions());
+    const response = await fetch(url);
     if (!response.ok) {
         if (response.status === 404) {
-            console.log(`No marketplace stats found for release ${releaseId}.`);
+            logger.debug(`No marketplace stats found for release ${releaseId}`);
             return null;
         }
         await handleDiscogsError(response, `marketplace stats for ID ${releaseId}`);
@@ -169,7 +172,7 @@ export async function getDiscogsMarketplaceStats(releaseId: string, distributorI
     const data: DiscogsMarketplaceStats = await response.json();
     return data;
   } catch (error) {
-    console.error(`Error fetching Discogs marketplace stats for ID ${releaseId}:`, error);
+    logger.error(`Error fetching Discogs marketplace stats for ID ${releaseId}`, error as Error);
     throw error;
   }
 }

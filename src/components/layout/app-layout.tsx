@@ -319,15 +319,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
               return (
               <SidebarMenuItem key={item.href} onClick={handleNavItemClick}>
-                <Link href={item.href} legacyBehavior passHref>
-                  <SidebarMenuButton
-                    isActive={isActive}
-                    tooltip={{ children: label, className: "bg-popover text-popover-foreground" }}
-                  >
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive}
+                  tooltip={{ children: label, className: "bg-popover text-popover-foreground" }}
+                >
+                  <Link href={item.href}>
                     <item.icon />
                     <span>{label}</span>
-                  </SidebarMenuButton>
-                </Link>
+                  </Link>
+                </SidebarMenuButton>
                  {item.href === '/cart' && cartCount > 0 && (
                   <SidebarMenuBadge>{cartCount}</SidebarMenuBadge>
                 )}

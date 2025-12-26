@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, where, limit, Timestamp } from 'firebase/firestore';
 import { deductStockForOrder, restoreStockForOrder, getRecordById } from './record-service';
 import { getDistributorById, updateDistributor } from './distributor-service';
+import { logger } from '@/lib/logger';
 
 const ORDERS_COLLECTION = 'orders';
 
@@ -24,7 +25,7 @@ const processOrderTimestamps = (orderData: any): Order => {
 export async function getOrders(user: User): Promise<Order[]> {
   const targetDistributorId = user.distributorId;
   if (!targetDistributorId) {
-      console.error("OrderService: User has no distributorId, cannot fetch orders.");
+      logger.warn("OrderService: User has no distributorId, cannot fetch orders");
       return [];
   }
   const ordersCollectionRef = collection(db, ORDERS_COLLECTION);
@@ -34,14 +35,14 @@ export async function getOrders(user: User): Promise<Order[]> {
       const orders = querySnapshot.docs.map(docSnap => processOrderTimestamps({ ...docSnap.data(), id: docSnap.id }));
       return orders.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   } catch(error) {
-      console.error("OrderService: Error fetching orders:", error);
+      logger.error("OrderService: Error fetching orders", error as Error);
       throw error;
   }
 }
 
 export async function getOrdersByDistributorId(distributorId: string): Promise<Order[]> {
     if (!distributorId) {
-        console.error("OrderService: Distributor ID is missing, cannot fetch orders.");
+        logger.warn("OrderService: Distributor ID is missing, cannot fetch orders");
         return [];
     }
     const ordersCollectionRef = collection(db, ORDERS_COLLECTION);
@@ -51,7 +52,7 @@ export async function getOrdersByDistributorId(distributorId: string): Promise<O
         const orders = querySnapshot.docs.map(docSnap => processOrderTimestamps({ ...docSnap.data(), id: docSnap.id }));
         return orders.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } catch(error) {
-        console.error(`OrderService: Error fetching orders for distributor ${distributorId}:`, error);
+        logger.error(`OrderService: Error fetching orders for distributor ${distributorId}`, error as Error);
         throw error;
     }
 }
@@ -65,7 +66,7 @@ export async function getOrdersByViewerId(viewerId: string): Promise<Order[]> {
     const orders = querySnapshot.docs.map(docSnap => processOrderTimestamps({ ...docSnap.data(), id: docSnap.id }));
     return orders.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   } catch(error) {
-    console.error(`OrderService: Error fetching orders for viewer ${viewerId}:`, error);
+    logger.error(`OrderService: Error fetching orders for viewer ${viewerId}`, error as Error);
     throw error;
   }
 }
@@ -79,7 +80,7 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
       }
       return null;
   } catch (error) {
-      console.error(`OrderService: Error fetching order ${orderId}:`, error);
+      logger.error(`OrderService: Error fetching order ${orderId}`, error as Error);
       throw error;
   }
 }
@@ -103,18 +104,18 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, ac
         try {
             await deductStockForOrder(orderData.items, orderData.distributorId, actingUser);
         } catch (error) {
-            console.error(`Failed to deduct stock for order ${orderId}:`, error);
+            logger.error(`Failed to deduct stock for order ${orderId}`, error as Error);
             // Re-throw the error to prevent status update if stock deduction fails, and show it to the user.
             throw error;
         }
     }
-    
+
     // Restore stock ONLY if a paid order is cancelled
     if (status === 'cancelled' && oldStatus === 'paid') {
         try {
             await restoreStockForOrder(orderData.items, actingUser);
         } catch (error) {
-            console.error(`Failed to restore stock for cancelled order ${orderId}:`, error);
+            logger.error(`Failed to restore stock for cancelled order ${orderId}`, error as Error);
             // Don't re-throw here, as cancelling the order is the primary goal even if stock restoration fails.
         }
     }
@@ -139,10 +140,10 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, ac
         try {
             const { sendShippingNotification } = await import('./email-service');
             sendShippingNotification(updatedOrder).catch(err =>
-                console.error('Failed to send shipping notification:', err)
+                logger.error('Failed to send shipping notification', err as Error)
             );
         } catch (error) {
-            console.error('Failed to import email service:', error);
+            logger.error('Failed to import email service', error as Error);
         }
     }
 
