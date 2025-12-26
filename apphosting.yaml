@@ -29,6 +29,9 @@ iam:
     # Grants permission to manage users in Firebase Authentication
     - role: roles/firebaseauth.admin
       description: "Allows the server to manage users (create, delete, etc.)."
+    # GRANTS PERMISSION TO READ SECRETS
+    - role: roles/secretmanager.secretAccessor
+      description: "Allow the app to access secrets from Secret Manager."
 # Environment variables for your backend application
 env:
   - variable: GOOGLE_AI_API_KEY # The name your application expects to find
