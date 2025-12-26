@@ -4,7 +4,16 @@ import { logger } from '@/lib/logger';
 
 // Use our secure proxy endpoint instead of calling Discogs directly
 // This keeps the API token server-side only
-const DISCOGS_PROXY_URL = '/api/discogs';
+// On server-side, we need absolute URL; on client-side, relative works
+const getProxyBaseUrl = () => {
+  // Server-side: use the site URL
+  if (typeof window === 'undefined') {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:9002';
+    return `${siteUrl}/api/discogs`;
+  }
+  // Client-side: relative URL works
+  return '/api/discogs';
+};
 
 function mapDiscogsReleaseToVinylRecord(release: DiscogsReleaseApiResponse): Partial<VinylRecord> {
   let formatDetailsString;
@@ -100,7 +109,7 @@ async function handleDiscogsError(response: Response, context: string): Promise<
 
 export async function searchDiscogsByBarcode(barcode: string, distributorId?: string): Promise<DiscogsReleaseSearchResult[] | null> {
   const normalizedBarcode = barcode.replace(/[\s-]/g, '');
-  const url = `${DISCOGS_PROXY_URL}/database/search?barcode=${encodeURIComponent(normalizedBarcode)}&type=release`;
+  const url = `${getProxyBaseUrl()}/database/search?barcode=${encodeURIComponent(normalizedBarcode)}&type=release`;
 
   try {
     const response = await fetch(url);
@@ -119,7 +128,7 @@ export async function searchDiscogsByBarcode(barcode: string, distributorId?: st
 }
 
 export async function searchDiscogsByArtistTitle(artist: string, title: string, distributorId?: string): Promise<DiscogsReleaseSearchResult[] | null> {
-  const url = `${DISCOGS_PROXY_URL}/database/search?type=release&artist=${encodeURIComponent(artist)}&release_title=${encodeURIComponent(title)}`;
+  const url = `${getProxyBaseUrl()}/database/search?type=release&artist=${encodeURIComponent(artist)}&release_title=${encodeURIComponent(title)}`;
 
   try {
     const response = await fetch(url);
@@ -143,7 +152,7 @@ export async function getDiscogsReleaseDetailsById(discogsId: string, distributo
     return null;
   }
 
-  const url = `${DISCOGS_PROXY_URL}/releases/${discogsId}`;
+  const url = `${getProxyBaseUrl()}/releases/${discogsId}`;
 
   const response = await fetch(url);
 
@@ -158,7 +167,7 @@ export async function getDiscogsReleaseDetailsById(discogsId: string, distributo
 
 
 export async function getDiscogsMarketplaceStats(releaseId: string, distributorId?: string): Promise<DiscogsMarketplaceStats | null> {
-  const url = `${DISCOGS_PROXY_URL}/marketplace/stats/${releaseId}`;
+  const url = `${getProxyBaseUrl()}/marketplace/stats/${releaseId}`;
 
   try {
     const response = await fetch(url);
