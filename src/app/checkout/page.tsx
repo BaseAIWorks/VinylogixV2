@@ -68,23 +68,52 @@ export default function CheckoutPage() {
             return;
         }
 
-        setIsPlacingOrder(true);
-        try {
-            const newOrder = await createOrder(user, cart);
+        if (cart.length === 0) {
             toast({
-                title: "Order Placed!",
-                description: `Your order #${newOrder.id.slice(0, 8)} has been successfully placed.`,
-            });
-            clearCart();
-            router.push(`/my-orders`);
-        } catch (error) {
-            console.error("Failed to place order:", error);
-            toast({
-                title: "Order Failed",
-                description: (error as Error).message || "There was an error placing your order. Please try again.",
+                title: "Empty Cart",
+                description: "Your cart is empty. Please add items before checking out.",
                 variant: "destructive"
             });
-        } finally {
+            return;
+        }
+
+        setIsPlacingOrder(true);
+        try {
+            // Get the distributor ID from the first cart item (all items should be from same distributor)
+            const distributorId = cart[0].distributorId;
+
+            // Create Stripe Checkout Session
+            const response = await fetch('/api/stripe/connect/checkout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    distributorId,
+                    items: cart,
+                    customerEmail: user.email,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to create checkout session');
+            }
+
+            // Redirect to Stripe Checkout
+            if (data.url) {
+                window.location.href = data.url;
+            } else {
+                throw new Error('No checkout URL received');
+            }
+        } catch (error) {
+            console.error("Failed to initiate checkout:", error);
+            toast({
+                title: "Checkout Failed",
+                description: (error as Error).message || "There was an error initiating checkout. Please try again.",
+                variant: "destructive"
+            });
             setIsPlacingOrder(false);
         }
     };
@@ -102,8 +131,8 @@ export default function CheckoutPage() {
                         <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CreditCard className="h-5 w-5 text-primary"/>Payment</CardTitle></CardHeader>
                         <CardContent>
                             <div className="p-6 border-2 border-dashed rounded-lg text-center text-muted-foreground">
-                                <p>Payment provider integration (e.g., Stripe) coming soon.</p>
-                                <p className="text-sm">For now, click "Place Order" to simulate the order creation.</p>
+                                <p className="font-medium text-foreground mb-2">Secure Payment via Stripe</p>
+                                <p className="text-sm">You&apos;ll be redirected to Stripe&apos;s secure checkout to complete your payment.</p>
                             </div>
                         </CardContent>
                     </Card>

@@ -280,9 +280,8 @@ export default function PresentationModePage() {
           <Image
             src={currentRecord.cover_url!}
             alt={`${currentRecord.title} cover`}
-            layout="fill"
-            objectFit="cover"
-            className="opacity-20 blur-xl scale-110"
+            fill
+            className="object-cover opacity-20 blur-xl scale-110"
             unoptimized={currentRecord.cover_url?.includes('discogs.com')}
           />
           <div className="absolute inset-0 bg-black/50" />

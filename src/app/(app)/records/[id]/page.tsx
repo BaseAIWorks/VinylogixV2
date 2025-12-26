@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import type { VinylRecord, DiscogsMarketplaceStats, Track } from "@/types";
+import type { VinylRecord, DiscogsMarketplaceStats, Track, WorkerPermissions } from "@/types";
 import { ArrowLeft, Edit, Trash2, CalendarDays, Tag, Music, Layers3, Info, Euro, Package, MapPin, AlignLeft, Barcode, Disc3, Loader2, User, Heart, Scale, ListMusic, ExternalLink, Library, PlusCircle, ListChecks, Sparkles, UserCircle, RefreshCw, ShoppingCart, Minus, Plus, Warehouse, Store, Check, BarChart3, AlertTriangle, Users, Star, TrendingDown, Briefcase, Globe, Paintbrush, X, Weight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -347,7 +347,7 @@ export default function RecordDetailPage() {
   const handleAddToCollection = async () => {
       if (!user || !user.email || !record) return;
       setIsSubmittingCollection(true);
-      const recordDataForService = {
+      const recordDataForService: any = {
           ...createFormDefaults(record),
           title: record.title,
           artist: record.artist,
@@ -377,7 +377,7 @@ export default function RecordDetailPage() {
   const handleAddToWishlist = async () => {
       if (!user || !user.email || !record) return;
       setIsSubmittingWishlist(true);
-      const recordDataForService = {
+      const recordDataForService: any = {
           ...createFormDefaults(record),
           title: record.title,
           artist: record.artist,
@@ -487,7 +487,7 @@ export default function RecordDetailPage() {
 
   const isFavorite = user?.role === 'viewer' && record && user.favorites?.includes(record.id);
 
-  const perms = user?.permissions || {};
+  const perms: Partial<WorkerPermissions> = user?.permissions || {};
   const canViewPurchasing = isMaster || (isOperator && (!!perms.canViewPurchasingPrice || !!perms.canEditPurchasingPrice));
   const canViewSelling = isMaster || (isOperator && (!!perms.canViewSellingPrice || !!perms.canEditSellingPrice));
   const canViewSupplier = isMaster || (isOperator && !!perms.canEditSuppliers);

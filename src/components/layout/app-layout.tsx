@@ -210,6 +210,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     { href: '/admin/dashboard', label: 'Distributors', title: 'Platform Dashboard', icon: Building, roles: ['superadmin']},
     { href: '/admin/accounts', label: 'All Accounts', title: 'User Management', icon: Users, roles: ['superadmin']},
     { href: '/admin/statistics', label: 'Platform Stats', title: 'Platform Statistics', icon: BarChart3, roles: ['superadmin']},
+    { href: '/admin/revenue', label: 'Revenue & Orders', title: 'Platform Revenue & Orders', icon: DollarSign, roles: ['superadmin']},
     { href: '/admin/settings', label: 'Platform Settings', title: 'Platform Settings', icon: Shapes, roles: ['superadmin']},
     { href: '/admin/changelog', label: 'Manage Changelog', title: 'Changelog Management', icon: Newspaper, roles: ['superadmin']},
     
@@ -279,14 +280,15 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <SidebarHeader className="p-4 flex justify-center items-center">
           <Link href="/dashboard" className="flex items-center gap-2 text-xl font-semibold text-sidebar-primary">
             <div className="w-full h-auto group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:h-8 transition-all flex items-center justify-center">
-              <Image 
-                src={logoUrl} 
-                alt={`${companyName} Logo`} 
-                width={130} 
-                height={26} 
-                className="group-data-[collapsible=icon]:w-7 group-data-[collapsible=icon]:h-7 h-auto w-auto object-contain" 
-                unoptimized={true} 
-                onError={(e) => e.currentTarget.src='/logo.png'} 
+              <Image
+                src={logoUrl}
+                alt={`${companyName} Logo`}
+                width={130}
+                height={26}
+                style={{ width: 'auto', height: 'auto', maxWidth: '130px', maxHeight: '26px' }}
+                className="group-data-[collapsible=icon]:max-w-7 group-data-[collapsible=icon]:max-h-7 object-contain"
+                unoptimized={true}
+                onError={(e) => e.currentTarget.src='/logo.png'}
               />
             </div>
           </Link>
@@ -349,13 +351,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <SidebarFooter className="p-4 group-data-[collapsible=icon]:hidden">
            <SidebarSeparator className="my-1" />
            <div className="flex items-center justify-center gap-2 text-xs text-sidebar-foreground/60 mt-2">
-              <Image 
-                src="/logo.png" 
-                alt="Vinylogix Logo" 
-                width={120} 
+              <Image
+                src="/logo.png"
+                alt="Vinylogix Logo"
+                width={120}
                 height={24}
-                className="h-auto w-auto object-contain max-h-[24px]"
-                unoptimized={true} 
+                style={{ width: 'auto', height: 'auto', maxHeight: '24px' }}
+                className="object-contain"
+                unoptimized={true}
                 onError={(e) => e.currentTarget.src='/logo.png'}
               />
               <span className="font-semibold">v1.0.0</span>

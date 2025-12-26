@@ -26,7 +26,7 @@ const PageHeader = () => {
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur-sm">
             <div className="container mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
                 <Link href="/" className="flex items-center gap-2">
-                    <Image src="/logo.png" alt="Vinylogix Logo" width={180} height={36} className="h-auto w-auto max-h-[36px]" unoptimized={true} />
+                    <Image src="/logo.png" alt="Vinylogix Logo" width={180} height={36} style={{ width: 'auto', height: 'auto', maxHeight: '36px' }} className="object-contain" unoptimized={true} />
                 </Link>
                 <div className="hidden items-center gap-4 md:flex">
                     <Button variant="ghost" onClick={() => router.push('/features')}>Features</Button>

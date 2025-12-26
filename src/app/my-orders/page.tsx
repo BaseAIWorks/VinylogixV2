@@ -102,7 +102,11 @@ export default function MyOrdersPage() {
                                </TableHeader>
                                <TableBody>
                                    {orders.map(order => (
-                                       <TableRow key={order.id} className="hover:bg-muted/50">
+                                       <TableRow
+                                           key={order.id}
+                                           className="cursor-pointer hover:bg-muted/50"
+                                           onClick={() => router.push(`/my-orders/${order.id}`)}
+                                       >
                                            <TableCell className="font-mono text-sm">{order.orderNumber || order.id.slice(0, 8)}</TableCell>
                                            <TableCell>{format(new Date(order.createdAt), 'dd MMM yyyy')}</TableCell>
                                            <TableCell>

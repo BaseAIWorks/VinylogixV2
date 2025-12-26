@@ -340,8 +340,10 @@ const Logo = ({ className }: { className?: string }) => {
             alt="Vinylogix Logo"
             width={180}
             height={36}
-            className={cn('h-auto w-auto max-h-[36px]', className)}
+            style={{ width: 'auto', height: 'auto', maxHeight: '36px' }}
+            className={cn('object-contain', className)}
             unoptimized={true}
+            priority
         />
     )
 }

@@ -332,6 +332,48 @@ export default function OrderDetailPage() {
                             <p className="text-muted-foreground whitespace-pre-wrap">{order.shippingAddress}</p>
                          </CardContent>
                     </Card>
+
+                    {/* Payment Details Card */}
+                    {order.paymentStatus === 'paid' && order.platformFeeAmount && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-3">
+                                    <DollarSign className="h-6 w-6 text-green-500" />
+                                    Payment Details
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Order Total:</span>
+                                    <span className="font-medium">€{formatPriceForDisplay(order.totalAmount)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Platform Fee (4%):</span>
+                                    <span className="text-red-600">-€{formatPriceForDisplay(order.platformFeeAmount / 100)}</span>
+                                </div>
+                                <Separator />
+                                <div className="flex justify-between">
+                                    <span className="font-semibold">Your Payout:</span>
+                                    <span className="font-semibold text-green-600">
+                                        €{formatPriceForDisplay(order.totalAmount - (order.platformFeeAmount / 100))}
+                                    </span>
+                                </div>
+                                {order.paidAt && (
+                                    <p className="text-xs text-muted-foreground pt-2">
+                                        Paid on {format(new Date(order.paidAt), 'PPP')}
+                                    </p>
+                                )}
+                                {order.stripePaymentIntentId && (
+                                    <div className="pt-2">
+                                        <p className="text-xs text-muted-foreground mb-1">Payment ID:</p>
+                                        <code className="text-xs bg-muted px-2 py-1 rounded">
+                                            {order.stripePaymentIntentId}
+                                        </code>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
             </div>
         </div>

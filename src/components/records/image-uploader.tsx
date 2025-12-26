@@ -160,7 +160,7 @@ export default function ImageUploader({ onUploadComplete, initialImageUrl }: Ima
   if (uploadedImageUrl) {
     return (
       <div className="relative w-48 h-48">
-        <Image src={uploadedImageUrl} alt="Uploaded cover" layout="fill" className="rounded-md object-cover" />
+        <Image src={uploadedImageUrl} alt="Uploaded cover" fill className="rounded-md object-cover" />
         <Button
           variant="destructive"
           size="icon"

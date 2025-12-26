@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { getAllInventoryRecords, getRecordById } from "@/services/record-service";
 import { getOrders } from "@/services/order-service";
 import { getUsersByDistributorId, getClientsByDistributorId } from "@/services/user-service";
-import type { VinylRecord, User, Order } from "@/types";
+import type { VinylRecord, User, Order, WorkerPermissions } from "@/types";
 import { format, parseISO, startOfWeek, startOfMonth, startOfYear, isWithinInterval, subDays, subMonths } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -214,7 +214,7 @@ export default function StatsPage() {
         return sum + shelves + storage;
     }, 0);
     
-    const perms = user?.permissions || {};
+    const perms: Partial<WorkerPermissions> = user?.permissions || {};
     const canViewPurchasing = user?.role === 'master' || (user?.role === 'worker' && (perms.canViewPurchasingPrice || perms.canEditPurchasingPrice));
     const canViewSelling = user?.role === 'master' || (user?.role === 'worker' && (perms.canViewSellingPrice || perms.canEditSellingPrice));
 

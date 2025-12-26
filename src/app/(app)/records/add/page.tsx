@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import RecordForm, { createFormDefaults, RecordFormValues } from '@/components/records/record-form';
+import RecordForm, { createFormDefaults, RecordFormValues, RecordFormInputData } from '@/components/records/record-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, AlertTriangle } from 'lucide-react';
@@ -22,7 +22,7 @@ export default function AddRecordPage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [initialData, setInitialData] = useState<Partial<VinylRecord>>(() => {
+  const [initialData, setInitialData] = useState<RecordFormInputData>(() => {
     // Initialize with barcode from URL if present
     const barcode = searchParams.get('barcode');
     const artist = searchParams.get('artist');

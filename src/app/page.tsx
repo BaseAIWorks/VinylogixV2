@@ -30,7 +30,8 @@ const FeatureShowcase = ({ title, description, image, imageAlt, features, revers
                         alt={imageAlt}
                         width={600}
                         height={450}
-                        className="rounded-xl shadow-2xl ring-1 ring-black/10 w-full"
+                        style={{ width: '100%', height: 'auto' }}
+                        className="rounded-xl shadow-2xl ring-1 ring-black/10"
                         data-ai-hint={imageAlt}
                     />
                 </div>
@@ -129,7 +130,7 @@ const PageFooter = () => {
                 <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
                 <div className="lg:col-span-1">
                     <div className="flex items-center gap-2">
-                        <Image src="/logo.png" alt="Vinylogix Logo" width={150} height={30} className="h-auto w-auto max-h-[30px]" unoptimized={true} />
+                        <Image src="/logo.png" alt="Vinylogix Logo" width={150} height={30} style={{ width: 'auto', height: 'auto', maxHeight: '30px' }} className="object-contain" unoptimized={true} />
                     </div>
                     <p className="mt-4 max-w-xs text-muted-foreground">
                     The ultimate platform for vinyl record stores and collectors to manage their inventory and passion.

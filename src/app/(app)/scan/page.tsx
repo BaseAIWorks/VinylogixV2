@@ -332,9 +332,10 @@ export default function ScanPage() {
             )}
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Button onClick={startBarcodeScan} className="w-full" disabled={isLoading || isScanning}><Barcode className="mr-2"/> Scan Barcode</Button>
               <Button onClick={startAiScan} variant="secondary" className="w-full" disabled={isLoading || isScanning}><ImageIcon className="mr-2"/> Scan Cover (AI)</Button>
+              <Button onClick={() => router.push('/records/add')} variant="outline" className="w-full" disabled={isLoading || isScanning}><FilePlus2 className="mr-2"/> Add Manually</Button>
           </div>
            <Dialog open={isHandheldDialogOpen} onOpenChange={setIsHandheldDialogOpen}>
             <DialogTrigger asChild>

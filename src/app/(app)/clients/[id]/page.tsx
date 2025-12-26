@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, UserCircle, ShoppingCart, Library, ListChecks, Loader2, AlertTriangle, Package, Heart, Disc3, Clock, Edit, KeyRound, Mail, Phone, Home, Briefcase, User, CalendarPlus, ShieldCheck, ShieldOff, NotepadText } from "lucide-react";
+import { ArrowLeft, UserCircle, ShoppingCart, Library, ListChecks, Loader2, AlertTriangle, Package, Heart, Disc3, Clock, Edit, KeyRound, Mail, Phone, Home, Briefcase, User as UserIcon, CalendarPlus, ShieldCheck, ShieldOff, NotepadText } from "lucide-react";
 import type { User, VinylRecord, Order, OrderStatus } from "@/types";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";

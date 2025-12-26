@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import RecordForm, { createFormDefaults, RecordFormValues, DetailItem } from '@/components/records/record-form';
+import RecordForm, { createFormDefaults, RecordFormValues, RecordFormInputData, DetailItem } from '@/components/records/record-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft, AlertTriangle, Disc3, Layers3, CalendarDays, Music, Paintbrush, Globe, Info, Barcode } from 'lucide-react';
@@ -19,12 +19,12 @@ export default function EditRecordPage() {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
-  
+
   const recordId = typeof params.id === 'string' ? params.id : '';
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [initialData, setInitialData] = useState<Partial<VinylRecord>>(createFormDefaults());
+  const [initialData, setInitialData] = useState<RecordFormInputData>(createFormDefaults());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchRecordData = useCallback(async () => {

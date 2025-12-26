@@ -119,13 +119,34 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, ac
         }
     }
 
-    await updateDoc(orderDocRef, {
+    const updatePayload: any = {
         status: status,
         updatedAt: Timestamp.now(),
-    });
-    
+    };
+
+    // Add shippedAt timestamp when marking as shipped
+    if (status === 'shipped' && oldStatus !== 'shipped') {
+        updatePayload.shippedAt = Timestamp.now();
+    }
+
+    await updateDoc(orderDocRef, updatePayload);
+
     const updatedSnap = await getDoc(orderDocRef);
-    return processOrderTimestamps({ ...updatedSnap.data(), id: updatedSnap.id });
+    const updatedOrder = processOrderTimestamps({ ...updatedSnap.data(), id: updatedSnap.id });
+
+    // Send shipping notification email if status changed to shipped
+    if (status === 'shipped' && oldStatus !== 'shipped') {
+        try {
+            const { sendShippingNotification } = await import('./email-service');
+            sendShippingNotification(updatedOrder).catch(err =>
+                console.error('Failed to send shipping notification:', err)
+            );
+        } catch (error) {
+            console.error('Failed to import email service:', error);
+        }
+    }
+
+    return updatedOrder;
 }
 
 export async function createOrder(user: User, cartItems: CartItem[]): Promise<Order> {

@@ -39,9 +39,27 @@ export default function RootLayout({
   }, []);
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <title>Vinylogix - Your Ultimate Vinyl Manager</title>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var theme = localStorage.getItem('vinyl_db_theme');
+                  if (theme === 'light' || theme === 'dark' || theme === 'black') {
+                    document.documentElement.classList.add('theme-' + theme);
+                  } else {
+                    document.documentElement.classList.add('theme-dark');
+                  }
+                } catch (e) {
+                  document.documentElement.classList.add('theme-dark');
+                }
+              })();
+            `,
+          }}
+        />
         <meta name="description" content="Your Ultimate Vinyl Manager" />
         <link rel="icon" href="/app.png" sizes="any" />
         <link rel="manifest" href="/manifest.json" />

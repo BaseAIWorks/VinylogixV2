@@ -5,38 +5,17 @@ import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
 
-// =====================================================================================
-// IMPORTANT: REPLACE THE PLACEHOLDER VALUES BELOW
-// You can find these details in your Firebase project settings.
-// Go to: Project Overview > Project settings (gear icon) > General > Your apps > Select your web app > Config
-// =====================================================================================
+// Firebase configuration - uses environment variables with fallbacks for Firebase Studio
+// In Firebase Studio, these values are automatically available from the project
 const firebaseConfig = {
-  // Found in Firebase Console: Project settings > General > Your apps > Config
-  apiKey: "AIzaSyBNHIP0cIjg8abv8jLZ5bT6hlwRBJt01qQ", 
-  
-  // Found in Firebase Console: Project settings > General > Your apps > Config
-  // Should be: [YOUR_PROJECT_ID].firebaseapp.com
-  authDomain: "vinylogix-v1.firebaseapp.com", 
-  
-  // This is your permanent Project ID. This value should be correct.
-  projectId: "vinylogix-v1", 
-  
-  // Found in Firebase Console: Project settings > General > Your apps > Config
-  // Should be: [YOUR_PROJECT_ID].appspot.com
-  storageBucket: "vinylogix-v1.firebasestorage.app", 
-  
-  // Found in Firebase Console: Project settings > General > Your apps > Config
-  messagingSenderId: "709401169654",
-  
-  // Found in Firebase Console: Project settings > General > Your apps > Config
-  appId: "1:709401169654:web:93a83783ae8bfe62e1a6d7",
-  
-    // Found in Firebase Console: Project settings > General > Your apps > Config
-  measurementId: "G-Q91D5J3W1M",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyBNHIP0cIjg8abv8jLZ5bT6hlwRBJt01qQ",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "vinylogix-v1.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "vinylogix-v1",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "vinylogix-v1.appspot.com",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "709401169654",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:709401169654:web:93a83783ae8bfe62e1a6d7",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-Q91D5J3W1M",
 };
-// =====================================================================================
-// END OF CONFIGURATION TO REPLACE
-// =====================================================================================
 
 
 let app: FirebaseApp;

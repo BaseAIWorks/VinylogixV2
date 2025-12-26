@@ -1,4 +1,9 @@
 import { resend } from '@/lib/resend';
+import { format } from 'date-fns';
+import type { Order } from '@/types';
+import { formatPriceForDisplay } from '@/lib/utils';
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
 
 interface DistributorInfo {
   name: string;
@@ -190,5 +195,190 @@ Happy record hunting!
   } catch (error) {
     console.error('Failed to send existing account invitation email:', error);
     throw error;
+  }
+}
+
+/**
+ * Send order confirmation email to client
+ */
+export async function sendOrderConfirmation(order: Order): Promise<void> {
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      to: order.viewerEmail,
+      subject: `Order Confirmation #${order.orderNumber || order.id.slice(0, 8)}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #f8f9fa; border-radius: 8px; padding: 30px; margin-bottom: 20px; }
+              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+              .item { padding: 12px 0; border-bottom: 1px solid #e9ecef; }
+              .total { padding: 16px 0; font-size: 18px; font-weight: 700; }
+              .button { display: inline-block; background-color: #26222B; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>Thank you for your order!</h1>
+              <p>We've received your order and will process it soon.</p>
+            </div>
+
+            <div class="card">
+              <h2>Order Details</h2>
+              <p><strong>Order Number:</strong> ${order.orderNumber || order.id.slice(0, 8)}</p>
+              <p><strong>Date:</strong> ${format(new Date(order.createdAt), 'PPP')}</p>
+              <p><strong>Status:</strong> ${order.status === 'paid' ? 'Paid ✓' : 'Processing'}</p>
+            </div>
+
+            <div class="card">
+              <h2>Items Ordered</h2>
+              ${order.items.map(item => `
+                <div class="item">
+                  <p style="margin: 0; font-weight: 600;">${item.title}</p>
+                  <p style="margin: 0; color: #6c757d;">${item.artist} • Qty: ${item.quantity} • €${formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</p>
+                </div>
+              `).join('')}
+              <div class="total">Total: €${formatPriceForDisplay(order.totalAmount)}</div>
+            </div>
+
+            <div class="card">
+              <h2>Shipping Address</h2>
+              <p style="white-space: pre-line;">${order.shippingAddress}</p>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${siteUrl}/my-orders/${order.id}" class="button">View Order Details</a>
+            </div>
+
+            <p style="text-align: center; color: #6c757d; font-size: 14px;">
+              Your order will be processed within 1-2 business days.
+            </p>
+          </body>
+        </html>
+      `,
+    });
+
+    console.log(`Order confirmation sent to ${order.viewerEmail} for order ${order.orderNumber}`);
+  } catch (error) {
+    console.error('Failed to send order confirmation:', error);
+  }
+}
+
+/**
+ * Send shipping notification to client
+ */
+export async function sendShippingNotification(order: Order): Promise<void> {
+  if (!order.trackingNumber) return;
+
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      to: order.viewerEmail,
+      subject: `Your order #${order.orderNumber || order.id.slice(0, 8)} has shipped!`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #d4edda; border-radius: 8px; padding: 30px; margin-bottom: 20px; text-align: center; }
+              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+              .button { display: inline-block; background-color: #26222B; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>📦 Good news! Your order is on its way.</h1>
+            </div>
+
+            <div class="card">
+              <h2>Shipping Details</h2>
+              <p><strong>Order Number:</strong> ${order.orderNumber || order.id.slice(0, 8)}</p>
+              ${order.carrier ? `<p><strong>Carrier:</strong> ${order.carrier.toUpperCase()}</p>` : ''}
+              <p><strong>Tracking Number:</strong> <code>${order.trackingNumber}</code></p>
+              ${order.estimatedDeliveryDate ? `<p><strong>Estimated Delivery:</strong> ${format(new Date(order.estimatedDeliveryDate), 'PPP')}</p>` : ''}
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              ${order.trackingUrl ? `<a href="${order.trackingUrl}" class="button">Track Package</a>` : ''}
+              <a href="${siteUrl}/my-orders/${order.id}" class="button" style="margin-left: 10px;">View Order</a>
+            </div>
+          </body>
+        </html>
+      `,
+    });
+
+    console.log(`Shipping notification sent to ${order.viewerEmail} for order ${order.orderNumber}`);
+  } catch (error) {
+    console.error('Failed to send shipping notification:', error);
+  }
+}
+
+/**
+ * Send new order notification to distributor
+ */
+export async function sendNewOrderNotification(order: Order, distributorEmail: string): Promise<void> {
+  try {
+    const platformFee = order.platformFeeAmount ? (order.platformFeeAmount / 100).toFixed(2) : '0.00';
+    const payout = order.platformFeeAmount
+      ? (order.totalAmount - (order.platformFeeAmount / 100)).toFixed(2)
+      : order.totalAmount.toFixed(2);
+
+    await resend.emails.send({
+      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      to: distributorEmail,
+      subject: `New Order Received #${order.orderNumber || order.id.slice(0, 8)}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #d1ecf1; border-radius: 8px; padding: 30px; margin-bottom: 20px; text-align: center; }
+              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+              .button { display: inline-block; background-color: #26222B; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; }
+              .payout { font-size: 20px; color: #28a745; font-weight: 700; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>🎉 New Order Received!</h1>
+            </div>
+
+            <div class="card">
+              <h2>Order Summary</h2>
+              <p><strong>Order Number:</strong> ${order.orderNumber || order.id.slice(0, 8)}</p>
+              <p><strong>Customer:</strong> ${order.customerName} (${order.viewerEmail})</p>
+              <p><strong>Items:</strong> ${order.items.length} item(s)</p>
+            </div>
+
+            <div class="card">
+              <h2>Payment Details</h2>
+              <p>Order Total: €${formatPriceForDisplay(order.totalAmount)}</p>
+              <p>Platform Fee (4%): -€${platformFee}</p>
+              <p class="payout">Your Payout: €${payout}</p>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${siteUrl}/orders/${order.id}" class="button">View Order Details</a>
+            </div>
+
+            <p style="text-align: center; color: #6c757d;">
+              Please process this order within 1-2 business days.
+            </p>
+          </body>
+        </html>
+      `,
+    });
+
+    console.log(`New order notification sent to distributor ${distributorEmail} for order ${order.orderNumber}`);
+  } catch (error) {
+    console.error('Failed to send new order notification:', error);
   }
 }

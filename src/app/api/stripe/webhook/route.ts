@@ -6,6 +6,7 @@ import {
   findDistributorByStripeCustomerId,
   updateDistributor,
 } from "@/services/server-distributor-service";
+import { createOrderFromCheckout } from "@/services/server-order-service";
 import type { SubscriptionTier, SubscriptionStatus } from "@/types";
 
 // Webhook signing secret
@@ -71,11 +72,43 @@ export async function POST(req: NextRequest) {
   try {
     switch (event.type) {
       // ============================================
+      // PAYMENT INTENT SUCCEEDED (Order Payment)
+      // ============================================
+      case "payment_intent.succeeded": {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+
+        console.log(
+          `Payment succeeded for PaymentIntent ${paymentIntent.id}, amount: ${paymentIntent.amount}`
+        );
+
+        // The order will be created when checkout.session.completed fires
+        // This event is mainly for logging successful payments
+        break;
+      }
+
+      // ============================================
+      // PAYMENT INTENT FAILED (Order Payment)
+      // ============================================
+      case "payment_intent.payment_failed": {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+
+        console.error(
+          `Payment failed for PaymentIntent ${paymentIntent.id}`,
+          paymentIntent.last_payment_error
+        );
+
+        // Log payment failures for monitoring
+        // Could also update order status if order already exists
+        break;
+      }
+
+      // ============================================
       // CHECKOUT SESSION COMPLETED
       // ============================================
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
 
+        // Handle subscription checkout
         if (session.mode === "subscription" && session.subscription && session.customer) {
           const subscriptionId =
             typeof session.subscription === "string"
@@ -151,6 +184,28 @@ export async function POST(req: NextRequest) {
               { error: "Internal server error in webhook handler" },
               { status: 500 }
             );
+          }
+        }
+
+        // Handle order payment checkout
+        if (session.mode === "payment" && session.metadata?.distributorId) {
+          console.log(
+            `Order payment checkout completed for session ${session.id}`
+          );
+
+          try {
+            const order = await createOrderFromCheckout(session);
+
+            console.log(
+              `Created order ${order.id} for distributor ${session.metadata.distributorId}, ` +
+                `total: ${session.amount_total}, platform fee: ${session.metadata.platformFeeAmount}`
+            );
+          } catch (error) {
+            console.error(
+              `Error creating order from checkout session ${session.id}:`,
+              error
+            );
+            // Don't return error - log and continue to avoid blocking webhook
           }
         }
         break;

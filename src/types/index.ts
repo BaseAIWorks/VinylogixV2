@@ -423,6 +423,20 @@ export interface Order {
   createdAt: string; // ISO String
   updatedAt: string; // ISO String
   orderNumber?: string;
+
+  // Stripe Connect Payment Fields
+  paymentStatus?: 'unpaid' | 'paid' | 'refunded' | 'failed';
+  stripePaymentIntentId?: string;
+  stripeCheckoutSessionId?: string;
+  paidAt?: string; // ISO String
+  platformFeeAmount?: number; // 4% platform fee in cents
+
+  // Shipping Tracking Fields
+  carrier?: 'postnl' | 'dhl' | 'ups' | 'fedex' | 'dpd' | 'gls' | 'other';
+  trackingNumber?: string;
+  trackingUrl?: string;
+  shippedAt?: string; // ISO String
+  estimatedDeliveryDate?: string; // ISO String
 }
 
 // ===================================

@@ -41,7 +41,8 @@ const FeatureShowcase = ({ title, description, image, imageAlt, features, revers
                         alt={imageAlt}
                         width={600}
                         height={450}
-                        className="rounded-xl shadow-2xl ring-1 ring-black/10 w-full"
+                        style={{ width: '100%', height: 'auto' }}
+                        className="rounded-xl shadow-2xl ring-1 ring-black/10"
                         data-ai-hint={imageAlt}
                     />
                 </div>
@@ -76,7 +77,7 @@ const PageFooter = () => {
                 <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
                 <div className="lg:col-span-1">
                     <div className="flex items-center gap-2">
-                        <Image src="/logo.png" alt="Vinylogix Logo" width={150} height={30} className="h-auto w-auto max-h-[30px]" unoptimized={true} />
+                        <Image src="/logo.png" alt="Vinylogix Logo" width={150} height={30} style={{ width: 'auto', height: 'auto', maxHeight: '30px' }} className="object-contain" unoptimized={true} />
                     </div>
                     <p className="mt-4 max-w-xs text-muted-foreground">
                     The ultimate platform for vinyl record stores and collectors to manage their inventory and passion.
@@ -155,7 +156,7 @@ export default function FeaturesPage() {
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur-sm">
             <div className="container mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
                <Link href="/" className="flex items-center gap-2">
-                <Image src="/logo.png" alt="Vinylogix Logo" width={180} height={36} className="h-auto w-auto max-h-[36px]" unoptimized={true} />
+                <Image src="/logo.png" alt="Vinylogix Logo" width={180} height={36} style={{ width: 'auto', height: 'auto', maxHeight: '36px' }} className="object-contain" unoptimized={true} />
               </Link>
               <div className="hidden items-center gap-4 md:flex">
                  <Button variant="ghost" onClick={() => router.push('/features')}>Features</Button>
