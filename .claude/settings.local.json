@@ -8,7 +8,8 @@
       "Bash(powershell -Command:*)",
       "Bash(cd:*)",
       "Bash(npm install:*)",
-      "Bash(npm run typecheck:*)"
+      "Bash(npm run typecheck:*)",
+      "Bash(npm uninstall:*)"
     ]
   }
 }
