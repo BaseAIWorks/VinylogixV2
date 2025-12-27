@@ -133,7 +133,7 @@ const ProfileCompletionDialog = () => {
 
     return (
         <Dialog open={isOpen}>
-            <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()} hideCloseButton>
+            <DialogContent className="sm:max-w-lg [&>button]:hidden" onInteractOutside={(e) => e.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle>Complete Your Profile</DialogTitle>
                     <DialogDescription>

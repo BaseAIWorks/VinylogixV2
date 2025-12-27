@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useEffect } from "react";
 import {
@@ -74,8 +75,7 @@ const distributorSettingsSchema = z.object({
 
 const notificationsFormSchema = z.object({
   lowStockNotificationsEnabled: z.boolean().default(false),
-  lowStockThreshold: z.string().optional()
-    .transform(val => (val && val.trim() !== "" ? Number(val) : 0)),
+  lowStockThreshold: z.string().optional(),
 });
 
 const cardDisplayFormSchema = z.object({
@@ -317,8 +317,11 @@ export default function SettingsPage() {
     await updateUserProfile(values);
   };
   
-  const handleProfileCompletion = async (values: DistributorSettingsValues) => {
-    await updateMyDistributorSettings({ ...values, profileComplete: true });
+  const handleProfileCompletion = async (values: ProfileFormValues) => {
+    // Save the user profile data first
+    await updateUserProfile(values);
+    // Then mark the distributor profile as complete
+    await updateMyDistributorSettings({ profileComplete: true });
     setIsProfileCompletionDialogOpen(false);
   };
 
@@ -331,7 +334,10 @@ export default function SettingsPage() {
   };
 
   const handleNotificationsUpdate = async (values: NotificationsFormValues) => {
-      await updateMyDistributorSettings({ ...values });
+      await updateMyDistributorSettings({
+        lowStockNotificationsEnabled: values.lowStockNotificationsEnabled,
+        lowStockThreshold: values.lowStockThreshold ? parseInt(values.lowStockThreshold, 10) : undefined,
+      });
   };
   
   const handleCardDisplayUpdate = async (values: CardDisplayFormValues) => {
@@ -508,12 +514,16 @@ export default function SettingsPage() {
   if (authLoading) {
     return <div className="flex items-center justify-center min-h-screen"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
   }
-  
+
+  const isMaster = user?.role === 'master';
+  const isSuperAdmin = user?.role === 'superadmin';
+
   return (
-    <div className="space-y-8 max-w-3xl mx-auto">
-        {user?.role === 'master' && (
+    <div className="max-w-4xl mx-auto">
+        {/* Profile Completion Dialog */}
+        {isMaster && (
           <Dialog open={isProfileCompletionDialogOpen}>
-            <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()} hideCloseButton>
+            <DialogContent className="sm:max-w-lg [&>button]:hidden" onInteractOutside={(e) => e.preventDefault()}>
               <DialogHeader>
                   <DialogTitle>Welcome! Complete Your Business Profile</DialogTitle>
                   <DialogDescription>
@@ -522,7 +532,6 @@ export default function SettingsPage() {
               </DialogHeader>
               <Form {...profileForm}>
                 <form onSubmit={profileForm.handleSubmit(handleProfileCompletion)} className="space-y-4 max-h-[70vh] overflow-y-auto pr-4">
-                  {/* Reuse the profile form fields, but wrap them in the new form context */}
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField control={profileForm.control} name="companyName" render={({ field }) => (
                           <FormItem><FormLabel>Company Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
@@ -545,7 +554,6 @@ export default function SettingsPage() {
                   <FormField control={profileForm.control} name="country" render={({ field }) => (
                      <FormItem><FormLabel>Country</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a country" /></SelectTrigger></FormControl><SelectContent>{countries.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
                   )} />
-
                   <DialogFooter className="pt-4 border-t sticky bottom-0 bg-background py-4">
                       <Button type="submit" disabled={profileForm.formState.isSubmitting}>
                           {profileForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
@@ -557,452 +565,469 @@ export default function SettingsPage() {
             </DialogContent>
           </Dialog>
         )}
-        
-        {(user?.role === 'superadmin' || user?.role === 'master') && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <Palette className="h-7 w-7 text-primary" />
-                <div>
-                  <CardTitle className="text-xl">Branding</CardTitle>
-                  <CardDescription>
-                    {user?.role === 'superadmin' 
-                        ? 'Customize the application name and logo for the entire platform.'
-                        : 'Customize the name and logo for your distributorship.'
-                    }
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Form {...brandingForm}>
-                <form onSubmit={brandingForm.handleSubmit(handleBrandingUpdate)} className="space-y-6">
-                  <FormField control={brandingForm.control} name="companyName" render={({ field }) => (
-                      <FormItem>
-                          <FormLabel>
-                            {user?.role === 'superadmin' ? 'Platform Name' : 'Company Name'}
-                          </FormLabel>
-                          <FormControl><Input placeholder="Your Company Name" {...field} /></FormControl>
-                          <FormMessage />
-                      </FormItem>
-                  )} />
-                  <FormField control={brandingForm.control} name="logoUrl" render={({ field }) => (
-                      <FormItem>
-                          <FormLabel>Logo URL</FormLabel>
-                          <FormControl><Input placeholder="https://example.com/logo.png" {...field} /></FormControl>
-                          <FormDescription>Enter a direct URL to your logo image. It should be a square image (e.g., PNG, JPG).</FormDescription>
-                          <FormMessage />
-                      </FormItem>
-                  )} />
-                   <Button type="submit" disabled={brandingForm.formState.isSubmitting || authLoading}>
-                        {brandingForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                        Save Branding
-                   </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-        )}
-        
-        {user?.role === 'master' && (
-           <Card>
-              <CardHeader>
+
+        <Tabs defaultValue={isMaster || isSuperAdmin ? "business" : "account"} className="w-full">
+          <TabsList className={`grid w-full mb-6 ${isMaster ? 'grid-cols-4' : isSuperAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {(isMaster || isSuperAdmin) && (
+              <TabsTrigger value="business" className="gap-2">
+                <Building2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Business</span>
+              </TabsTrigger>
+            )}
+            {isMaster && (
+              <TabsTrigger value="inventory" className="gap-2">
+                <Package className="h-4 w-4" />
+                <span className="hidden sm:inline">Inventory</span>
+              </TabsTrigger>
+            )}
+            {isMaster && (
+              <TabsTrigger value="clients" className="gap-2">
+                <Users className="h-4 w-4" />
+                <span className="hidden sm:inline">Clients</span>
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="account" className="gap-2">
+              <UserCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">Account</span>
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ==================== BUSINESS TAB ==================== */}
+          {(isMaster || isSuperAdmin) && (
+            <TabsContent value="business" className="space-y-6">
+              {/* Branding Section */}
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <Palette className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-lg">Branding</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Form {...brandingForm}>
+                    <form onSubmit={brandingForm.handleSubmit(handleBrandingUpdate)} className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField control={brandingForm.control} name="companyName" render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>{isSuperAdmin ? 'Platform Name' : 'Company Name'}</FormLabel>
+                                <FormControl><Input placeholder="Your Company Name" {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )} />
+                        <FormField control={brandingForm.control} name="logoUrl" render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Logo URL</FormLabel>
+                                <FormControl><Input placeholder="https://example.com/logo.png" {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )} />
+                      </div>
+                      <Button type="submit" size="sm" disabled={brandingForm.formState.isSubmitting || authLoading}>
+                          {brandingForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                          Save Branding
+                      </Button>
+                    </form>
+                  </Form>
+                </CardContent>
+              </Card>
+
+              {/* Distributor URL - Master only */}
+              {isMaster && (
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                      <LinkIcon className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Public URL</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <Form {...distributorSettingsForm}>
+                      <form onSubmit={distributorSettingsForm.handleSubmit(handleDistributorSettingsUpdate)} className="space-y-4">
+                        <FormField control={distributorSettingsForm.control} name="slug" render={({ field }) => (
+                          <FormItem>
+                            <div className="flex items-center">
+                              <span className="text-sm text-muted-foreground rounded-l-md border border-r-0 bg-muted px-3 py-2 h-10 flex items-center">
+                                vinylogix.com/
+                              </span>
+                              <FormControl>
+                                <Input {...field} placeholder="your-store-name" className="rounded-l-none max-w-xs" disabled={!canUpdateSlug()} />
+                              </FormControl>
+                              <Button type="submit" size="sm" className="ml-2" disabled={distributorSettingsForm.formState.isSubmitting || authLoading || !canUpdateSlug()}>
+                                {distributorSettingsForm.formState.isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                              </Button>
+                            </div>
+                            <FormDescription className="text-xs">
+                              {!canUpdateSlug()
+                                ? `You can change your URL again after ${getNextSlugUpdateDate()}.`
+                                : 'Lowercase letters, numbers, and hyphens only. Cannot be changed for 30 days.'
+                              }
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      </form>
+                    </Form>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Payouts & Billing - Master only */}
+              {isMaster && (
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                      <CreditCard className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Payouts & Billing</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {activeDistributor?.stripeAccountId ? (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          {activeDistributor.stripeAccountStatus === 'verified' ? (
+                            <div className="flex items-center gap-2 text-green-600">
+                              <Check className="h-4 w-4"/>
+                              <span className="font-medium text-sm">Stripe connected & verified</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-orange-600">
+                              <AlertCircle className="h-4 w-4"/>
+                              <span className="font-medium text-sm">Stripe account needs attention</span>
+                            </div>
+                          )}
+                          <p className="text-xs text-muted-foreground mt-1">
+                            ID: <code className="bg-muted px-1 rounded">{activeDistributor.stripeAccountId}</code>
+                          </p>
+                        </div>
+                        <Button onClick={handleStripeConnect} disabled={isConnectingStripe} size="sm" variant="outline">
+                          {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Manage <ExternalLink className="ml-1 h-3 w-3"/>
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">Connect Stripe to receive payouts from your customers.</p>
+                        <Button onClick={handleStripeConnect} disabled={isConnectingStripe} size="sm">
+                          {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Connect Stripe
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+          )}
+
+          {/* ==================== INVENTORY TAB ==================== */}
+          {isMaster && (
+            <TabsContent value="inventory" className="space-y-6">
+              {/* Card Display Settings */}
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <View className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-lg">Card Display</CardTitle>
+                  </div>
+                  <CardDescription className="text-sm">Choose which details to show on record cards.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Form {...cardDisplayForm}>
+                    <form onSubmit={cardDisplayForm.handleSubmit(handleCardDisplayUpdate)} className="space-y-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <FormField control={cardDisplayForm.control} name="showTitle" render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="text-sm font-normal">Title</FormLabel></FormItem>
+                        )}/>
+                        <FormField control={cardDisplayForm.control} name="showArtist" render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="text-sm font-normal">Artist</FormLabel></FormItem>
+                        )}/>
+                        <FormField control={cardDisplayForm.control} name="showYear" render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="text-sm font-normal">Year</FormLabel></FormItem>
+                        )}/>
+                        <FormField control={cardDisplayForm.control} name="showCountry" render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="text-sm font-normal">Country</FormLabel></FormItem>
+                        )}/>
+                        <FormField control={cardDisplayForm.control} name="showShelfStock" render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="text-sm font-normal">Shelf Stock</FormLabel></FormItem>
+                        )}/>
+                        <FormField control={cardDisplayForm.control} name="showStorageStock" render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="text-sm font-normal">Storage Stock</FormLabel></FormItem>
+                        )}/>
+                        <FormField control={cardDisplayForm.control} name="showTotalStock" render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="text-sm font-normal">Total Stock</FormLabel></FormItem>
+                        )}/>
+                        <FormField control={cardDisplayForm.control} name="showFormat" render={({ field }) => (
+                            <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="text-sm font-normal">Format</FormLabel></FormItem>
+                        )}/>
+                      </div>
+                      <Button type="submit" size="sm" disabled={cardDisplayForm.formState.isSubmitting || authLoading}>
+                        {cardDisplayForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        Save
+                      </Button>
+                    </form>
+                  </Form>
+                </CardContent>
+              </Card>
+
+              {/* Storage Locations */}
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <DatabaseZap className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-lg">Storage Locations</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <LocationManager title="Shelf Locations" locations={shelfLocations} onUpdateLocations={setShelfLocations} />
+                    <LocationManager title="Storage Locations" locations={storageLocations} onUpdateLocations={setStorageLocations} />
+                  </div>
+                  <div className="flex justify-end pt-4 border-t">
+                    <Button onClick={handleUpdateLocations} size="sm" disabled={isSavingLocations || authLoading}>
+                      {isSavingLocations ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                      Save Locations
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Export Data */}
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <FileDown className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Export Data</CardTitle>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={isExportingCSV}>
+                      {isExportingCSV ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                      Export CSV
+                    </Button>
+                  </div>
+                </CardHeader>
+              </Card>
+            </TabsContent>
+          )}
+
+          {/* ==================== CLIENTS TAB ==================== */}
+          {isMaster && (
+            <TabsContent value="clients" className="space-y-6">
+              {/* Client Menu Settings */}
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <MenuSquare className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-lg">Client Menu Visibility</CardTitle>
+                  </div>
+                  <CardDescription className="text-sm">Control which features your clients can access.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Form {...clientMenuForm}>
+                    <form onSubmit={clientMenuForm.handleSubmit(handleClientMenuUpdate)} className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <FormField control={clientMenuForm.control} name="showCollection" render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                            <FormLabel className="text-sm font-normal">My Collection</FormLabel>
+                            <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                          </FormItem>
+                        )} />
+                        <FormField control={clientMenuForm.control} name="showWishlist" render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                            <FormLabel className="text-sm font-normal">Wishlist</FormLabel>
+                            <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                          </FormItem>
+                        )} />
+                        <FormField control={clientMenuForm.control} name="showScan" render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                            <FormLabel className="text-sm font-normal">Scan/Add Record</FormLabel>
+                            <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                          </FormItem>
+                        )} />
+                        <FormField control={clientMenuForm.control} name="showDiscogs" render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                            <FormLabel className="text-sm font-normal">Discogs</FormLabel>
+                            <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                          </FormItem>
+                        )} />
+                      </div>
+                      <Button type="submit" size="sm" disabled={clientMenuForm.formState.isSubmitting || authLoading}>
+                        {clientMenuForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        Save Menu Settings
+                      </Button>
+                    </form>
+                  </Form>
+                </CardContent>
+              </Card>
+
+              {/* Notifications */}
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <Bell className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-lg">Notifications</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Form {...notificationsForm}>
+                    <form onSubmit={notificationsForm.handleSubmit(handleNotificationsUpdate)} className="space-y-4">
+                      <FormField control={notificationsForm.control} name="lowStockNotificationsEnabled" render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-sm">Low Stock Alerts</FormLabel>
+                            <FormDescription className="text-xs">Get notified when stock drops below threshold.</FormDescription>
+                          </div>
+                          <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                        </FormItem>
+                      )} />
+                      {lowStockEnabled && (
+                        <FormField control={notificationsForm.control} name="lowStockThreshold" render={({ field }) => (
+                          <FormItem className="max-w-xs">
+                            <FormLabel className="text-sm">Threshold</FormLabel>
+                            <FormControl><Input type="number" placeholder="e.g., 20" {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                      )}
+                      <Button type="submit" size="sm" disabled={notificationsForm.formState.isSubmitting || authLoading}>
+                        {notificationsForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        Save
+                      </Button>
+                    </form>
+                  </Form>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {/* ==================== ACCOUNT TAB ==================== */}
+          <TabsContent value="account" className="space-y-6">
+            {/* Profile */}
+            <Card>
+              <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
-                  <LinkIcon className="h-7 w-7 text-primary" />
+                  <UserCircle className="h-5 w-5 text-primary" />
                   <div>
-                    <CardTitle className="text-xl">Distributor URL</CardTitle>
-                    <CardDescription>Set a unique, memorable URL for your public catalog.</CardDescription>
+                    <CardTitle className="text-lg">My Profile</CardTitle>
+                    <CardDescription className="text-sm">Role: <span className="font-medium">{user?.role ? roleDisplayNames[user.role] : ''}</span></CardDescription>
                   </div>
                 </div>
               </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <Label htmlFor="email" className="text-sm">Email</Label>
+                    <Input id="email" type="email" value={user?.email || ""} disabled className="mt-1" />
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => user?.email && sendPasswordReset(user.email)} className="mt-6">
+                    <KeyRound className="mr-2 h-4 w-4"/>
+                    Reset Password
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* My Details */}
+            <Card>
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-3">
+                  <Home className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-lg">Contact & Address</CardTitle>
+                </div>
+              </CardHeader>
               <CardContent>
-                <Form {...distributorSettingsForm}>
-                  <form onSubmit={distributorSettingsForm.handleSubmit(handleDistributorSettingsUpdate)} className="space-y-4">
-                     <FormField
-                      control={distributorSettingsForm.control}
-                      name="slug"
-                      render={({ field }) => (
+                <Form {...profileForm}>
+                  <form onSubmit={profileForm.handleSubmit(handleProfileUpdate)} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField control={profileForm.control} name="firstName" render={({ field }) => (
+                        <FormItem><FormLabel className="text-sm">First Name</FormLabel><FormControl><Input placeholder="First Name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={profileForm.control} name="lastName" render={({ field }) => (
+                        <FormItem><FormLabel className="text-sm">Last Name</FormLabel><FormControl><Input placeholder="Last Name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField control={profileForm.control} name="companyName" render={({ field }) => (
+                        <FormItem><FormLabel className="text-sm">Company Name</FormLabel><FormControl><Input placeholder="Company Name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={profileForm.control} name="phoneNumber" render={({ field }) => (
+                        <FormItem><FormLabel className="text-sm">Phone Number</FormLabel><FormControl><Input placeholder="Phone Number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                    </div>
+
+                    <Separator className="my-4" />
+                    <h4 className="text-sm font-medium">Shipping Address</h4>
+
+                    <FormField control={profileForm.control} name="addressLine1" render={({ field }) => (
+                      <FormItem><FormLabel className="text-sm">Address Line 1</FormLabel><FormControl><Input placeholder="Street and number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={profileForm.control} name="addressLine2" render={({ field }) => (
+                      <FormItem><FormLabel className="text-sm">Address Line 2</FormLabel><FormControl><Input placeholder="Apartment, suite, etc." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField control={profileForm.control} name="postcode" render={({ field }) => (
+                        <FormItem><FormLabel className="text-sm">Postcode</FormLabel><FormControl><Input placeholder="Postcode" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={profileForm.control} name="city" render={({ field }) => (
+                        <FormItem><FormLabel className="text-sm">City</FormLabel><FormControl><Input placeholder="City" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={profileForm.control} name="country" render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Public URL Slug</FormLabel>
-                          <div className="flex items-center">
-                            <span className="text-sm text-muted-foreground rounded-l-md border border-r-0 bg-muted px-3 py-2 h-10 flex items-center">
-                              vinylogix.com/
-                            </span>
-                            <FormControl>
-                               <Input {...field} placeholder="your-store-name" className="rounded-l-none" disabled={!canUpdateSlug()} />
-                            </FormControl>
-                          </div>
-                          {!canUpdateSlug() ? (
-                            <FormDescription>
-                              You can change your URL again after {getNextSlugUpdateDate()}.
-                            </FormDescription>
-                          ) : (
-                             <FormDescription>
-                              Use only lowercase letters, numbers, and hyphens. Cannot be changed for 30 days.
-                            </FormDescription>
-                          )}
+                          <FormLabel className="text-sm">Country</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger></FormControl>
+                            <SelectContent>{countries.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
-                      )}
-                    />
-                    <div className="flex justify-end">
-                       <Button type="submit" disabled={distributorSettingsForm.formState.isSubmitting || authLoading || !canUpdateSlug()}>
-                          {distributorSettingsForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                          Save URL
-                       </Button>
+                      )} />
                     </div>
+
+                    {user?.role === 'viewer' && (
+                      <>
+                        <Separator className="my-4" />
+                        <FormField control={profileForm.control} name="useDifferentBillingAddress" render={({ field }) => (
+                          <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3">
+                            <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                            <FormLabel className="text-sm font-normal">Use a different billing address</FormLabel>
+                          </FormItem>
+                        )} />
+                        {useDifferentBilling && (
+                          <FormField control={profileForm.control} name="billingAddress" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Billing Address</FormLabel>
+                              <FormControl><Textarea placeholder="Full billing address" {...field} value={field.value ?? ''} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                        )}
+                      </>
+                    )}
+
+                    <Button type="submit" size="sm" disabled={profileForm.formState.isSubmitting || authLoading}>
+                      {profileForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                      Save Details
+                    </Button>
                   </form>
                 </Form>
               </CardContent>
             </Card>
-        )}
-        
-        {user?.role === 'master' && (
+
+            {/* Logout */}
             <Card>
-                <CardHeader>
-                    <div className="flex items-center gap-3">
-                        <CreditCard className="h-7 w-7 text-primary" />
-                        <div>
-                            <CardTitle className="text-xl">Payouts & Billing</CardTitle>
-                            <CardDescription>Manage how you receive payments from your customers.</CardDescription>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                     {activeDistributor?.stripeAccountId ? (
-                        <div>
-                            {activeDistributor.stripeAccountStatus === 'verified' ? (
-                                <div className="flex items-center gap-2 text-green-600">
-                                    <Check className="h-5 w-5"/>
-                                    <p className="font-semibold">Your Stripe account is connected and verified.</p>
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-2 text-orange-600">
-                                    <AlertCircle className="h-5 w-5"/>
-                                    <p className="font-semibold">Your Stripe account needs attention.</p>
-                                </div>
-                            )}
-                            <p className="text-sm text-muted-foreground mt-2">
-                                Account ID: <code className="text-xs bg-muted px-1 py-0.5 rounded">{activeDistributor.stripeAccountId}</code>
-                            </p>
-                            <Button onClick={handleStripeConnect} disabled={isConnectingStripe} className="mt-4">
-                                {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Manage Stripe Account <ExternalLink className="ml-2 h-4 w-4"/>
-                            </Button>
-                        </div>
-                    ) : (
-                        <div>
-                            <p className="text-muted-foreground mb-4">Connect a Stripe account to receive payouts for your orders. Vinylogix uses Stripe Connect to securely route payments from your clients directly to you.</p>
-                            <Button onClick={handleStripeConnect} disabled={isConnectingStripe}>
-                                {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Connect with Stripe
-                            </Button>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-        )}
-
-        {user?.role === 'master' && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <View className="h-7 w-7 text-primary" />
-                <div>
-                  <CardTitle className="text-xl">Card Display Settings</CardTitle>
-                  <CardDescription>Choose which details to show on record cards in the inventory.</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-               <Form {...cardDisplayForm}>
-                <form onSubmit={cardDisplayForm.handleSubmit(handleCardDisplayUpdate)} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                    <FormField control={cardDisplayForm.control} name="showTitle" render={({ field }) => (
-                        <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Show Title</FormLabel></FormItem>
-                    )}/>
-                    <FormField control={cardDisplayForm.control} name="showArtist" render={({ field }) => (
-                        <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Show Artist</FormLabel></FormItem>
-                    )}/>
-                     <FormField control={cardDisplayForm.control} name="showYear" render={({ field }) => (
-                        <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Show Year</FormLabel></FormItem>
-                    )}/>
-                    <FormField control={cardDisplayForm.control} name="showCountry" render={({ field }) => (
-                        <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Show Country</FormLabel></FormItem>
-                    )}/>
-                    <FormField control={cardDisplayForm.control} name="showShelfStock" render={({ field }) => (
-                        <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Show Shelf Stock</FormLabel></FormItem>
-                    )}/>
-                    <FormField control={cardDisplayForm.control} name="showStorageStock" render={({ field }) => (
-                        <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Show Storage Stock</FormLabel></FormItem>
-                    )}/>
-                     <FormField control={cardDisplayForm.control} name="showTotalStock" render={({ field }) => (
-                        <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Show Total Stock</FormLabel></FormItem>
-                    )}/>
-                    <FormField control={cardDisplayForm.control} name="showFormat" render={({ field }) => (
-                        <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel>Show Format</FormLabel></FormItem>
-                    )}/>
-                  </div>
-                  <Button type="submit" disabled={cardDisplayForm.formState.isSubmitting || authLoading} className="mt-6">
-                    {cardDisplayForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Save Display Settings
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-        )}
-
-        {user?.role === 'master' && (
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center gap-3">
-                        <MenuSquare className="h-7 w-7 text-primary" />
-                        <div>
-                            <CardTitle className="text-xl">Client Menu Settings</CardTitle>
-                            <CardDescription>Control which menu items are visible to your clients.</CardDescription>
-                        </div>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <Form {...clientMenuForm}>
-                        <form onSubmit={clientMenuForm.handleSubmit(handleClientMenuUpdate)} className="space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <FormField control={clientMenuForm.control} name="showCollection" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Show 'My Collection'</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>)} />
-                                <FormField control={clientMenuForm.control} name="showWishlist" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Show 'Wishlist'</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>)} />
-                                <FormField control={clientMenuForm.control} name="showScan" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Show 'Scan/Add Record'</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>)} />
-                                <FormField control={clientMenuForm.control} name="showDiscogs" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Show 'Discogs'</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>)} />
-                            </div>
-                            <Button type="submit" disabled={clientMenuForm.formState.isSubmitting || authLoading} className="mt-6">
-                                {clientMenuForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                Save Menu Settings
-                            </Button>
-                        </form>
-                    </Form>
-                </CardContent>
-            </Card>
-        )}
-
-        {user?.role === 'master' && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <Bell className="h-7 w-7 text-primary" />
-                <div>
-                  <CardTitle className="text-xl">Notification Settings</CardTitle>
-                  <CardDescription>Configure when and how you receive notifications.</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-               <Form {...notificationsForm}>
-                <form onSubmit={notificationsForm.handleSubmit(handleNotificationsUpdate)} className="space-y-6">
-                   <FormField
-                    control={notificationsForm.control}
-                    name="lowStockNotificationsEnabled"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">Low Stock Notifications</FormLabel>
-                          <FormDescription>Receive an alert when a record's stock drops below a certain number.</FormDescription>
-                        </div>
-                        <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  {lowStockEnabled && (
-                    <FormField
-                      control={notificationsForm.control}
-                      name="lowStockThreshold"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Low Stock Threshold</FormLabel>
-                          <FormControl><Input type="number" placeholder="e.g., 20" {...field} /></FormControl>
-                          <FormDescription>Get a notification when total stock for an item is at or below this number.</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                  <Button type="submit" disabled={notificationsForm.formState.isSubmitting || authLoading}>
-                    {notificationsForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Save Notification Settings
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-        )}
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <UserCircle className="h-7 w-7 text-primary" />
-              <div>
-                <CardTitle className="text-xl">My Profile</CardTitle>
-                <CardDescription>Manage your account details. Your role is: <span className="font-semibold capitalize">{user?.role ? roleDisplayNames[user.role] : ''}</span></CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={user?.email || ""} disabled />
-            </div>
-            <Button variant="outline" onClick={() => user?.email && sendPasswordReset(user.email)}>
-              <KeyRound className="mr-2 h-4 w-4"/>
-              Change Password
-            </Button>
-            <p className="text-sm text-muted-foreground">This will send a password reset link to your email address.</p>
-          </CardContent>
-        </Card>
-
-        
-        <Card>
-            <CardHeader>
-                <div className="flex items-center gap-3">
-                    <Home className="h-7 w-7 text-primary" />
-                    <div>
-                        <CardTitle className="text-xl">My Details</CardTitle>
-                        <CardDescription>Update your contact and address details for shipping and billing.</CardDescription>
-                    </div>
-                </div>
-            </CardHeader>
-            <CardContent>
-                <Form {...profileForm}>
-                    <form onSubmit={profileForm.handleSubmit(handleProfileUpdate)} className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField control={profileForm.control} name="firstName" render={({ field }) => (
-                                <FormItem><FormLabel>First Name</FormLabel><FormControl><Input placeholder="First Name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                             <FormField control={profileForm.control} name="lastName" render={({ field }) => (
-                                <FormItem><FormLabel>Last Name</FormLabel><FormControl><Input placeholder="Last Name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                        </div>
-                        <FormField control={profileForm.control} name="companyName" render={({ field }) => (
-                           <FormItem><FormLabel>Company Name</FormLabel><FormControl><Input placeholder="Company Name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                         <FormField control={profileForm.control} name="phoneNumber" render={({ field }) => (
-                            <FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input placeholder="Phone Number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                        )} />
-
-                        <Separator />
-                        <h3 className="text-lg font-medium">Shipping Address</h3>
-                        
-                        <FormField control={profileForm.control} name="addressLine1" render={({ field }) => (
-                           <FormItem><FormLabel>Address Line 1</FormLabel><FormControl><Input placeholder="Street and number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                        <FormField control={profileForm.control} name="addressLine2" render={({ field }) => (
-                           <FormItem><FormLabel>Address Line 2 (Optional)</FormLabel><FormControl><Input placeholder="Apartment, suite, etc." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField control={profileForm.control} name="postcode" render={({ field }) => (
-                               <FormItem><FormLabel>Postcode</FormLabel><FormControl><Input placeholder="Postcode" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                            <FormField control={profileForm.control} name="city" render={({ field }) => (
-                               <FormItem><FormLabel>City</FormLabel><FormControl><Input placeholder="City" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                            )} />
-                        </div>
-                        <FormField control={profileForm.control} name="country" render={({ field }) => (
-                           <FormItem>
-                                <FormLabel>Country</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                                    <FormControl><SelectTrigger><SelectValue placeholder="Select a country" /></SelectTrigger></FormControl>
-                                    <SelectContent>
-                                        {countries.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                               <FormMessage />
-                           </FormItem>
-                        )} />
-
-                        {user?.role === 'viewer' && (
-                          <>
-                            <Separator />
-                            <FormField control={profileForm.control} name="useDifferentBillingAddress" render={({ field }) => (
-                                <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
-                                    <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                                    <div className="space-y-1 leading-none">
-                                        <FormLabel>Use a different billing address</FormLabel>
-                                    </div>
-                                </FormItem>
-                            )} />
-
-                            {useDifferentBilling && (
-                                <FormField control={profileForm.control} name="billingAddress" render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Billing Address</FormLabel>
-                                        <FormControl><Textarea placeholder="Billing Street 1, 54321 Town, Country" {...field} value={field.value ?? ''} /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )} />
-                            )}
-                          </>
-                        )}
-                        
-                        <Button type="submit" disabled={profileForm.formState.isSubmitting || authLoading}>
-                            {profileForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                            Save My Details
-                        </Button>
-                    </form>
-                </Form>
-            </CardContent>
-        </Card>
-
-        {user?.role === 'master' && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <DatabaseZap className="h-7 w-7 text-primary" />
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-xl">Storage Locations</CardTitle>
-                    <CardDescription>Manage your predefined storage locations (e.g., shelves, boxes).</CardDescription>
+                    <p className="font-medium text-sm">Sign Out</p>
+                    <p className="text-xs text-muted-foreground">End your current session</p>
                   </div>
+                  <Button variant="destructive" size="sm" onClick={logout}>
+                    <LogOut className="mr-2 h-4 w-4" /> Log Out
+                  </Button>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <LocationManager title="Shelf Locations" locations={shelfLocations} onUpdateLocations={setShelfLocations} />
-                    <LocationManager title="Storage Locations" locations={storageLocations} onUpdateLocations={setStorageLocations} />
-                 </div>
-                 <div className="flex justify-end pt-4 border-t">
-                    <Button onClick={handleUpdateLocations} disabled={isSavingLocations || authLoading}>
-                        {isSavingLocations ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                        Save Locations
-                    </Button>
-                 </div>
               </CardContent>
             </Card>
-        )}
-
-        {user?.role === 'master' && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <FileDown className="h-7 w-7 text-primary" />
-                  <div>
-                    <CardTitle className="text-xl">Export Data</CardTitle>
-                    <CardDescription>Export your collection data to CSV.</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">Export your entire vinyl collection to a CSV file. The file will include a summary of key statistics at the top.</p>
-                <Button variant="outline" onClick={handleExportCSV} disabled={isExportingCSV}>
-                  {isExportingCSV ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                  Export as CSV
-                </Button>
-              </CardContent>
-            </Card>
-        )}
-
-        <Separator />
-
-        <div className="flex justify-between items-center">
-            <Button variant="destructive" onClick={logout}>
-              <LogOut className="mr-2 h-4 w-4" /> Log Out
-            </Button>
-        </div>
+          </TabsContent>
+        </Tabs>
       </div>
   );
 }
