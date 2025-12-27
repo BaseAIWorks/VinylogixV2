@@ -37,7 +37,6 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
   User as FirebaseUserType,
   getAuth as getAuthInstance,
   GoogleAuthProvider,
@@ -1265,7 +1264,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     try {
-      await sendPasswordResetEmail(auth, email);
+      const response = await fetch('/api/auth/password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send password reset email');
+      }
+
       toast({
         title: 'Password Reset Email Sent',
         description: `An email has been sent to ${email} with instructions to reset the password.`,
