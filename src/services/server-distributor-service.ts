@@ -20,6 +20,24 @@ const processDistributorTimestampsServer = (distributorData: any): Distributor =
   return processed as Distributor;
 };
 
+export async function getDistributorById(id: string): Promise<Distributor | null> {
+  const adminDb = getAdminDb();
+  if (!adminDb) {
+    throw new Error("Admin DB not initialized on server.");
+  }
+  const distributorDocRef = adminDb.collection(DISTRIBUTORS_COLLECTION).doc(id);
+  try {
+    const docSnap = await distributorDocRef.get();
+    if (docSnap.exists) {
+      return processDistributorTimestampsServer({ ...docSnap.data(), id: docSnap.id });
+    }
+    return null;
+  } catch (error) {
+    console.error(`ServerDistributorService: Error fetching distributor ${id}:`, error);
+    throw error;
+  }
+}
+
 export async function findDistributorByStripeCustomerId(customerId: string): Promise<Distributor | null> {
   const adminDb = getAdminDb();
   if (!adminDb) {

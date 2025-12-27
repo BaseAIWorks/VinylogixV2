@@ -1,7 +1,7 @@
 
 import { stripe } from '@/lib/stripe';
 import { NextRequest, NextResponse } from 'next/server';
-import { updateDistributor, getDistributorById } from '@/services/distributor-service';
+import { updateDistributor, getDistributorById } from '@/services/server-distributor-service';
 
 export async function POST(req: NextRequest) {
   try {

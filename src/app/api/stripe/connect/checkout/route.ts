@@ -1,6 +1,6 @@
 import { stripe } from '@/lib/stripe';
 import { NextRequest, NextResponse } from 'next/server';
-import { getDistributorById } from '@/services/distributor-service';
+import { getDistributorById } from '@/services/server-distributor-service';
 import type { CartItem, VinylRecord } from '@/types';
 
 export async function POST(req: NextRequest) {
