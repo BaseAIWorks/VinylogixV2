@@ -222,7 +222,7 @@ export default function ClientDetailPage() {
                             <DetailItem icon={Home} label="Address" value={<div className="whitespace-pre-wrap">{fullAddress}</div>} />
                             <DetailItem icon={Briefcase} label="Chamber of Commerce" value={client.chamberOfCommerce} />
                              <DetailItem icon={Briefcase} label="EORI Number" value={client.eoriNumber} />
-                            <DetailItem icon={User} label="VAT Number" value={client.vatNumber} />
+                            <DetailItem icon={UserIcon} label="VAT Number" value={client.vatNumber} />
                             {client.createdAt && <DetailItem icon={CalendarPlus} label="Client Since" value={format(new Date(client.createdAt), 'dd MMM yyyy')} />}
                             {client.notes && <DetailItem icon={NotepadText} label="Notes" value={<div className="whitespace-pre-wrap">{client.notes}</div>} />}
                         </CardContent>
