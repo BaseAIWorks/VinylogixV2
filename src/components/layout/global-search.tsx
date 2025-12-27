@@ -43,11 +43,11 @@ export function GlobalSearch() {
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverAnchor asChild>
-        <div className="relative w-full max-w-sm">
+        <div className="relative w-full min-w-[200px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search records..."
-            className="pl-9"
+            className="pl-9 h-10 border-2 border-muted-foreground/20 focus:border-primary bg-background"
             value={globalSearchTerm}
             onChange={(e) => setGlobalSearchTerm(e.target.value)}
             onFocus={() => { if (globalSearchTerm) setIsOpen(true); }}

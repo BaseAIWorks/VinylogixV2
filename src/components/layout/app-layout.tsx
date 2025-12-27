@@ -34,7 +34,7 @@ import {
   DropdownMenuPortal,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, ScanLine, BarChart3, Settings, LogOut, Menu, Heart, Package, ShoppingCart, Boxes, Library, ListChecks, Bell, Building, Check, Key, X, Shapes, Users, Briefcase, FileUp, Palette, Disc3, DollarSign, HardHat, Activity, FilePenLine, Store, ChevronsUpDown, Truck, Settings2, CreditCard, Newspaper } from 'lucide-react';
+import { LayoutDashboard, ScanLine, BarChart3, Settings, LogOut, Menu, Heart, Package, ShoppingCart, Boxes, Library, ListChecks, Bell, Building, Check, Key, X, Shapes, Users, Briefcase, FileUp, Palette, Disc3, DollarSign, HardHat, Activity, FilePenLine, Store, ChevronsUpDown, Truck, Settings2, CreditCard, Newspaper, PlusCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import Image from 'next/image';
@@ -390,8 +390,24 @@ export default function AppLayout({ children }: AppLayoutProps) {
               {currentPageTitle}
             </h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <GlobalSearch />
+            {user && (user.role === 'master' || user.role === 'worker') && (
+              <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground hidden sm:flex">
+                <Link href="/scan">
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Add Vinyl
+                </Link>
+              </Button>
+            )}
+            {user && (user.role === 'master' || user.role === 'worker') && (
+              <Button asChild size="icon" variant="outline" className="sm:hidden">
+                <Link href="/scan">
+                  <PlusCircle className="h-5 w-5" />
+                  <span className="sr-only">Add Vinyl</span>
+                </Link>
+              </Button>
+            )}
             {user && (
               <div className="flex items-center gap-2">
                 {user.role !== 'viewer' && user.role !== 'superadmin' && (

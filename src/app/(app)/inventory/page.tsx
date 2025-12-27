@@ -200,25 +200,11 @@ export default function InventoryPage() {
   
   return (
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex items-center gap-4">
-                {user?.role === 'viewer' && activeDistributor && (
-                    <Image src={activeDistributor.logoUrl || '/logo.png'} alt={`${activeDistributorName} Logo`} width={40} height={40} style={{ width: '40px', height: '40px' }} className="rounded-md object-contain" onError={(e) => e.currentTarget.src='/logo.png'} unoptimized={true} />
-                )}
-                <h1 className="text-3xl font-bold tracking-tight text-foreground hidden sm:block">{pageTitle}</h1>
-            </div>
-          {user?.role !== 'viewer' && (
-            <div className="flex items-center gap-2">
-              <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                <Link href="/scan">
-                  <span className="flex items-center gap-2">
-                    <PlusCircle className="mr-2 h-5 w-5" />
-                    Add New Vinyl
-                  </span>
-                </Link>
-              </Button>
-            </div>
-          )}
+        <div className="flex items-center gap-4">
+            {user?.role === 'viewer' && activeDistributor && (
+                <Image src={activeDistributor.logoUrl || '/logo.png'} alt={`${activeDistributorName} Logo`} width={40} height={40} style={{ width: '40px', height: '40px' }} className="rounded-md object-contain" onError={(e) => e.currentTarget.src='/logo.png'} unoptimized={true} />
+            )}
+            <h1 className="text-3xl font-bold tracking-tight text-foreground hidden sm:block">{pageTitle}</h1>
         </div>
 
         <div className="flex flex-col md:flex-row gap-4 items-center">
