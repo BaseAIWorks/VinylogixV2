@@ -101,26 +101,31 @@ exports.deleteAuthUser = (0, https_1.onCall)({ region: "europe-west4", enforceAp
     }
 });
 // This is a secure, server-side function to fetch all users.
-// It can only be called by authenticated users.
+// SECURITY: This function is restricted to superadmins ONLY.
+// Master users should use getUsersByDistributorId for their own team.
 exports.getAllUsers = (0, https_1.onCall)({ region: "europe-west4", cors: true }, async (request) => {
-    var _a;
+    var _a, _b;
     // CRITICAL: Check if the user is authenticated FIRST.
     if (!request.auth) {
         logger.warn("getAllUsers was called by an unauthenticated user.");
-        // Throw a specific, structured error that the client can handle.
         throw new https_1.HttpsError("unauthenticated", "Authentication required.");
     }
-    // Now that we know the user is authenticated, we can safely access their UID.
     const uid = request.auth.uid;
     try {
         // Check if the user has the required role from Firestore.
         const userDoc = await admin.firestore().collection("users").doc(uid).get();
         const userRole = (_a = userDoc.data()) === null || _a === void 0 ? void 0 : _a.role;
-        if (userRole !== "master" && userRole !== "superadmin") {
-            logger.error(`User ${uid} with role ${userRole} attempted to call getAllUsers.`);
-            throw new https_1.HttpsError("permission-denied", "Permission denied. You must be a master user or superadmin.");
+        const userDistributorId = (_b = userDoc.data()) === null || _b === void 0 ? void 0 : _b.distributorId;
+        // SECURITY FIX: Only superadmins can fetch ALL users across the platform.
+        // This prevents cross-tenant data leakage where a master user could see
+        // users from other distributors.
+        if (userRole !== "superadmin") {
+            logger.warn(`SECURITY: User ${uid} with role "${userRole}" (distributor: ${userDistributorId}) ` +
+                `attempted to call getAllUsers. This function is restricted to superadmins only.`);
+            throw new https_1.HttpsError("permission-denied", "Permission denied. Only superadmins can access all platform users. " +
+                "Use the operators page to manage your team.");
         }
-        logger.info(`getAllUsers called by authenticated user: ${uid} with role ${userRole}`);
+        logger.info(`getAllUsers called by superadmin: ${uid}`);
         // Proceed with fetching all user data
         const listUsersResult = await admin.auth().listUsers(1000);
         const allFirestoreUsers = await admin.firestore().collection("users").get();

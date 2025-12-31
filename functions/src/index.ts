@@ -82,29 +82,39 @@ export const deleteAuthUser = onCall({ region: "europe-west4", enforceAppCheck: 
 
 
 // This is a secure, server-side function to fetch all users.
-// It can only be called by authenticated users.
+// SECURITY: This function is restricted to superadmins ONLY.
+// Master users should use getUsersByDistributorId for their own team.
 export const getAllUsers = onCall({ region: "europe-west4", cors: true }, async (request) => {
   // CRITICAL: Check if the user is authenticated FIRST.
   if (!request.auth) {
     logger.warn("getAllUsers was called by an unauthenticated user.");
-    // Throw a specific, structured error that the client can handle.
     throw new HttpsError("unauthenticated", "Authentication required.");
   }
 
-  // Now that we know the user is authenticated, we can safely access their UID.
   const uid = request.auth.uid;
-  
+
   try {
     // Check if the user has the required role from Firestore.
     const userDoc = await admin.firestore().collection("users").doc(uid).get();
     const userRole = userDoc.data()?.role;
+    const userDistributorId = userDoc.data()?.distributorId;
 
-    if (userRole !== "master" && userRole !== "superadmin") {
-      logger.error(`User ${uid} with role ${userRole} attempted to call getAllUsers.`);
-      throw new HttpsError("permission-denied", "Permission denied. You must be a master user or superadmin.");
+    // SECURITY FIX: Only superadmins can fetch ALL users across the platform.
+    // This prevents cross-tenant data leakage where a master user could see
+    // users from other distributors.
+    if (userRole !== "superadmin") {
+      logger.warn(
+        `SECURITY: User ${uid} with role "${userRole}" (distributor: ${userDistributorId}) ` +
+        `attempted to call getAllUsers. This function is restricted to superadmins only.`
+      );
+      throw new HttpsError(
+        "permission-denied",
+        "Permission denied. Only superadmins can access all platform users. " +
+        "Use the operators page to manage your team."
+      );
     }
-    
-    logger.info(`getAllUsers called by authenticated user: ${uid} with role ${userRole}`);
+
+    logger.info(`getAllUsers called by superadmin: ${uid}`);
 
     // Proceed with fetching all user data
     const listUsersResult = await admin.auth().listUsers(1000);
