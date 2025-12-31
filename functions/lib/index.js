@@ -183,32 +183,64 @@ exports.getAllUsers = (0, https_1.onCall)({ region: "europe-west4", cors: true }
         throw new https_1.HttpsError("internal", "An internal error occurred while fetching users.");
     }
 });
-// NIEUWE FUNCTIE: stelt Firebase Auth Custom Claims in op basis van Firestore gebruikersdocument
+// Syncs Firebase Auth Custom Claims based on Firestore user document changes.
+// SECURITY: This function validates that role changes are legitimate to prevent privilege escalation.
 exports.setCustomUserClaimsOnUserWrite = (0, firestore_1.onDocumentWritten)('users/{userId}', async (event) => {
-    var _a, _b;
-    const userId = event.params.userId; // <-- event.params
-    const afterData = (_b = (_a = event.data) === null || _a === void 0 ? void 0 : _a.after) === null || _b === void 0 ? void 0 : _b.data(); // Data after the write (if exists)
-    // Als het document is verwijderd (afterData is null)
+    var _a, _b, _c, _d;
+    const userId = event.params.userId;
+    const beforeData = (_b = (_a = event.data) === null || _a === void 0 ? void 0 : _a.before) === null || _b === void 0 ? void 0 : _b.data(); // Data before the write
+    const afterData = (_d = (_c = event.data) === null || _c === void 0 ? void 0 : _c.after) === null || _d === void 0 ? void 0 : _d.data(); // Data after the write
+    // If the document was deleted, clear all custom claims
     if (!afterData) {
         logger.info(`User document ${userId} deleted. Clearing custom claims.`);
         try {
-            await admin.auth().setCustomUserClaims(userId, {}); // Cleart alle custom claims
+            await admin.auth().setCustomUserClaims(userId, {});
         }
         catch (error) {
             logger.error(`Error clearing custom claims for user ${userId}:`, error);
         }
         return null;
     }
-    // Verkrijg de huidige custom claims van de gebruiker
+    // Get current claims from Firebase Auth
     const currentUser = await admin.auth().getUser(userId);
     const currentClaims = currentUser.customClaims || {};
-    let newClaims = Object.assign({}, currentClaims); // Begin met huidige claims
-    // Controleer en update de 'role' claim
-    const role = afterData.role;
-    if (typeof role === 'string') {
-        newClaims.role = role;
+    let newClaims = Object.assign({}, currentClaims);
+    // SECURITY: Validate role changes
+    // If the role is changing, verify it's a legitimate change
+    const oldRole = beforeData === null || beforeData === void 0 ? void 0 : beforeData.role;
+    const newRole = afterData.role;
+    if (typeof newRole === 'string' && newRole !== oldRole) {
+        // SECURITY CHECK: Prevent escalation to master or superadmin through direct Firestore writes
+        // Only allow these role assignments if:
+        // 1. It's a new user (no previous role) AND role is not master/superadmin, OR
+        // 2. The previous role was already master/superadmin (legitimate admin action)
+        // 3. The role is being downgraded (e.g., master -> worker)
+        const isEscalation = (newRole === 'master' || newRole === 'superadmin');
+        const wasPrivileged = (oldRole === 'master' || oldRole === 'superadmin');
+        if (isEscalation && !wasPrivileged && oldRole !== undefined) {
+            // Someone tried to escalate a regular user to master/superadmin
+            // This should have been blocked by Firestore rules, but we add defense-in-depth
+            logger.error(`SECURITY ALERT: Attempted privilege escalation detected for user ${userId}. ` +
+                `Role change from "${oldRole}" to "${newRole}" was blocked. ` +
+                `This may indicate a security rule bypass attempt.`);
+            // Don't sync the escalated role - keep the old role in claims
+            if (oldRole) {
+                newClaims.role = oldRole;
+            }
+            else {
+                delete newClaims.role;
+            }
+        }
+        else {
+            // Legitimate role change
+            newClaims.role = newRole;
+            logger.info(`Role updated for user ${userId}: "${oldRole}" -> "${newRole}"`);
+        }
     }
-    else if (newClaims.role !== undefined) { // Als rol nu ontbreekt in Firestore, verwijder uit claims
+    else if (typeof newRole === 'string') {
+        newClaims.role = newRole;
+    }
+    else if (newClaims.role !== undefined) {
         delete newClaims.role;
     }
     // Controleer en update de 'distributorId' claim

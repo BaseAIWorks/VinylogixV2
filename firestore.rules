@@ -44,6 +44,34 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.accessibleDistributorIds.hasAny([distributorId]);
     }
 
+    // SECURITY: Check if sensitive fields are being modified
+    // These fields control permissions and should NEVER be self-modifiable
+    function sensitiveFieldsUnchanged() {
+      let before = resource.data;
+      let after = request.resource.data;
+
+      // Check that role hasn't changed (or wasn't set if it didn't exist)
+      let roleUnchanged = (!('role' in before) && !('role' in after)) ||
+                          (('role' in before) && ('role' in after) && before.role == after.role);
+
+      // Check that distributorId hasn't changed
+      let distributorUnchanged = (!('distributorId' in before) && !('distributorId' in after)) ||
+                                  (('distributorId' in before) && ('distributorId' in after) && before.distributorId == after.distributorId);
+
+      // Check that accessibleDistributorIds hasn't changed
+      let accessUnchanged = (!('accessibleDistributorIds' in before) && !('accessibleDistributorIds' in after)) ||
+                            (('accessibleDistributorIds' in before) && ('accessibleDistributorIds' in after) && before.accessibleDistributorIds == after.accessibleDistributorIds);
+
+      return roleUnchanged && distributorUnchanged && accessUnchanged;
+    }
+
+    // Check if ONLY role-related fields are being modified (for masters updating their team)
+    function noRoleEscalation() {
+      let after = request.resource.data;
+      // Masters cannot set role to 'master' or 'superadmin' for anyone
+      return !('role' in after) || (after.role != 'master' && after.role != 'superadmin');
+    }
+
     // ==================================================================
     // Collections
     // ==================================================================
@@ -55,14 +83,19 @@ service cloud.firestore {
       allow read: if isSuperAdmin() || isOwner(userId) || (isMaster() && resource.data.distributorId == request.auth.token.distributorId);
 
       // A user can create their own document (on signup).
-      allow create: if isOwner(userId);
-      
-      // A user can update their own document.
-      // A master user can update users within their distributorship.
-      // A superadmin can update any user.
-      // Field-level security: only specific roles can change other specific fields.
-      allow update: if isSuperAdmin() || isOwner(userId) || (isMaster() && resource.data.distributorId == request.auth.token.distributorId);
-      
+      // On create, users cannot set themselves as master or superadmin.
+      allow create: if isOwner(userId) &&
+                      (!('role' in request.resource.data) ||
+                       (request.resource.data.role != 'master' && request.resource.data.role != 'superadmin'));
+
+      // SECURITY: Field-level restrictions on updates
+      // - Users can update their own document BUT cannot change sensitive fields (role, distributorId, accessibleDistributorIds)
+      // - Masters can update users in their distributor BUT cannot escalate to master/superadmin
+      // - Superadmins can update anything
+      allow update: if isSuperAdmin() ||
+                      (isOwner(userId) && sensitiveFieldsUnchanged()) ||
+                      (isMaster() && resource.data.distributorId == request.auth.token.distributorId && noRoleEscalation());
+
       // A master or superadmin can delete a user document.
       allow delete: if isSuperAdmin() || (isMaster() && resource.data.distributorId == request.auth.token.distributorId);
     }
