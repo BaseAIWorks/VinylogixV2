@@ -38,6 +38,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
+import { auth } from "@/lib/firebase";
 
 
 const profileFormSchema = z.object({
@@ -359,11 +360,25 @@ export default function SettingsPage() {
         toast({ title: "Error", description: "Distributor context not found.", variant: "destructive" });
         return;
     }
+
+    // Get the current user's ID token for authentication
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        toast({ title: "Error", description: "You must be logged in to connect Stripe.", variant: "destructive" });
+        return;
+    }
+
     setIsConnectingStripe(true);
     try {
+        // Get a fresh ID token
+        const idToken = await currentUser.getIdToken(true);
+
         const response = await fetch('/api/stripe/connect/onboard', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`,
+            },
             body: JSON.stringify({ distributorId: user.distributorId, distributorEmail: user.email }),
         });
         const { url, error } = await response.json();
