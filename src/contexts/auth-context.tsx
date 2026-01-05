@@ -709,6 +709,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const userWithRole = await fetchUserRole(firebaseUser);
 
         if (userWithRole) {
+          // Force token refresh for master/worker to ensure custom claims are synced
+          // This handles the race condition where Cloud Function sets claims after login
+          if (userWithRole.role === 'master' || userWithRole.role === 'worker') {
+            const maxRetries = 3;
+            const retryDelay = 1000; // 1 second
+
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+              try {
+                const tokenResult = await firebaseUser.getIdTokenResult(true);
+                // Check if claims are synced
+                if (tokenResult.claims.role === userWithRole.role) {
+                  break; // Claims are synced, we're done
+                }
+                // Claims not synced yet, wait and retry
+                if (attempt < maxRetries - 1) {
+                  await new Promise(resolve => setTimeout(resolve, retryDelay));
+                }
+              } catch (tokenError) {
+                console.warn(`Token refresh attempt ${attempt + 1} failed:`, tokenError);
+              }
+            }
+          }
+
           await loadCartFromFirestore(userWithRole.cart || []);
           let distributorIdToLoad: string | undefined = userWithRole.distributorId;
           let accessibleDistributorData: Distributor[] = [];

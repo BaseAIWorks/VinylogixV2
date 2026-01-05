@@ -37,8 +37,22 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Extract user claims and verify permissions
-    const userRole = decodedToken.role;
-    const userDistributorId = decodedToken.distributorId;
+    // Check claims first, but fall back to Firestore if claims aren't synced yet
+    let userRole = decodedToken.role;
+    let userDistributorId = decodedToken.distributorId;
+
+    // If claims are missing, fetch from Firestore as fallback
+    if (!userRole) {
+      const adminDb = (await import('@/lib/firebase-admin')).getAdminDb();
+      if (adminDb) {
+        const userDoc = await adminDb.collection('users').doc(decodedToken.uid).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          userRole = userData?.role;
+          userDistributorId = userData?.distributorId;
+        }
+      }
+    }
 
     if (userRole !== 'master' && userRole !== 'superadmin') {
       return NextResponse.json(

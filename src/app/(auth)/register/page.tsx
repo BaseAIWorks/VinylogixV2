@@ -11,8 +11,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Stepper, Step, StepIndicator, StepStatus, StepNumber, StepTitle, useSteps, StepIcon } from "@/components/ui/stepper";
-import { Check, Loader2, Building, User, Key, ArrowRight, AlertTriangle } from "lucide-react";
-import React, { useState } from "react";
+import { Check, Loader2, Building, User, Key, ArrowRight, AlertTriangle, Eye, EyeOff } from "lucide-react";
+import React, { useState, useEffect } from "react";
 import type { SubscriptionTier } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -48,10 +48,19 @@ const steps = [
   { label: "Subscribe", icon: Key },
 ];
 
-const StepContent = ({ activeStep, form }: { 
-    activeStep: number; 
+const StepContent = ({ activeStep, form }: {
+    activeStep: number;
     form: UseFormReturn<OnboardingFormValues>;
 }) => {
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+    // Watch password fields for live matching validation
+    const password = form.watch("password");
+    const confirmPassword = form.watch("confirmPassword");
+    const passwordsMatch = password && confirmPassword && password === confirmPassword;
+    const showMismatch = confirmPassword && confirmPassword.length > 0 && password !== confirmPassword;
+
     switch (activeStep) {
         case 0:
             return (
@@ -87,8 +96,83 @@ const StepContent = ({ activeStep, form }: {
                       <FormField control={form.control} name="lastName" render={({ field }) => (<FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} placeholder="Jansen" /></FormControl><FormMessage /></FormItem>)} />
                     </div>
                     <FormField control={form.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email Address</FormLabel><FormControl><Input type="email" {...field} placeholder="you@yourstore.com" /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="password" render={({ field }) => (<FormItem><FormLabel>Password</FormLabel><FormControl><Input type="password" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                    <FormField control={form.control} name="confirmPassword" render={({ field }) => (<FormItem><FormLabel>Confirm Password</FormLabel><FormControl><Input type="password" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField
+                      control={form.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Password</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Input
+                                type={showPassword ? "text" : "password"}
+                                {...field}
+                                placeholder="Enter your password"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                                onClick={() => setShowPassword(!showPassword)}
+                              >
+                                {showPassword ? (
+                                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                                ) : (
+                                  <Eye className="h-4 w-4 text-muted-foreground" />
+                                )}
+                              </Button>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="confirmPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Confirm Password</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Input
+                                type={showConfirmPassword ? "text" : "password"}
+                                {...field}
+                                placeholder="Confirm your password"
+                                className={showMismatch ? "border-destructive focus-visible:ring-destructive" : passwordsMatch ? "border-green-500 focus-visible:ring-green-500" : ""}
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                              >
+                                {showConfirmPassword ? (
+                                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                                ) : (
+                                  <Eye className="h-4 w-4 text-muted-foreground" />
+                                )}
+                              </Button>
+                            </div>
+                          </FormControl>
+                          {showMismatch && (
+                            <p className="text-sm text-destructive flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              Passwords don't match
+                            </p>
+                          )}
+                          {passwordsMatch && (
+                            <p className="text-sm text-green-600 flex items-center gap-1">
+                              <Check className="h-3 w-3" />
+                              Passwords match
+                            </p>
+                          )}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                 </div>
             );
         case 2:
