@@ -12,7 +12,8 @@
       "Bash(npm uninstall:*)",
       "Bash(npm run build)",
       "Bash(ls:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(find:*)"
     ]
   }
 }

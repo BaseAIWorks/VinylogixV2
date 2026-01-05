@@ -11,7 +11,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { User } from "@/types";
 import { getClientsByDistributorId } from "@/services/user-service";
-import { inviteClient } from "@/services/client-user-service"; // Corrected import
+import { inviteClient, removeClientAccess } from "@/services/client-user-service";
 import Link from "next/link";
 import {
   DropdownMenu,
@@ -35,7 +35,7 @@ import { Label } from "@/components/ui/label";
 
 
 export default function ClientsPage() {
-    const { user, loading: authLoading, deleteUser } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const router = useRouter();
     const { toast } = useToast();
 
@@ -79,11 +79,11 @@ export default function ClientsPage() {
         }
     };
     
-    const handleDeleteClient = async () => {
-        if (!clientToDelete) return;
+    const handleRemoveClient = async () => {
+        if (!clientToDelete || !user?.distributorId || !user.uid) return;
         try {
-            await deleteUser(clientToDelete.uid);
-            toast({ title: "Client Deleted", description: `"${clientToDelete.email}" has been deleted.` });
+            await removeClientAccess(clientToDelete.uid, user.distributorId, user.uid);
+            toast({ title: "Client Removed", description: `"${clientToDelete.email}" has been removed from your client list.` });
             fetchClients();
         } catch (error) {
             toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
@@ -218,7 +218,7 @@ export default function ClientsPage() {
                                                     <DropdownMenuContent align="end">
                                                         <DropdownMenuItem onClick={() => router.push(`/clients/${client.uid}`)}><Eye className="mr-2 h-4 w-4" />View Details</DropdownMenuItem>
                                                         <DropdownMenuItem onClick={() => router.push(`/clients/${client.uid}`)}><Edit className="mr-2 h-4 w-4" />Edit Client</DropdownMenuItem>
-                                                        <DropdownMenuItem className="text-destructive" onClick={() => setClientToDelete(client)}><Trash2 className="mr-2 h-4 w-4" />Delete Client</DropdownMenuItem>
+                                                        <DropdownMenuItem className="text-destructive" onClick={() => setClientToDelete(client)}><Trash2 className="mr-2 h-4 w-4" />Remove Client</DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                            </TableCell>
@@ -238,15 +238,15 @@ export default function ClientsPage() {
              <AlertDialog open={!!clientToDelete} onOpenChange={(open) => !open && setClientToDelete(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogTitle>Remove Client?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will permanently delete the client "{clientToDelete?.email}". This action cannot be undone.
+                            This will remove "{clientToDelete?.email}" from your client list. They will no longer have access to your environment. This does not delete their account.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteClient} className="bg-destructive hover:bg-destructive/90">
-                            Delete
+                        <AlertDialogAction onClick={handleRemoveClient} className="bg-destructive hover:bg-destructive/90">
+                            Remove
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
