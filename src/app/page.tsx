@@ -110,7 +110,7 @@ const PageFooter = () => {
         Product: [
             { href: "/features", text: "Features" },
             { href: "/pricing", text: "Pricing" },
-            { href: "/#", text: "Changelog" },
+            { href: "/changelog", text: "Changelog" },
         ],
         Company: [
             { href: "/#", text: "About" },
@@ -118,9 +118,9 @@ const PageFooter = () => {
             { href: "/#", text: "Blog" },
         ],
         Resources: [
-            { href: "/#", text: "Contact" },
-            { href: "/#", text: "Support" },
-            { href: "/#", text: "Privacy" },
+            { href: "/help", text: "Help & FAQ" },
+            { href: "mailto:support@vinylogix.com", text: "Contact Support" },
+            { href: "/#", text: "Privacy Policy" },
         ],
     };
 
