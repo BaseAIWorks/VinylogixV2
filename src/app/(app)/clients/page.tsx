@@ -2,7 +2,8 @@
 "use client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Users, AlertTriangle, PlusCircle, ArrowLeft, MoreVertical, Edit, Trash2, Eye, Mail } from "lucide-react";
+import { Loader2, Users, AlertTriangle, PlusCircle, ArrowLeft, MoreVertical, Edit, Trash2, Eye, Mail, Building2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
 import { format, parseISO } from "date-fns";
@@ -206,7 +207,15 @@ export default function ClientsPage() {
                                    {clients.map(client => (
                                        <TableRow key={client.uid} className="border-b">
                                            <TableCell className="font-medium cursor-pointer" onClick={() => router.push(`/clients/${client.uid}`)}>
-                                             {`${client.firstName || ''} ${client.lastName || ''}`.trim() || '-'}
+                                             <div className="flex items-center gap-2">
+                                               {`${client.firstName || ''} ${client.lastName || ''}`.trim() || '-'}
+                                               {client.role === 'master' && (
+                                                 <Badge variant="secondary" className="text-xs">
+                                                   <Building2 className="h-3 w-3 mr-1" />
+                                                   Distributor
+                                                 </Badge>
+                                               )}
+                                             </div>
                                            </TableCell>
                                            <TableCell className="cursor-pointer" onClick={() => router.push(`/clients/${client.uid}`)}>{client.email}</TableCell>
                                            <TableCell className="hidden sm:table-cell cursor-pointer" onClick={() => router.push(`/clients/${client.uid}`)}>{formatDateSafe(client.createdAt)}</TableCell>

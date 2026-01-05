@@ -185,10 +185,11 @@ const ProfileCompletionDialog = () => {
 export default function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname();
   const router = useRouter(); 
-  const { 
-      user, logout, cartCount, clientPendingOrdersCount, operatorPendingOrdersCount, unreadNotificationsCount, 
+  const {
+      user, logout, cartCount, clientPendingOrdersCount, operatorPendingOrdersCount, unreadNotificationsCount,
       displayBranding, activeDistributor, isImpersonating, stopImpersonating, theme, setTheme,
-      accessibleDistributors, activeDistributorId, setActiveDistributorId, setOpenMobile: setSidebarOpen 
+      accessibleDistributors, activeDistributorId, setActiveDistributorId, setOpenMobile: setSidebarOpen,
+      clientAccessDistributors
   } = useAuth();
   const isMobile = useIsMobile();
   const [defaultOpen, setDefaultOpen] = React.useState(!isMobile); 
@@ -348,6 +349,31 @@ export default function AppLayout({ children }: AppLayoutProps) {
               )
             })}
           </SidebarMenu>
+          {/* Client Access section for masters/workers who are also clients of other distributors */}
+          {(user?.role === 'master' || user?.role === 'worker') && clientAccessDistributors.length > 0 && (
+            <>
+              <SidebarSeparator className="my-2" />
+              <div className="px-4 py-2 group-data-[collapsible=icon]:hidden">
+                <p className="text-xs font-semibold text-sidebar-foreground/60 uppercase tracking-wider">Client Access</p>
+              </div>
+              <SidebarMenu>
+                {clientAccessDistributors.map((dist) => (
+                  <SidebarMenuItem key={dist.id} onClick={handleNavItemClick}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === `/client-view/${dist.id}`}
+                      tooltip={{ children: dist.name, className: "bg-popover text-popover-foreground" }}
+                    >
+                      <Link href={`/client-view/${dist.id}`}>
+                        <Store />
+                        <span>{dist.name}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </>
+          )}
         </SidebarContent>
         <SidebarFooter className="p-4 group-data-[collapsible=icon]:hidden">
            <SidebarSeparator className="my-1" />

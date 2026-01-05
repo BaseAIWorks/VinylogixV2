@@ -131,6 +131,7 @@ interface AuthContextType {
   activeDistributorId: string | null;
   setActiveDistributorId: (id: string | null) => void;
   accessibleDistributors: Distributor[];
+  clientAccessDistributors: Distributor[]; // Distributors a master/worker can access as a client
 
   // Impersonation
   isImpersonating: boolean;
@@ -197,6 +198,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [activeDistributor, setActiveDistributor] = useState<Distributor | null>(null);
   const [activeDistributorId, _setActiveDistributorId] = useState<string | null>(null);
   const [accessibleDistributors, setAccessibleDistributors] = useState<Distributor[]>([]);
+  const [clientAccessDistributors, setClientAccessDistributors] = useState<Distributor[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark' | 'black'>('dark');
 
   const [isImpersonating, setIsImpersonating] = useState(false);
@@ -741,8 +743,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               )) as Distributor,
             ].filter(Boolean) as Distributor[];
             setAccessibleDistributors(accessibleDistributorData);
+
+            // For masters/workers, also load distributors they can access as a client
+            if (
+              (userWithRole.role === 'master' || userWithRole.role === 'worker') &&
+              userWithRole.accessibleDistributorIds &&
+              userWithRole.accessibleDistributorIds.length > 0
+            ) {
+              const clientDistributors = await getDistributorsByIds(
+                userWithRole.accessibleDistributorIds
+              );
+              setClientAccessDistributors(clientDistributors);
+            } else {
+              setClientAccessDistributors([]);
+            }
           } else {
             setAccessibleDistributors([]);
+            setClientAccessDistributors([]);
           }
 
           if (distributorIdToLoad) {
@@ -1759,6 +1776,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     activeDistributorId,
     setActiveDistributorId,
     accessibleDistributors,
+    clientAccessDistributors,
     updateMyDistributorSettings,
     isImpersonating,
     impersonate,

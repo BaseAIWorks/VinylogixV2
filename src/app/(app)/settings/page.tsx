@@ -182,6 +182,7 @@ export default function SettingsPage() {
   const [storageLocations, setStorageLocations] = useState<string[]>([]);
   const [isSavingLocations, setIsSavingLocations] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
+  const [isConnectingPayPal, setIsConnectingPayPal] = useState(false);
   const [isProfileCompletionDialogOpen, setIsProfileCompletionDialogOpen] = useState(false);
 
 
@@ -395,7 +396,46 @@ export default function SettingsPage() {
         setIsConnectingStripe(false);
     }
   };
-  
+
+  const handlePayPalConnect = async () => {
+    if (!user || !user.distributorId) {
+        toast({ title: "Error", description: "Distributor context not found.", variant: "destructive" });
+        return;
+    }
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        toast({ title: "Error", description: "You must be logged in to connect PayPal.", variant: "destructive" });
+        return;
+    }
+
+    setIsConnectingPayPal(true);
+    try {
+        const idToken = await currentUser.getIdToken(true);
+
+        const response = await fetch('/api/paypal/connect/onboard', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({ distributorId: user.distributorId, distributorEmail: user.email }),
+        });
+        const { url, error } = await response.json();
+        if (error) {
+            throw new Error(error);
+        }
+        if (url) {
+            window.location.href = url;
+        } else {
+            throw new Error("Could not retrieve PayPal onboarding URL.");
+        }
+    } catch (error) {
+        toast({ title: "PayPal Connection Failed", description: (error as Error).message, variant: "destructive" });
+        setIsConnectingPayPal(false);
+    }
+  };
+
   const escapeCSVValue = (value: any): string => {
     if (value === null || value === undefined) {
       return "";
@@ -692,42 +732,103 @@ export default function SettingsPage() {
                   <CardHeader className="pb-4">
                     <div className="flex items-center gap-3">
                       <CreditCard className="h-5 w-5 text-primary" />
-                      <CardTitle className="text-lg">Payouts & Billing</CardTitle>
+                      <CardTitle className="text-lg">Payment Providers</CardTitle>
                     </div>
+                    <CardDescription className="text-sm">Connect payment providers to receive payments from your customers.</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    {activeDistributor?.stripeAccountId ? (
-                      <div className="flex items-center justify-between">
-                        <div>
-                          {activeDistributor.stripeAccountStatus === 'verified' ? (
-                            <div className="flex items-center gap-2 text-green-600">
-                              <Check className="h-4 w-4"/>
-                              <span className="font-medium text-sm">Stripe connected & verified</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2 text-orange-600">
-                              <AlertCircle className="h-4 w-4"/>
-                              <span className="font-medium text-sm">Stripe account needs attention</span>
-                            </div>
-                          )}
-                          <p className="text-xs text-muted-foreground mt-1">
-                            ID: <code className="bg-muted px-1 rounded">{activeDistributor.stripeAccountId}</code>
-                          </p>
+                  <CardContent className="space-y-6">
+                    {/* Stripe Section */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 bg-[#635BFF] rounded flex items-center justify-center">
+                          <span className="text-white font-bold text-xs">S</span>
                         </div>
-                        <Button onClick={handleStripeConnect} disabled={isConnectingStripe} size="sm" variant="outline">
-                          {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          Manage <ExternalLink className="ml-1 h-3 w-3"/>
-                        </Button>
+                        <span className="font-medium">Stripe</span>
                       </div>
-                    ) : (
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-muted-foreground">Connect Stripe to receive payouts from your customers.</p>
-                        <Button onClick={handleStripeConnect} disabled={isConnectingStripe} size="sm">
-                          {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          Connect Stripe
-                        </Button>
+                      {activeDistributor?.stripeAccountId ? (
+                        <div className="flex items-center justify-between pl-10">
+                          <div>
+                            {activeDistributor.stripeAccountStatus === 'verified' ? (
+                              <div className="flex items-center gap-2 text-green-600">
+                                <Check className="h-4 w-4"/>
+                                <span className="font-medium text-sm">Connected & verified</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 text-orange-600">
+                                <AlertCircle className="h-4 w-4"/>
+                                <span className="font-medium text-sm">Account needs attention</span>
+                              </div>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              ID: <code className="bg-muted px-1 rounded">{activeDistributor.stripeAccountId}</code>
+                            </p>
+                          </div>
+                          <Button onClick={handleStripeConnect} disabled={isConnectingStripe} size="sm" variant="outline">
+                            {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Manage <ExternalLink className="ml-1 h-3 w-3"/>
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between pl-10">
+                          <p className="text-sm text-muted-foreground">Accept credit/debit cards via Stripe.</p>
+                          <Button onClick={handleStripeConnect} disabled={isConnectingStripe} size="sm">
+                            {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Connect Stripe
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    <Separator />
+
+                    {/* PayPal Section */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 bg-[#003087] rounded flex items-center justify-center">
+                          <span className="text-white font-bold text-xs">P</span>
+                        </div>
+                        <span className="font-medium">PayPal</span>
                       </div>
-                    )}
+                      {activeDistributor?.paypalMerchantId ? (
+                        <div className="flex items-center justify-between pl-10">
+                          <div>
+                            {activeDistributor.paypalAccountStatus === 'verified' ? (
+                              <div className="flex items-center gap-2 text-green-600">
+                                <Check className="h-4 w-4"/>
+                                <span className="font-medium text-sm">Connected & verified</span>
+                              </div>
+                            ) : activeDistributor.paypalAccountStatus === 'restricted' ? (
+                              <div className="flex items-center gap-2 text-red-600">
+                                <AlertCircle className="h-4 w-4"/>
+                                <span className="font-medium text-sm">Account restricted</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 text-orange-600">
+                                <AlertCircle className="h-4 w-4"/>
+                                <span className="font-medium text-sm">Verification pending</span>
+                              </div>
+                            )}
+                            {activeDistributor.paypalEmail && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Email: <code className="bg-muted px-1 rounded">{activeDistributor.paypalEmail}</code>
+                              </p>
+                            )}
+                          </div>
+                          <Button onClick={handlePayPalConnect} disabled={isConnectingPayPal} size="sm" variant="outline">
+                            {isConnectingPayPal && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Manage <ExternalLink className="ml-1 h-3 w-3"/>
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between pl-10">
+                          <p className="text-sm text-muted-foreground">Accept PayPal payments from your customers.</p>
+                          <Button onClick={handlePayPalConnect} disabled={isConnectingPayPal} size="sm">
+                            {isConnectingPayPal && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Connect PayPal
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               )}

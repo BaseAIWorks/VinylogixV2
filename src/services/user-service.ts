@@ -98,7 +98,7 @@ export async function getUsersByDistributorId(distributorId: string): Promise<Us
     }
 }
 
-// Fetches ONLY clients (viewers) for a distributor
+// Fetches all users who have client access to a distributor (viewers, masters, and workers with accessibleDistributorIds)
 export async function getClientsByDistributorId(distributorId: string): Promise<User[]> {
     if (!distributorId) {
         console.log("getClientsByDistributorId: No distributorId provided, returning empty array.");

@@ -161,6 +161,11 @@ export interface Distributor {
   billingCycle?: 'monthly' | 'quarterly' | 'yearly'; // <- Add this
   subscriptionCurrentPeriodEnd?: string; // ISO date string
   profileComplete?: boolean;
+
+  // PayPal Commerce Platform
+  paypalMerchantId?: string; // PayPal merchant account ID
+  paypalEmail?: string; // PayPal account email
+  paypalAccountStatus?: 'pending' | 'verified' | 'restricted';
 }
 
 export interface BrandingSettings {
@@ -424,12 +429,19 @@ export interface Order {
   updatedAt: string; // ISO String
   orderNumber?: string;
 
-  // Stripe Connect Payment Fields
+  // Payment Fields
+  paymentMethod?: 'stripe' | 'paypal';
   paymentStatus?: 'unpaid' | 'paid' | 'refunded' | 'failed';
-  stripePaymentIntentId?: string;
-  stripeCheckoutSessionId?: string;
   paidAt?: string; // ISO String
   platformFeeAmount?: number; // 4% platform fee in cents
+
+  // Stripe Connect Payment Fields
+  stripePaymentIntentId?: string;
+  stripeCheckoutSessionId?: string;
+
+  // PayPal Payment Fields
+  paypalOrderId?: string;
+  paypalCaptureId?: string;
 
   // Shipping Tracking Fields
   carrier?: 'postnl' | 'dhl' | 'ups' | 'fedex' | 'dpd' | 'gls' | 'other';

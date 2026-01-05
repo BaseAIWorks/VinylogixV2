@@ -102,25 +102,33 @@ export async function POST(req: NextRequest) {
 
     if (!existingUserQuery.empty) {
       const existingUser = existingUserQuery.docs[0].data() as FirestoreUser;
-      
-      // If user exists and is already a viewer with access to this distributor
-      if (existingUser.role === 'viewer' && 
-          existingUser.accessibleDistributorIds?.includes(distributorId)) {
+
+      // Check if user already has access to this distributor
+      if (existingUser.accessibleDistributorIds?.includes(distributorId)) {
         return NextResponse.json(
           { error: 'This user already has access to your distributorship' },
           { status: 409 }
         );
       }
-      
-      // If user exists but is not a viewer, they can't be invited as a client
-      if (existingUser.role !== 'viewer') {
+
+      // Prevent a master/worker from being invited as a client of their OWN distributor
+      if ((existingUser.role === 'master' || existingUser.role === 'worker') &&
+          existingUser.distributorId === distributorId) {
         return NextResponse.json(
-          { error: 'This email is associated with a non-client account and cannot be invited as a client' },
+          { error: 'This user is already part of your organization' },
           { status: 409 }
         );
       }
 
-      // If user exists and is a viewer but doesn't have access, grant access
+      // Superadmins cannot be invited as clients
+      if (existingUser.role === 'superadmin') {
+        return NextResponse.json(
+          { error: 'This email is associated with an admin account and cannot be invited as a client' },
+          { status: 409 }
+        );
+      }
+
+      // Grant access to the distributor (works for viewers, masters, and workers)
       await existingUserQuery.docs[0].ref.update({
         accessibleDistributorIds: FieldValue.arrayUnion(distributorId)
       });
@@ -137,9 +145,13 @@ export async function POST(req: NextRequest) {
         // Don't fail the entire operation if email fails
       }
 
+      const roleMessage = existingUser.role === 'viewer'
+        ? 'Access granted to existing client account'
+        : 'Access granted - this user can now view your collection as a client';
+
       return NextResponse.json({
         success: true,
-        message: 'Access granted to existing client account',
+        message: roleMessage,
         userCreated: false
       });
     }

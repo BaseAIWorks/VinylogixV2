@@ -4,15 +4,17 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { formatPriceForDisplay } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Home, FileText, ShoppingBag, CreditCard, Loader2 } from "lucide-react";
+import { Home, FileText, ShoppingBag, CreditCard, Loader2, Check } from "lucide-react";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { createOrder } from "@/services/order-service";
-import type { User } from "@/types";
+import type { User, Distributor } from "@/types";
+import { getDistributorById } from "@/services/distributor-service";
 
 const formatAddress = (user: Partial<User>, type: 'shipping' | 'billing' = 'shipping'): string => {
     if (type === 'billing' && user.useDifferentBillingAddress) {
@@ -45,17 +47,56 @@ const AddressCard = ({ title, icon: Icon, user, type }: { title: string, icon: R
     </Card>
 );
 
+type PaymentMethod = 'stripe' | 'paypal';
+
 export default function CheckoutPage() {
     const { user, cart, cartTotal, clearCart } = useAuth();
     const router = useRouter();
     const { toast } = useToast();
     const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('stripe');
+    const [distributor, setDistributor] = useState<Distributor | null>(null);
+    const [isLoadingDistributor, setIsLoadingDistributor] = useState(true);
+
+    // Get the distributor ID from the first cart item
+    const distributorId = cart.length > 0 ? cart[0].distributorId : null;
+
+    // Load distributor to check available payment methods
+    useEffect(() => {
+        async function loadDistributor() {
+            if (!distributorId) {
+                setIsLoadingDistributor(false);
+                return;
+            }
+            try {
+                const dist = await getDistributorById(distributorId);
+                setDistributor(dist);
+
+                // Set default payment method based on availability
+                if (dist?.stripeAccountId && dist.stripeAccountStatus === 'verified') {
+                    setPaymentMethod('stripe');
+                } else if (dist?.paypalMerchantId && dist.paypalAccountStatus === 'verified') {
+                    setPaymentMethod('paypal');
+                }
+            } catch (error) {
+                console.error('Failed to load distributor:', error);
+            } finally {
+                setIsLoadingDistributor(false);
+            }
+        }
+        loadDistributor();
+    }, [distributorId]);
 
     if (!user) {
         return <div/>;
     }
-    
+
     const isAddressSet = user.addressLine1 && user.city && user.postcode && user.country;
+
+    // Check available payment methods
+    const stripeAvailable = distributor?.stripeAccountId && distributor.stripeAccountStatus === 'verified';
+    const paypalAvailable = distributor?.paypalMerchantId && distributor.paypalAccountStatus === 'verified';
+    const anyPaymentMethodAvailable = stripeAvailable || paypalAvailable;
 
     const handlePlaceOrder = async () => {
         if (!isAddressSet) {
@@ -77,35 +118,21 @@ export default function CheckoutPage() {
             return;
         }
 
+        if (!anyPaymentMethodAvailable) {
+            toast({
+                title: "Payment Not Available",
+                description: "This distributor has not set up any payment methods yet.",
+                variant: "destructive"
+            });
+            return;
+        }
+
         setIsPlacingOrder(true);
         try {
-            // Get the distributor ID from the first cart item (all items should be from same distributor)
-            const distributorId = cart[0].distributorId;
-
-            // Create Stripe Checkout Session
-            const response = await fetch('/api/stripe/connect/checkout', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    distributorId,
-                    items: cart,
-                    customerEmail: user.email,
-                }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to create checkout session');
-            }
-
-            // Redirect to Stripe Checkout
-            if (data.url) {
-                window.location.href = data.url;
+            if (paymentMethod === 'stripe') {
+                await handleStripeCheckout();
             } else {
-                throw new Error('No checkout URL received');
+                await handlePayPalCheckout();
             }
         } catch (error) {
             console.error("Failed to initiate checkout:", error);
@@ -115,6 +142,67 @@ export default function CheckoutPage() {
                 variant: "destructive"
             });
             setIsPlacingOrder(false);
+        }
+    };
+
+    const handleStripeCheckout = async () => {
+        const response = await fetch('/api/stripe/connect/checkout', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                distributorId,
+                items: cart,
+                customerEmail: user.email,
+            }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to create checkout session');
+        }
+
+        if (data.url) {
+            window.location.href = data.url;
+        } else {
+            throw new Error('No checkout URL received');
+        }
+    };
+
+    const handlePayPalCheckout = async () => {
+        const shippingAddress = formatAddress(user, 'shipping');
+        const billingAddress = formatAddress(user, 'billing');
+        const customerName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || '';
+
+        const response = await fetch('/api/paypal/connect/checkout', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                distributorId,
+                items: cart,
+                customerEmail: user.email,
+                viewerId: user.uid,
+                shippingAddress,
+                billingAddress,
+                customerName,
+                phoneNumber: user.phoneNumber || user.mobileNumber,
+            }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to create PayPal order');
+        }
+
+        if (data.approvalUrl) {
+            window.location.href = data.approvalUrl;
+        } else {
+            throw new Error('No PayPal checkout URL received');
         }
     };
 
@@ -128,12 +216,53 @@ export default function CheckoutPage() {
                         <AddressCard title="Billing Address" icon={FileText} user={user} type="billing"/>
                     </div>
                      <Card>
-                        <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CreditCard className="h-5 w-5 text-primary"/>Payment</CardTitle></CardHeader>
+                        <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CreditCard className="h-5 w-5 text-primary"/>Payment Method</CardTitle></CardHeader>
                         <CardContent>
-                            <div className="p-6 border-2 border-dashed rounded-lg text-center text-muted-foreground">
-                                <p className="font-medium text-foreground mb-2">Secure Payment via Stripe</p>
-                                <p className="text-sm">You&apos;ll be redirected to Stripe&apos;s secure checkout to complete your payment.</p>
-                            </div>
+                            {isLoadingDistributor ? (
+                                <div className="flex items-center justify-center p-6">
+                                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                </div>
+                            ) : !anyPaymentMethodAvailable ? (
+                                <div className="p-6 border-2 border-dashed border-destructive/50 rounded-lg text-center">
+                                    <p className="font-medium text-destructive mb-2">No Payment Methods Available</p>
+                                    <p className="text-sm text-muted-foreground">This seller has not set up payment processing yet.</p>
+                                </div>
+                            ) : (
+                                <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)} className="space-y-3">
+                                    {stripeAvailable && (
+                                        <div className={`flex items-center space-x-3 p-4 border rounded-lg cursor-pointer transition-colors ${paymentMethod === 'stripe' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
+                                             onClick={() => setPaymentMethod('stripe')}>
+                                            <RadioGroupItem value="stripe" id="stripe" />
+                                            <div className="flex items-center gap-3 flex-1">
+                                                <div className="h-10 w-10 bg-[#635BFF] rounded flex items-center justify-center flex-shrink-0">
+                                                    <span className="text-white font-bold">S</span>
+                                                </div>
+                                                <div>
+                                                    <Label htmlFor="stripe" className="font-medium cursor-pointer">Credit / Debit Card</Label>
+                                                    <p className="text-sm text-muted-foreground">Pay securely with Stripe</p>
+                                                </div>
+                                            </div>
+                                            {paymentMethod === 'stripe' && <Check className="h-5 w-5 text-primary" />}
+                                        </div>
+                                    )}
+                                    {paypalAvailable && (
+                                        <div className={`flex items-center space-x-3 p-4 border rounded-lg cursor-pointer transition-colors ${paymentMethod === 'paypal' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
+                                             onClick={() => setPaymentMethod('paypal')}>
+                                            <RadioGroupItem value="paypal" id="paypal" />
+                                            <div className="flex items-center gap-3 flex-1">
+                                                <div className="h-10 w-10 bg-[#003087] rounded flex items-center justify-center flex-shrink-0">
+                                                    <span className="text-white font-bold">P</span>
+                                                </div>
+                                                <div>
+                                                    <Label htmlFor="paypal" className="font-medium cursor-pointer">PayPal</Label>
+                                                    <p className="text-sm text-muted-foreground">Pay with your PayPal account</p>
+                                                </div>
+                                            </div>
+                                            {paymentMethod === 'paypal' && <Check className="h-5 w-5 text-primary" />}
+                                        </div>
+                                    )}
+                                </RadioGroup>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
