@@ -234,7 +234,7 @@ const LocationSelector = ({
                             <CommandList>
                                 <CommandEmpty>
                                     {canManageLocations ? (
-                                        <Button variant="ghost" className="w-full" onClick={handleCreate}>
+                                        <Button type="button" variant="ghost" className="w-full" onClick={handleCreate}>
                                             Create and add &quot;{search}&quot;
                                         </Button>
                                     ) : (
