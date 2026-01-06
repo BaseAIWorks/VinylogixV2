@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { formatPriceForDisplay } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Home, FileText, ShoppingBag, CreditCard, Loader2, Check } from "lucide-react";
+import { Home, FileText, ShoppingBag, CreditCard, Loader2, Check, ArrowLeft, AlertCircle } from "lucide-react";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -92,6 +92,17 @@ export default function CheckoutPage() {
     }
 
     const isAddressSet = user.addressLine1 && user.city && user.postcode && user.country;
+
+    // Get list of missing address fields for user feedback
+    const getMissingAddressFields = () => {
+        const missing: string[] = [];
+        if (!user.addressLine1) missing.push('Street address');
+        if (!user.city) missing.push('City');
+        if (!user.postcode) missing.push('Postal code');
+        if (!user.country) missing.push('Country');
+        return missing;
+    };
+    const missingFields = getMissingAddressFields();
 
     // Check available payment methods
     const stripeAvailable = distributor?.stripeAccountId && distributor.stripeAccountStatus === 'verified';
@@ -208,7 +219,12 @@ export default function CheckoutPage() {
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">
-            <h1 className="text-3xl font-bold tracking-tight">Checkout</h1>
+            <div className="flex items-center gap-4">
+                <Button variant="ghost" size="icon" onClick={() => router.back()} title="Go back">
+                    <ArrowLeft className="h-5 w-5" />
+                </Button>
+                <h1 className="text-3xl font-bold tracking-tight">Checkout</h1>
+            </div>
             <div className="grid md:grid-cols-3 gap-8">
                 <div className="md:col-span-2 space-y-6">
                     <div className="grid sm:grid-cols-2 gap-6">
@@ -289,6 +305,33 @@ export default function CheckoutPage() {
                                 <span>Total</span>
                                 <span>€ {formatPriceForDisplay(cartTotal)}</span>
                            </div>
+                            {/* Warning for missing address fields */}
+                            {missingFields.length > 0 && (
+                                <div className="flex items-start gap-2 p-3 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg">
+                                    <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
+                                    <div className="text-sm">
+                                        <p className="font-medium text-orange-800 dark:text-orange-300">Missing shipping information</p>
+                                        <p className="text-orange-700 dark:text-orange-400 mt-1">
+                                            Please add: {missingFields.join(', ')}
+                                        </p>
+                                        <Link href="/settings" className="inline-block mt-2 text-orange-700 dark:text-orange-300 underline hover:no-underline font-medium">
+                                            Go to Settings
+                                        </Link>
+                                    </div>
+                                </div>
+                            )}
+                            {/* Warning for empty cart */}
+                            {cart.length === 0 && (
+                                <div className="flex items-start gap-2 p-3 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg">
+                                    <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
+                                    <div className="text-sm">
+                                        <p className="font-medium text-orange-800 dark:text-orange-300">Your cart is empty</p>
+                                        <p className="text-orange-700 dark:text-orange-400 mt-1">
+                                            Add items to your cart before checking out.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                             <Button size="lg" className="w-full" onClick={handlePlaceOrder} disabled={isPlacingOrder || cart.length === 0 || !isAddressSet}>
                                 {isPlacingOrder && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                                 Place Order

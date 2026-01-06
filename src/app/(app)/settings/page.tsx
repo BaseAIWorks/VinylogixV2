@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users, Clock } from "lucide-react";
+import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users, Clock, RefreshCw } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useEffect } from "react";
 import {
@@ -182,6 +182,7 @@ export default function SettingsPage() {
   const [storageLocations, setStorageLocations] = useState<string[]>([]);
   const [isSavingLocations, setIsSavingLocations] = useState(false);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
+  const [isRefreshingStripeStatus, setIsRefreshingStripeStatus] = useState(false);
   const [isConnectingPayPal, setIsConnectingPayPal] = useState(false);
   const [isProfileCompletionDialogOpen, setIsProfileCompletionDialogOpen] = useState(false);
 
@@ -374,7 +375,11 @@ export default function SettingsPage() {
         // Get a fresh ID token
         const idToken = await currentUser.getIdToken(true);
 
-        const response = await fetch('/api/stripe/connect/onboard', {
+        // Use dashboard endpoint for verified accounts, onboard for others
+        const isVerified = activeDistributor?.stripeAccountStatus === 'verified';
+        const endpoint = isVerified ? '/api/stripe/connect/dashboard' : '/api/stripe/connect/onboard';
+
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -389,11 +394,52 @@ export default function SettingsPage() {
         if (url) {
             window.location.href = url;
         } else {
-            throw new Error("Could not retrieve Stripe onboarding URL.");
+            throw new Error(isVerified ? "Could not retrieve Stripe dashboard URL." : "Could not retrieve Stripe onboarding URL.");
         }
     } catch (error) {
         toast({ title: "Stripe Connection Failed", description: (error as Error).message, variant: "destructive" });
         setIsConnectingStripe(false);
+    }
+  };
+
+  const handleRefreshStripeStatus = async () => {
+    if (!user || !user.distributorId) {
+        toast({ title: "Error", description: "Distributor context not found.", variant: "destructive" });
+        return;
+    }
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
+        return;
+    }
+
+    setIsRefreshingStripeStatus(true);
+    try {
+        const idToken = await currentUser.getIdToken(true);
+
+        const response = await fetch('/api/stripe/connect/status', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({ distributorId: user.distributorId }),
+        });
+        const data = await response.json();
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        // The real-time Firestore listener will auto-update the UI
+        toast({
+            title: "Status Refreshed",
+            description: `Stripe account status: ${data.status}`,
+        });
+    } catch (error) {
+        toast({ title: "Refresh Failed", description: (error as Error).message, variant: "destructive" });
+    } finally {
+        setIsRefreshingStripeStatus(false);
     }
   };
 
@@ -783,12 +829,30 @@ export default function SettingsPage() {
                               </p>
                             )}
                           </div>
-                          {activeDistributor.stripeAccountStatus !== 'in_review' && (
-                            <Button onClick={handleStripeConnect} disabled={isConnectingStripe} size="sm" variant="outline">
-                              {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                              Manage <ExternalLink className="ml-1 h-3 w-3"/>
+                          <div className="flex items-center gap-2">
+                            {/* Refresh status button */}
+                            <Button
+                              onClick={handleRefreshStripeStatus}
+                              disabled={isRefreshingStripeStatus}
+                              size="sm"
+                              variant="ghost"
+                              title="Refresh status from Stripe"
+                            >
+                              <RefreshCw className={`h-4 w-4 ${isRefreshingStripeStatus ? 'animate-spin' : ''}`}/>
                             </Button>
-                          )}
+                            {/* Main action button based on status */}
+                            {activeDistributor.stripeAccountStatus === 'verified' ? (
+                              <Button onClick={handleStripeConnect} disabled={isConnectingStripe} size="sm" variant="outline">
+                                {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Dashboard <ExternalLink className="ml-1 h-3 w-3"/>
+                              </Button>
+                            ) : activeDistributor.stripeAccountStatus !== 'in_review' && (
+                              <Button onClick={handleStripeConnect} disabled={isConnectingStripe} size="sm" variant="outline">
+                                {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Continue Setup <ExternalLink className="ml-1 h-3 w-3"/>
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       ) : (
                         <div className="flex items-center justify-between pl-10">
