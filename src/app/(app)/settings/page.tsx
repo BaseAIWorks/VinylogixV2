@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users } from "lucide-react";
+import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users, Clock } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useEffect } from "react";
 import {
@@ -753,20 +753,42 @@ export default function SettingsPage() {
                                 <Check className="h-4 w-4"/>
                                 <span className="font-medium text-sm">Connected & verified</span>
                               </div>
+                            ) : activeDistributor.stripeAccountStatus === 'in_review' ? (
+                              <div className="flex items-center gap-2 text-blue-600">
+                                <Clock className="h-4 w-4"/>
+                                <span className="font-medium text-sm">Under review</span>
+                              </div>
+                            ) : activeDistributor.stripeAccountStatus === 'restricted' ? (
+                              <div className="flex items-center gap-2 text-red-600">
+                                <AlertCircle className="h-4 w-4"/>
+                                <span className="font-medium text-sm">Account restricted</span>
+                              </div>
+                            ) : activeDistributor.stripeAccountStatus === 'details_needed' ? (
+                              <div className="flex items-center gap-2 text-orange-600">
+                                <AlertCircle className="h-4 w-4"/>
+                                <span className="font-medium text-sm">More information needed</span>
+                              </div>
                             ) : (
                               <div className="flex items-center gap-2 text-orange-600">
                                 <AlertCircle className="h-4 w-4"/>
-                                <span className="font-medium text-sm">Account needs attention</span>
+                                <span className="font-medium text-sm">Setup incomplete</span>
                               </div>
                             )}
                             <p className="text-xs text-muted-foreground mt-1">
                               ID: <code className="bg-muted px-1 rounded">{activeDistributor.stripeAccountId}</code>
                             </p>
+                            {activeDistributor.stripeAccountStatus === 'in_review' && (
+                              <p className="text-xs text-blue-600 mt-1">
+                                Stripe is reviewing your details. This may take 1-2 business days.
+                              </p>
+                            )}
                           </div>
-                          <Button onClick={handleStripeConnect} disabled={isConnectingStripe} size="sm" variant="outline">
-                            {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Manage <ExternalLink className="ml-1 h-3 w-3"/>
-                          </Button>
+                          {activeDistributor.stripeAccountStatus !== 'in_review' && (
+                            <Button onClick={handleStripeConnect} disabled={isConnectingStripe} size="sm" variant="outline">
+                              {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Manage <ExternalLink className="ml-1 h-3 w-3"/>
+                            </Button>
+                          )}
                         </div>
                       ) : (
                         <div className="flex items-center justify-between pl-10">

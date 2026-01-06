@@ -153,7 +153,7 @@ export interface Distributor {
   orderCounter?: number;
   orderIdPrefix?: string;
   stripeAccountId?: string; // For Stripe Connect
-  stripeAccountStatus?: 'pending' | 'verified' | 'restricted' | 'details_needed';
+  stripeAccountStatus?: 'pending' | 'verified' | 'in_review' | 'restricted' | 'details_needed';
   stripeCustomerId?: string; // For Stripe Billing
   subscriptionId?: string; // For Stripe Billing
   subscriptionStatus?: SubscriptionStatus; // For Stripe Billing

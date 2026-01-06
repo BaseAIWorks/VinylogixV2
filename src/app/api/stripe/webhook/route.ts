@@ -301,22 +301,48 @@ export async function POST(req: NextRequest) {
           let status:
             | "pending"
             | "verified"
+            | "in_review"
             | "restricted"
             | "details_needed" = "pending";
 
-          if (account.details_submitted) {
-            if (account.charges_enabled && account.payouts_enabled) {
-              status = "verified";
-            } else {
-              status = "details_needed";
-            }
+          // Check requirements for more granular status
+          const requirements = account.requirements;
+          const hasPendingVerification = requirements?.pending_verification && requirements.pending_verification.length > 0;
+          const hasCurrentlyDue = requirements?.currently_due && requirements.currently_due.length > 0;
+          const hasPastDue = requirements?.past_due && requirements.past_due.length > 0;
+          const hasDisabledReason = requirements?.disabled_reason;
+
+          if (account.charges_enabled && account.payouts_enabled) {
+            // Account is fully verified and can accept payments
+            status = "verified";
+          } else if (hasDisabledReason) {
+            // Account has been disabled/restricted
+            status = "restricted";
+          } else if (hasCurrentlyDue || hasPastDue) {
+            // User needs to provide more information
+            status = "details_needed";
+          } else if (account.details_submitted && hasPendingVerification) {
+            // Details submitted, waiting for Stripe to verify
+            status = "in_review";
+          } else if (account.details_submitted) {
+            // Details submitted but no specific pending items - still in review
+            status = "in_review";
           }
+          // Otherwise stays as "pending" (onboarding not started/completed)
 
           await updateDistributor(distributorId, {
             stripeAccountStatus: status,
           });
           console.log(
-            `Updated Stripe Connect account status for distributor ${distributorId} to ${status}`
+            `Updated Stripe Connect account status for distributor ${distributorId} to ${status}`,
+            {
+              charges_enabled: account.charges_enabled,
+              payouts_enabled: account.payouts_enabled,
+              details_submitted: account.details_submitted,
+              pending_verification: requirements?.pending_verification,
+              currently_due: requirements?.currently_due,
+              disabled_reason: requirements?.disabled_reason,
+            }
           );
         } else {
           console.warn(
