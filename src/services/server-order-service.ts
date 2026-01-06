@@ -4,6 +4,7 @@ import type { Order, OrderStatus, OrderItem } from '@/types';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
 import Stripe from 'stripe';
+import { stripe } from '@/lib/stripe';
 
 const ORDERS_COLLECTION = 'orders';
 
@@ -45,42 +46,79 @@ export async function createOrderFromCheckout(session: Stripe.Checkout.Session):
   const counter = (distributor?.orderCounter || 0) + 1;
   const orderNumber = `${prefix}-${counter.toString().padStart(5, '0')}`;
 
-  // Get line items from the session
-  const lineItems = session.line_items?.data || [];
+  // Line items are NOT included in webhook events by default
+  // We need to retrieve them from Stripe
+  let lineItems: Stripe.LineItem[] = [];
 
-  // Convert Stripe line items to order items
-  const orderItems: OrderItem[] = lineItems.map((item) => ({
-    recordId: item.price?.product as string || 'unknown',
-    title: item.description || 'Unknown Record',
-    artist: 'Unknown Artist',
-    cover_url: undefined,
-    priceAtTimeOfOrder: (item.price?.unit_amount || 0) / 100,
-    quantity: item.quantity || 1,
-  }));
+  if (session.line_items?.data && session.line_items.data.length > 0) {
+    // Line items already expanded (unlikely in webhook)
+    lineItems = session.line_items.data;
+  } else {
+    // Fetch line items from Stripe
+    try {
+      const lineItemsResponse = await stripe.checkout.sessions.listLineItems(session.id, {
+        limit: 100,
+      });
+      lineItems = lineItemsResponse.data;
+    } catch (error) {
+      console.error('Failed to retrieve line items from Stripe:', error);
+    }
+  }
+
+  // Parse cart items from metadata if available (contains record IDs, artists, cover URLs)
+  let cartItemsMetadata: Array<{ id: string; artist: string; cover_url?: string; qty: number }> = [];
+  try {
+    if (session.metadata?.cartItems) {
+      cartItemsMetadata = JSON.parse(session.metadata.cartItems);
+    }
+  } catch (e) {
+    console.warn('Failed to parse cartItems metadata:', e);
+  }
+
+  // Convert Stripe line items to order items, enriching with metadata
+  const orderItems: OrderItem[] = lineItems.map((item, index) => {
+    const metaItem = cartItemsMetadata[index];
+    return {
+      recordId: metaItem?.id || item.price?.product as string || 'unknown',
+      title: item.description || 'Unknown Record',
+      artist: metaItem?.artist || 'Unknown Artist',
+      cover_url: metaItem?.cover_url,
+      priceAtTimeOfOrder: (item.price?.unit_amount || 0) / 100,
+      quantity: item.quantity || metaItem?.qty || 1,
+    };
+  });
 
   const now = new Date();
   const totalAmount = (session.amount_total || 0) / 100; // Convert from cents
   const platformFeeAmount = parseInt(session.metadata?.platformFeeAmount || '0', 10);
 
-  // Extract customer details from session
+  // Extract customer details - prefer metadata (from our app) over Stripe session data
   const customerEmail = session.customer_details?.email || session.customer_email || 'N/A';
-  const customerName = session.customer_details?.name || customerEmail;
+  const customerName = session.metadata?.customerName || session.customer_details?.name || customerEmail;
 
-  const shippingAddress = session.customer_details?.address
-    ? [
-        session.customer_details.address.line1,
-        session.customer_details.address.line2,
-        `${session.customer_details.address.postal_code || ''} ${session.customer_details.address.city || ''}`.trim(),
-        session.customer_details.address.country,
-      ].filter(Boolean).join('\n')
-    : 'No shipping address provided';
+  // Use shipping address from our metadata (formatted by our app) or fall back to Stripe's address
+  let shippingAddress = session.metadata?.shippingAddress;
+  if (!shippingAddress || shippingAddress === '') {
+    shippingAddress = session.customer_details?.address
+      ? [
+          session.customer_details.address.line1,
+          session.customer_details.address.line2,
+          `${session.customer_details.address.postal_code || ''} ${session.customer_details.address.city || ''}`.trim(),
+          session.customer_details.address.country,
+        ].filter(Boolean).join('\n')
+      : 'No shipping address provided';
+  }
+
+  const billingAddress = session.metadata?.billingAddress || shippingAddress;
+  const viewerId = session.metadata?.userId || 'unknown';
 
   const newOrderData: any = {
     distributorId,
-    viewerId: 'unknown', // We don't have the user ID from Stripe
+    viewerId,
     viewerEmail: customerEmail,
     customerName,
     shippingAddress,
+    billingAddress,
     items: orderItems,
     status: 'paid' as OrderStatus, // Payment already completed
     totalAmount,

@@ -31,7 +31,7 @@ interface ValidatedCartItem {
 
 export async function POST(req: NextRequest) {
   try {
-    const { distributorId, items, customerEmail } = await req.json();
+    const { distributorId, items, customerEmail, userId, customerName, shippingAddress, billingAddress } = await req.json();
 
     if (!distributorId || !items || items.length === 0) {
       return NextResponse.json(
@@ -157,6 +157,15 @@ export async function POST(req: NextRequest) {
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
 
+    // Build cart items metadata (record IDs, artists, cover URLs for order creation)
+    // Stripe metadata has a 500 char limit per value, so we store JSON of essential data
+    const cartItemsData = validatedItems.map(item => ({
+      id: item.dbRecord.id,
+      artist: item.dbRecord.artist,
+      cover_url: item.dbRecord.cover_url,
+      qty: item.quantity,
+    }));
+
     // Create Stripe Checkout Session with Connect
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -173,6 +182,12 @@ export async function POST(req: NextRequest) {
       metadata: {
         distributorId,
         platformFeeAmount: platformFeeAmount.toString(),
+        userId: userId || '',
+        customerName: customerName || '',
+        shippingAddress: shippingAddress || '',
+        billingAddress: billingAddress || '',
+        // Store cart items as JSON (limited to 500 chars, but should be enough for most orders)
+        cartItems: JSON.stringify(cartItemsData).substring(0, 500),
       },
     });
 

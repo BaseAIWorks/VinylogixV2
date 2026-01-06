@@ -6,10 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function CheckoutSuccessPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { clearCart } = useAuth();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const sessionId = searchParams.get('session_id');
 
@@ -19,6 +21,9 @@ export default function CheckoutSuccessPage() {
       return;
     }
 
+    // Clear the cart after successful payment
+    clearCart();
+
     // The webhook will handle creating the order
     // Here we just confirm the payment was successful
     const timer = setTimeout(() => {
@@ -26,7 +31,7 @@ export default function CheckoutSuccessPage() {
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [sessionId]);
+  }, [sessionId, clearCart]);
 
   if (status === 'loading') {
     return (

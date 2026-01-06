@@ -157,6 +157,10 @@ export default function CheckoutPage() {
     };
 
     const handleStripeCheckout = async () => {
+        const shippingAddress = formatAddress(user, 'shipping');
+        const billingAddress = formatAddress(user, 'billing');
+        const customerName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || '';
+
         const response = await fetch('/api/stripe/connect/checkout', {
             method: 'POST',
             headers: {
@@ -166,6 +170,10 @@ export default function CheckoutPage() {
                 distributorId,
                 items: cart,
                 customerEmail: user.email,
+                userId: user.uid,
+                customerName,
+                shippingAddress,
+                billingAddress,
             }),
         });
 

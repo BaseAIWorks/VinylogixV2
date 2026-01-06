@@ -83,21 +83,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // For Standard accounts, create a login link to their Stripe Dashboard
-    const loginLink = await stripe.accounts.createLoginLink(distributor.stripeAccountId);
+    // Retrieve the account to check its type
+    const account = await stripe.accounts.retrieve(distributor.stripeAccountId);
 
-    return NextResponse.json({ url: loginLink.url });
+    // Standard accounts manage their dashboard directly at dashboard.stripe.com
+    // Express accounts use a login link
+    if (account.type === 'standard') {
+      // Standard accounts go directly to Stripe Dashboard
+      return NextResponse.json({ url: 'https://dashboard.stripe.com' });
+    } else {
+      // Express/Custom accounts use a login link
+      const loginLink = await stripe.accounts.createLoginLink(distributor.stripeAccountId);
+      return NextResponse.json({ url: loginLink.url });
+    }
 
   } catch (error: any) {
     console.error("Stripe Dashboard Link Error:", error);
-
-    // Handle specific Stripe error for accounts that can't use login links
-    if (error.code === 'account_invalid') {
-      return NextResponse.json(
-        { error: 'Your Stripe account is not fully set up. Please complete onboarding.' },
-        { status: 400 }
-      );
-    }
 
     return NextResponse.json(
       { error: `Failed to access Stripe dashboard: ${error.message}` },
