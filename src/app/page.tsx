@@ -3,7 +3,7 @@
 
 import { Button } from "@/components/ui/button";
 import { HeroSection } from "@/components/ui/hero-section-1";
-import { ArrowRight, ScanLine, Keyboard, Disc3, Bot, Warehouse, ShoppingCart, Users, KeyRound, HardHat, BarChart3, Palette, Building, Package, User, Heart, Library, ListChecks, Laptop, Tablet, Smartphone, Instagram, Facebook, Twitter, Linkedin } from "lucide-react";
+import { ArrowRight, ScanLine, Keyboard, Disc3, Bot, Warehouse, ShoppingCart, Users, KeyRound, HardHat, BarChart3, Palette, Building, Package, User, Heart, Library, ListChecks, Laptop, Tablet, Smartphone, Instagram, Facebook, Sparkles, Gift, Clock, Check } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import React from "react";
@@ -85,6 +85,104 @@ const DeviceSection = () => (
 );
 
 
+// Promo Banner component definition
+const PromoBanner = () => (
+    <section className="py-16 sm:py-20">
+        <div className="container mx-auto px-4">
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary/90 to-primary/80 p-8 md:p-12 lg:p-16">
+                {/* Background decoration */}
+                <div className="absolute inset-0 opacity-10">
+                    <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/20 blur-3xl" />
+                    <div className="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-white/20 blur-3xl" />
+                </div>
+
+                <div className="relative z-10">
+                    {/* Badge */}
+                    <div className="flex justify-center mb-6">
+                        <span className="inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm">
+                            <Sparkles className="h-4 w-4" />
+                            Limited Time Offer
+                        </span>
+                    </div>
+
+                    {/* Main headline */}
+                    <div className="text-center text-white">
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight">
+                            Try Vinylogix Free for 7 Days
+                        </h2>
+                        <p className="mt-4 text-lg md:text-xl text-white/90 max-w-2xl mx-auto">
+                            Get full access to all Scale plan features during your trial. No credit card required.
+                        </p>
+                    </div>
+
+                    {/* Features grid */}
+                    <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+                        <div className="flex items-start gap-3 bg-white/10 rounded-xl p-4 backdrop-blur-sm">
+                            <div className="rounded-full bg-white/20 p-2">
+                                <Clock className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-white">7-Day Free Trial</h4>
+                                <p className="text-sm text-white/80">Full access, no commitment</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-3 bg-white/10 rounded-xl p-4 backdrop-blur-sm">
+                            <div className="rounded-full bg-white/20 p-2">
+                                <Sparkles className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-white">All Scale Features</h4>
+                                <p className="text-sm text-white/80">Premium tools included</p>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-3 bg-white/10 rounded-xl p-4 backdrop-blur-sm">
+                            <div className="rounded-full bg-white/20 p-2">
+                                <Check className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-white">No Credit Card</h4>
+                                <p className="text-sm text-white/80">Start instantly</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Special offer box */}
+                    <div className="mt-10 max-w-3xl mx-auto">
+                        <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-6 md:p-8 border border-white/20">
+                            <div className="flex items-center justify-center gap-2 mb-4">
+                                <Gift className="h-6 w-6 text-yellow-300" />
+                                <h3 className="text-xl md:text-2xl font-bold text-white">Early Adopter Bonus</h3>
+                            </div>
+                            <p className="text-white/90 text-center text-lg">
+                                Choose the <span className="font-semibold text-yellow-300">Growth plan</span> and subscribe before{" "}
+                                <span className="font-semibold text-yellow-300">January 30, 2025</span> — get all{" "}
+                                <span className="font-semibold text-yellow-300">Scale plan features free for 6 months!</span>
+                            </p>
+                            <p className="text-white/70 text-center text-sm mt-2">
+                                That's 6 months of premium features at no extra cost when you stay after your trial.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* CTA Buttons */}
+                    <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+                        <Button size="lg" variant="secondary" className="text-primary font-semibold px-8" asChild>
+                            <Link href="/register">
+                                Start Your Free Trial <ArrowRight className="ml-2 h-5 w-5" />
+                            </Link>
+                        </Button>
+                        <Button size="lg" variant="ghost" className="text-white border-white/30 border hover:bg-white/10" asChild>
+                            <Link href="/pricing">
+                                View Pricing Plans
+                            </Link>
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+);
+
 // CTA Section component definition
 const CallToActionSection = () => (
   <section className="bg-background py-24">
@@ -95,8 +193,8 @@ const CallToActionSection = () => (
           </p>
           <div className="mt-8">
               <Button size="lg" asChild>
-                  <Link href="/register/client">
-                      Get Started for Free <ArrowRight className="ml-2 h-5 w-5" />
+                  <Link href="/register">
+                      Start Your Free Trial <ArrowRight className="ml-2 h-5 w-5" />
                   </Link>
               </Button>
           </div>
@@ -198,7 +296,7 @@ export default function MarketingPage() {
         <HeroSection />
 
         <main>
-            <FeatureShowcase 
+            <FeatureShowcase
                 title="Inventory Management Redefined"
                 description="Go beyond spreadsheets. From barcode scanning to AI-powered descriptions, manage your stock with precision and ease."
                 image="/Invent-app.png"
@@ -206,7 +304,9 @@ export default function MarketingPage() {
                 features={inventoryFeatures}
             />
 
-            <FeatureShowcase 
+            <PromoBanner />
+
+            <FeatureShowcase
                 title="Insightful Analytics & Client Management"
                 description="Get a 360-degree view of your operation. Control user access, manage clients, and make data-driven decisions."
                 image="/Statis-app.png"
