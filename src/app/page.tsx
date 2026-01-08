@@ -133,10 +133,8 @@ const PageFooter = () => {
                     The ultimate platform for vinyl record stores and collectors to manage their inventory and passion.
                     </p>
                     <div className="mt-6 flex gap-4">
-                    <a href="/#" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Instagram"><Instagram className="h-6 w-6" /></a>
-                    <a href="/#" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Facebook"><Facebook className="h-6 w-6" /></a>
-                    <a href="/#" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Twitter"><Twitter className="h-6 w-6" /></a>
-                    <a href="/#" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="LinkedIn"><Linkedin className="h-6 w-6" /></a>
+                    <a href="https://www.instagram.com/vinylogix/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Instagram"><Instagram className="h-6 w-6" /></a>
+                    <a href="https://www.facebook.com/vinylogix" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Facebook"><Facebook className="h-6 w-6" /></a>
                     </div>
                 </div>
 

@@ -199,7 +199,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [activeDistributorId, _setActiveDistributorId] = useState<string | null>(null);
   const [accessibleDistributors, setAccessibleDistributors] = useState<Distributor[]>([]);
   const [clientAccessDistributors, setClientAccessDistributors] = useState<Distributor[]>([]);
-  const [theme, setTheme] = useState<'light' | 'dark' | 'black'>('dark');
+  const [theme, setTheme] = useState<'light' | 'dark' | 'black'>('light');
 
   const [isImpersonating, setIsImpersonating] = useState(false);
   const [originalUser, setOriginalUser] = useState<User | null>(null);
@@ -280,18 +280,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
+  // Only load stored theme preference when user is logged in
   useEffect(() => {
-    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-    if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'black') {
-      setTheme(storedTheme);
+    if (user) {
+      const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+      if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'black') {
+        setTheme(storedTheme);
+      }
     }
-  }, []);
+  }, [user]);
 
+  // Only apply theme to document when user is logged in
+  // Public pages will use the default light theme from root layout
   useEffect(() => {
-    document.documentElement.classList.remove('theme-light', 'theme-dark', 'theme-black');
-    document.documentElement.classList.add(`theme-${theme}`);
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
-  }, [theme]);
+    if (user) {
+      document.documentElement.classList.remove('theme-light', 'theme-dark', 'theme-black');
+      document.documentElement.classList.add(`theme-${theme}`);
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    }
+  }, [theme, user]);
 
   useEffect(() => {
     const fetchSettings = async () => {
