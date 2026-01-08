@@ -108,7 +108,6 @@ const CallToActionSection = () => (
 const PageFooter = () => {
     const footerLinks = {
         Product: [
-            { href: "/features", text: "Features" },
             { href: "/pricing", text: "Pricing" },
         ],
         Company: [
