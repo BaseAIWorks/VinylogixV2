@@ -34,7 +34,7 @@ import {
   DropdownMenuPortal,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
-import { LayoutDashboard, ScanLine, BarChart3, Settings, LogOut, Menu, Heart, Package, ShoppingCart, Boxes, Library, ListChecks, Bell, Building, Check, Key, X, Shapes, Users, Briefcase, FileUp, Palette, Disc3, DollarSign, HardHat, Activity, FilePenLine, Store, ChevronsUpDown, Truck, Settings2, CreditCard, Newspaper, PlusCircle } from 'lucide-react';
+import { LayoutDashboard, ScanLine, BarChart3, Settings, LogOut, Menu, Heart, Package, ShoppingCart, Boxes, Library, ListChecks, Bell, Building, Check, Key, X, Shapes, Users, Briefcase, FileUp, Palette, Disc3, DollarSign, HardHat, Activity, FilePenLine, Store, ChevronsUpDown, Truck, Settings2, CreditCard, Newspaper, PlusCircle, BookOpen } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import Image from 'next/image';
@@ -377,7 +377,17 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </SidebarContent>
         <SidebarFooter className="p-4 group-data-[collapsible=icon]:hidden">
            <SidebarSeparator className="my-1" />
-           <div className="flex items-center justify-center gap-2 text-xs text-sidebar-foreground/60 mt-2">
+           <SidebarMenu>
+             <SidebarMenuItem>
+               <SidebarMenuButton asChild tooltip="User Manual">
+                 <Link href="/manual" className="flex items-center gap-2">
+                   <BookOpen className="h-4 w-4" />
+                   <span>User Manual</span>
+                 </Link>
+               </SidebarMenuButton>
+             </SidebarMenuItem>
+           </SidebarMenu>
+           <div className="flex items-center justify-center gap-2 text-xs text-sidebar-foreground/60 mt-3">
               <Image
                 src="/logo.png"
                 alt="Vinylogix Logo"
