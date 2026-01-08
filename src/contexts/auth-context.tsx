@@ -980,6 +980,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     try {
       await firebaseSignOut(auth);
+      // Reset to light theme for public pages after logout
+      document.documentElement.classList.remove('theme-light', 'theme-dark', 'theme-black');
+      document.documentElement.classList.add('theme-light');
       toast({
         title: 'Logged Out',
         description: 'You have been successfully logged out.',
@@ -1500,7 +1503,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (loading || isImpersonating) return;
 
-    const publicRoutes = ['/', '/login', '/register/client', '/register', '/features', '/pricing'];
+    const publicRoutes = ['/', '/login', '/register/client', '/register', '/features', '/pricing', '/help', '/contact'];
     const isPublicRoute =
       publicRoutes.includes(pathname) || pathname.startsWith('/register');
     const isAuthRoute =

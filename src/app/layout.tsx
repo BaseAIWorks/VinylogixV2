@@ -46,16 +46,9 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
-                try {
-                  var theme = localStorage.getItem('vinyl_db_theme');
-                  if (theme === 'light' || theme === 'dark' || theme === 'black') {
-                    document.documentElement.classList.add('theme-' + theme);
-                  } else {
-                    document.documentElement.classList.add('theme-dark');
-                  }
-                } catch (e) {
-                  document.documentElement.classList.add('theme-dark');
-                }
+                // Default to light theme for public pages
+                // Dashboard will override this with user preference
+                document.documentElement.classList.add('theme-light');
               })();
             `,
           }}

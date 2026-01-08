@@ -110,16 +110,14 @@ const PageFooter = () => {
         Product: [
             { href: "/features", text: "Features" },
             { href: "/pricing", text: "Pricing" },
-            { href: "/changelog", text: "Changelog" },
         ],
         Company: [
             { href: "/#", text: "About" },
             { href: "/#", text: "Team" },
-            { href: "/#", text: "Blog" },
         ],
         Resources: [
             { href: "/help", text: "Help & FAQ" },
-            { href: "mailto:support@vinylogix.com", text: "Contact Support" },
+            { href: "/contact", text: "Contact Support" },
             { href: "/#", text: "Privacy Policy" },
         ],
     };
