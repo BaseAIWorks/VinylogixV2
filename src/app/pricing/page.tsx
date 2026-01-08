@@ -259,7 +259,8 @@ export default function PricingPage() {
     const orderTotal = salePrice + shippingCost;
 
     // Vinylogix: 4% platform fee on item + Stripe fees on total
-    const stripeFee = orderTotal * 0.029 + 0.30;
+    // Stripe EU rates: 1.5% + €0.25 (standard EEA cards)
+    const stripeFee = orderTotal * 0.015 + 0.25;
     const vinylogixFee = salePrice * 0.04;
     const vinylogixTotalFee = stripeFee + vinylogixFee;
 
@@ -413,7 +414,7 @@ export default function PricingPage() {
                                         </TableRow>
                                         <TableRow>
                                             <TableCell>Payment Processing</TableCell>
-                                            <TableCell className="text-center">2.9% + €0.30 (€{formatPriceForDisplay(stripeFee)})</TableCell>
+                                            <TableCell className="text-center">1.5% + €0.25 (€{formatPriceForDisplay(stripeFee)})</TableCell>
                                             <TableCell className="text-center">3.4% + €0.35 (€{formatPriceForDisplay(otherPlatformPaymentFee)})</TableCell>
                                         </TableRow>
                                         <TableRow className="font-bold bg-muted/50">
