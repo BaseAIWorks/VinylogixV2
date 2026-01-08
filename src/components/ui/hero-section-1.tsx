@@ -4,7 +4,7 @@
 import React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowRight, ChevronRight, Menu, X, Settings, LogOut, LayoutDashboard } from 'lucide-react'
+import { ArrowRight, ChevronRight, Menu, X, Settings, LogOut, LayoutDashboard, Gift } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AnimatedGroup } from '@/components/ui/animated-group'
 import { cn } from '@/lib/utils'
@@ -109,6 +109,27 @@ export function HeroSection() {
                                         className="mx-auto mt-8 max-w-2xl text-balance text-lg">
                                         From inventory management and order processing to client engagement and sales analytics, Vinylogix provides the tools you need to thrive.
                                     </p>
+                                </AnimatedGroup>
+
+                                {/* Compact Promo Banner */}
+                                <AnimatedGroup variants={transitionVariants}>
+                                    <div className="mt-8 mx-auto max-w-xl">
+                                        <div className="rounded-xl bg-primary/10 border border-primary/20 px-6 py-4 backdrop-blur-sm transition-all duration-300 hover:shadow-[0_0_30px_rgba(124,58,237,0.3)] hover:border-primary/40">
+                                            <div className="flex flex-col items-center gap-2 text-center">
+                                                <div className="flex items-center gap-2">
+                                                    <Gift className="h-5 w-5 text-primary shrink-0" />
+                                                    <span className="text-xl font-bold text-primary">Try 7 days for free</span>
+                                                </div>
+                                                <p className="text-sm text-muted-foreground">
+                                                    All plans include a 7-day free trial with all Scale plan features
+                                                </p>
+                                                <p className="text-sm">
+                                                    <span className="font-semibold">Growth plan before Jan 30</span>
+                                                    <span className="text-muted-foreground"> = Scale plan features free for 6 months</span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </AnimatedGroup>
 
                                 <AnimatedGroup

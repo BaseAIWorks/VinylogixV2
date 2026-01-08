@@ -3,7 +3,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowRight, Check, Flame, Instagram, Facebook, Calculator, ScanLine, BarChart3, Users, Building } from "lucide-react";
+import { ArrowRight, Check, Flame, Instagram, Facebook, Calculator, ScanLine, BarChart3, Users, Building, Gift, Sparkles, Clock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -281,48 +281,77 @@ export default function PricingPage() {
         <PageHeader/>
 
         <main className="flex-grow">
-            <section className="relative overflow-hidden py-24 md:py-32 text-center text-white">
-                 <div className="absolute inset-0 z-0 h-full w-full bg-slate-900">
-                    <Image
-                        src="/Background-3.png"
-                        alt="Vinyl records on display in a store"
-                        fill
-                        className="object-cover opacity-20"
-                        data-ai-hint="record store"
-                    />
-                 </div>
-                 <div className="container mx-auto px-4 relative z-10">
-                    <h1 className="text-5xl font-extrabold tracking-tight text-white">Find the Perfect Plan for Your Collection</h1>
-                    <p className="mt-4 max-w-2xl mx-auto text-xl text-slate-300">Whether you're a passionate collector or a growing record store, we have a plan that fits your needs. No hidden fees, cancel anytime.</p>
+            {/* Hero Section with integrated CTA */}
+            <section className="relative overflow-hidden pt-16 pb-12 md:pt-24 md:pb-16">
+                {/* Background effects */}
+                <div className="absolute inset-0 z-0">
+                    <div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-primary/5 to-transparent" />
+                    <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl opacity-30" />
+                    <div className="absolute top-20 right-1/4 w-72 h-72 bg-accent/20 rounded-full blur-3xl opacity-20" />
+                </div>
+
+                <div className="container mx-auto px-4 relative z-10 max-w-5xl">
+                    <div className="text-center">
+                        <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground">
+                            Find the Perfect Plan
+                        </h1>
+                        <p className="mt-4 max-w-2xl mx-auto text-lg text-muted-foreground">
+                            Whether you're a passionate collector or a growing record store, we have a plan that fits your needs. No hidden fees, cancel anytime.
+                        </p>
+                    </div>
+
+                    {/* Integrated Promo Card */}
+                    <div className="mt-10 rounded-2xl bg-card border border-border p-6 md:p-8 shadow-lg transition-all duration-300 hover:shadow-xl hover:shadow-primary/5">
+                        <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
+                            <div className="flex items-center gap-4">
+                                <div className="rounded-full bg-primary/10 p-3">
+                                    <Gift className="h-8 w-8 text-primary" />
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-bold text-foreground">Try 7 days for free</h3>
+                                    <p className="text-muted-foreground">All plans include a free trial with all Scale plan features</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 rounded-xl bg-primary/5 border border-primary/10 px-5 py-3">
+                                <Clock className="h-5 w-5 text-primary shrink-0" />
+                                <div>
+                                    <p className="text-sm font-semibold text-foreground">Early Adopter Bonus</p>
+                                    <p className="text-sm text-muted-foreground">Growth plan before Jan 30 = Scale features free for 6 months</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Billing Cycle Selector */}
+                    <div className="mt-10 flex justify-center">
+                        <RadioGroup defaultValue="monthly" onValueChange={(value) => setBillingCycle(value as any)} className="inline-flex rounded-lg bg-muted p-1">
+                            <div>
+                                <RadioGroupItem value="monthly" id="monthly" className="peer sr-only" />
+                                <Label htmlFor="monthly" className="cursor-pointer rounded-md px-6 py-2 text-sm font-medium transition-all peer-data-[state=checked]:bg-background peer-data-[state=checked]:shadow-sm">
+                                    Monthly
+                                </Label>
+                            </div>
+                            <div>
+                                <RadioGroupItem value="quarterly" id="quarterly" className="peer sr-only" />
+                                <Label htmlFor="quarterly" className="cursor-pointer rounded-md px-6 py-2 text-sm font-medium transition-all peer-data-[state=checked]:bg-background peer-data-[state=checked]:shadow-sm">
+                                    Quarterly
+                                </Label>
+                            </div>
+                            <div>
+                                <RadioGroupItem value="yearly" id="yearly" className="peer sr-only" />
+                                <Label htmlFor="yearly" className="cursor-pointer rounded-md px-6 py-2 text-sm font-medium transition-all peer-data-[state=checked]:bg-background peer-data-[state=checked]:shadow-sm">
+                                    Yearly
+                                </Label>
+                            </div>
+                        </RadioGroup>
+                    </div>
                 </div>
             </section>
-        
-            <div className="py-16 sm:py-20">
-              <div className="container mx-auto px-4">
-                  <div className="flex justify-center items-center gap-4">
-                    <RadioGroup defaultValue="monthly" onValueChange={(value) => setBillingCycle(value as any)} className="grid grid-cols-3 gap-4">
-                        <div>
-                            <RadioGroupItem value="monthly" id="monthly" className="peer sr-only" />
-                            <Label htmlFor="monthly" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                                Monthly
-                            </Label>
-                        </div>
-                        <div>
-                            <RadioGroupItem value="quarterly" id="quarterly" className="peer sr-only" />
-                            <Label htmlFor="quarterly" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                                Quarterly
-                            </Label>
-                        </div>
-                         <div>
-                            <RadioGroupItem value="yearly" id="yearly" className="peer sr-only" />
-                            <Label htmlFor="yearly" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                                Yearly
-                            </Label>
-                        </div>
-                    </RadioGroup>
-                  </div>
 
-                  <div className="isolate mx-auto mt-10 grid max-w-md grid-cols-1 gap-8 md:max-w-2xl lg:max-w-5xl lg:grid-cols-3">
+            {/* Pricing Cards */}
+            <div className="py-8 sm:py-12">
+              <div className="container mx-auto px-4 max-w-5xl">
+                  <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
                       {isLoading || !tiers ? (
                           [...Array(3)].map((_, i) => (
                              <div key={i} className="flex flex-col rounded-2xl border p-8 space-y-4">
@@ -354,14 +383,14 @@ export default function PricingPage() {
             </div>
 
             <section className="py-16 sm:py-24">
-                <div className="container mx-auto px-4">
-                    <div className="text-center max-w-3xl mx-auto">
+                <div className="container mx-auto px-4 max-w-5xl">
+                    <div className="text-center">
                         <h2 className="text-3xl font-bold tracking-tight text-primary sm:text-4xl">More Than Just a Marketplace</h2>
-                        <p className="mt-4 text-lg text-muted-foreground">
+                        <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
                             We provide a full suite of professional tools to manage and grow your entire business, not just list items for sale.
                         </p>
                     </div>
-                    <div className="mt-16 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-12">
+                    <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-8">
                         {otherFeatures.map(feature => (
                             <FeatureListItem key={feature.title} {...feature} />
                         ))}
@@ -369,19 +398,19 @@ export default function PricingPage() {
                 </div>
             </section>
 
-            <section className="py-16 sm:py-24 bg-primary/5 dark:bg-primary/10">
-                <div className="container mx-auto px-4">
-                    <div className="text-center max-w-3xl mx-auto">
+            <section className="py-16 sm:py-24 bg-muted/50">
+                <div className="container mx-auto px-4 max-w-5xl">
+                    <div className="text-center">
                          <div className="inline-flex bg-primary/10 text-primary p-3 rounded-full mb-4">
                             <Calculator className="h-8 w-8" />
                         </div>
                         <h2 className="text-3xl font-bold tracking-tight text-primary sm:text-4xl">Transparent Transaction Fees</h2>
-                        <p className="mt-4 text-lg text-muted-foreground">
+                        <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
                             We believe in clear pricing. Beyond your subscription, you only pay for what you sell, and you'll still keep more of your money compared to other platforms.
                         </p>
                     </div>
 
-                    <div className="mt-16 grid lg:grid-cols-2 gap-8 items-center">
+                    <div className="mt-12 grid lg:grid-cols-2 gap-8 items-start">
                         <Card className="shadow-lg">
                             <CardHeader>
                                 <CardTitle>Fee Breakdown</CardTitle>
