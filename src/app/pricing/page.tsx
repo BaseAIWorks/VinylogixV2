@@ -255,11 +255,17 @@ export default function PricingPage() {
 
     // Example calculation data
     const salePrice = 500.00;
-    const stripeFee = salePrice * 0.029 + 0.30;
+    const shippingCost = 15.00;
+    const orderTotal = salePrice + shippingCost;
+
+    // Vinylogix: 4% platform fee on item + Stripe fees on total
+    const stripeFee = orderTotal * 0.029 + 0.30;
     const vinylogixFee = salePrice * 0.04;
     const vinylogixTotalFee = stripeFee + vinylogixFee;
-    const otherPlatformFee = salePrice * 0.09;
-    const otherPlatformPaymentFee = salePrice * 0.0349 + 0.35; // Example based on common payment processor
+
+    // Other platforms: ~9% on item + shipping + PayPal fees (3.40% + €0.35 per PayPal EU)
+    const otherPlatformFee = orderTotal * 0.09;
+    const otherPlatformPaymentFee = orderTotal * 0.034 + 0.35;
     const otherPlatformTotalFee = otherPlatformFee + otherPlatformPaymentFee;
 
     const otherFeatures = [
@@ -378,7 +384,7 @@ export default function PricingPage() {
                         <Card className="shadow-lg">
                             <CardHeader>
                                 <CardTitle>Fee Breakdown</CardTitle>
-                                <CardDescription>Example based on a €{formatPriceForDisplay(salePrice)} record sale.</CardDescription>
+                                <CardDescription>Example based on a €{formatPriceForDisplay(salePrice)} record sale + €{formatPriceForDisplay(shippingCost)} shipping.</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <Table>
@@ -396,14 +402,19 @@ export default function PricingPage() {
                                             <TableCell className="text-center">€{formatPriceForDisplay(salePrice)}</TableCell>
                                         </TableRow>
                                         <TableRow>
+                                            <TableCell className="font-medium">Shipping</TableCell>
+                                            <TableCell className="text-center">€{formatPriceForDisplay(shippingCost)}</TableCell>
+                                            <TableCell className="text-center">€{formatPriceForDisplay(shippingCost)}</TableCell>
+                                        </TableRow>
+                                        <TableRow>
                                             <TableCell>Platform Fee</TableCell>
-                                            <TableCell className="text-center">4% (€{formatPriceForDisplay(vinylogixFee)})</TableCell>
-                                            <TableCell className="text-center">~9% (€{formatPriceForDisplay(otherPlatformFee)})</TableCell>
+                                            <TableCell className="text-center">4% on item (€{formatPriceForDisplay(vinylogixFee)})</TableCell>
+                                            <TableCell className="text-center">~9% on total (€{formatPriceForDisplay(otherPlatformFee)})</TableCell>
                                         </TableRow>
                                         <TableRow>
                                             <TableCell>Payment Processing</TableCell>
-                                            <TableCell className="text-center">~2.9% + €0.30 (Stripe)</TableCell>
-                                            <TableCell className="text-center">~3.5% + €0.35 (e.g. PayPal)</TableCell>
+                                            <TableCell className="text-center">2.9% + €0.30 (€{formatPriceForDisplay(stripeFee)})</TableCell>
+                                            <TableCell className="text-center">3.4% + €0.35 (€{formatPriceForDisplay(otherPlatformPaymentFee)})</TableCell>
                                         </TableRow>
                                         <TableRow className="font-bold bg-muted/50">
                                             <TableCell>Total Fees</TableCell>
@@ -412,12 +423,12 @@ export default function PricingPage() {
                                         </TableRow>
                                         <TableRow className="font-bold text-lg text-primary">
                                             <TableCell>Your Payout</TableCell>
-                                            <TableCell className="text-center">€{formatPriceForDisplay(salePrice - vinylogixTotalFee)}</TableCell>
-                                            <TableCell className="text-center">€{formatPriceForDisplay(salePrice - otherPlatformTotalFee)}</TableCell>
+                                            <TableCell className="text-center">€{formatPriceForDisplay(orderTotal - vinylogixTotalFee)}</TableCell>
+                                            <TableCell className="text-center">€{formatPriceForDisplay(orderTotal - otherPlatformTotalFee)}</TableCell>
                                         </TableRow>
                                     </TableBody>
                                 </Table>
-                                <p className="text-xs text-muted-foreground mt-4">*Payment processing fees are estimates and may vary. Other platforms often require a separate payment provider (e.g., PayPal), whose fees come on top of the platform fee.</p>
+                                <p className="text-xs text-muted-foreground mt-4">*Payment processing fees based on Stripe (EU) and PayPal (EU commercial rates). Other platforms typically charge fees on both item price and shipping costs.</p>
                             </CardContent>
                         </Card>
                          <div className="space-y-4">
