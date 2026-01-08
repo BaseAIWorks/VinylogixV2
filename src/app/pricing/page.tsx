@@ -3,7 +3,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowRight, Check, Flame, Instagram, Facebook, Twitter, Linkedin, Percent, Calculator, Building, Bot, ScanLine, BarChart3, Users } from "lucide-react";
+import { ArrowRight, Check, Flame, Instagram, Facebook, Calculator, ScanLine, BarChart3, Users, Building } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -29,7 +29,6 @@ const PageHeader = () => {
                     <Image src="/logo.png" alt="Vinylogix Logo" width={180} height={36} style={{ width: 'auto', height: 'auto', maxHeight: '36px' }} className="object-contain" unoptimized={true} />
                 </Link>
                 <div className="hidden items-center gap-4 md:flex">
-                    <Button variant="ghost" onClick={() => router.push('/features')}>Features</Button>
                     <Button variant="ghost" onClick={() => router.push('/pricing')}>Pricing</Button>
                 </div>
                 <div className="flex items-center gap-2">
@@ -51,19 +50,16 @@ const PageHeader = () => {
 const PageFooter = () => {
     const footerLinks = {
         Product: [
-            { href: "/features", text: "Features" },
             { href: "/pricing", text: "Pricing" },
-            { href: "/#", text: "Changelog" },
         ],
         Company: [
             { href: "/#", text: "About" },
             { href: "/#", text: "Team" },
-            { href: "/#", text: "Blog" },
         ],
         Resources: [
-            { href: "/#", text: "Contact" },
-            { href: "/#", text: "Support" },
-            { href: "/#", text: "Privacy" },
+            { href: "/help", text: "Help & FAQ" },
+            { href: "/contact", text: "Contact Support" },
+            { href: "/#", text: "Privacy Policy" },
         ],
     };
 
@@ -79,10 +75,8 @@ const PageFooter = () => {
                 The ultimate platform for vinyl record stores and collectors to manage their inventory and passion.
                 </p>
                 <div className="mt-6 flex gap-4">
-                <a href="/#" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Instagram"><Instagram className="h-6 w-6" /></a>
-                <a href="/#" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Facebook"><Facebook className="h-6 w-6" /></a>
-                <a href="/#" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Twitter"><Twitter className="h-6 w-6" /></a>
-                <a href="/#" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="LinkedIn"><Linkedin className="h-6 w-6" /></a>
+                <a href="https://www.instagram.com/vinylogix/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Instagram"><Instagram className="h-6 w-6" /></a>
+                <a href="https://www.facebook.com/vinylogix" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Facebook"><Facebook className="h-6 w-6" /></a>
                 </div>
             </div>
 
@@ -99,7 +93,7 @@ const PageFooter = () => {
                 ))}
             </div>
             </div>
-            
+
             <div className="mt-12 border-t pt-8">
             <div className="flex flex-col-reverse items-center justify-between gap-4 sm:flex-row">
                 <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} Vinylogix. All rights reserved.</p>
@@ -262,7 +256,7 @@ export default function PricingPage() {
     // Example calculation data
     const salePrice = 500.00;
     const stripeFee = salePrice * 0.029 + 0.30;
-    const vinylogixFee = salePrice * 0.02;
+    const vinylogixFee = salePrice * 0.04;
     const vinylogixTotalFee = stripeFee + vinylogixFee;
     const otherPlatformFee = salePrice * 0.09;
     const otherPlatformPaymentFee = salePrice * 0.0349 + 0.35; // Example based on common payment processor
@@ -403,7 +397,7 @@ export default function PricingPage() {
                                         </TableRow>
                                         <TableRow>
                                             <TableCell>Platform Fee</TableCell>
-                                            <TableCell className="text-center">2% (€{formatPriceForDisplay(vinylogixFee)})</TableCell>
+                                            <TableCell className="text-center">4% (€{formatPriceForDisplay(vinylogixFee)})</TableCell>
                                             <TableCell className="text-center">~9% (€{formatPriceForDisplay(otherPlatformFee)})</TableCell>
                                         </TableRow>
                                         <TableRow>
