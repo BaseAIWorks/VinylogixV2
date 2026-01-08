@@ -239,7 +239,6 @@ export default function ContactPage() {
           <p>&copy; {new Date().getFullYear()} Vinylogix. All rights reserved.</p>
           <div className="mt-2 flex justify-center gap-4">
             <Link href="/pricing" className="hover:text-foreground">Pricing</Link>
-            <Link href="/features" className="hover:text-foreground">Features</Link>
             <Link href="/help" className="hover:text-foreground">Help</Link>
             <Link href="/" className="hover:text-foreground">Home</Link>
           </div>

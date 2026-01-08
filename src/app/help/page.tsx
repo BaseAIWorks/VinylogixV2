@@ -82,8 +82,24 @@ const faqCategories = [
         a: "Vinylogix supports Stripe and PayPal for payment processing. When your clients place orders, payments are processed through your connected payment account. A small platform fee (4%) is deducted, and the rest goes directly to you."
       },
       {
-        q: "How do I connect my payment account?",
-        a: "Go to Settings > Payment Providers and click 'Connect' for either Stripe or PayPal. You'll be guided through the onboarding process to link your account. Once verified, you can start accepting payments from clients."
+        q: "What are the payment processing fees?",
+        a: "We use Stripe for secure payment processing. As of January 2025, Stripe's fees for the European Economic Area (EEA) are: Standard EEA cards: 1.5% + €0.25, Premium EEA cards: 1.9% + €0.25, UK cards: 2.5% + €0.25, and International cards: 3.25% + €0.25 (plus 2% if currency conversion is required). These fees are charged by Stripe, not Vinylogix. For the most up-to-date rates, please visit stripe.com/pricing. Additionally, Vinylogix charges a 4% platform fee on the item price to support the platform and its features."
+      },
+      {
+        q: "What is the Stripe onboarding process?",
+        a: "Connecting your Stripe account is quick and secure. Here's what to expect: 1) Click 'Connect Stripe' in your Settings, 2) You'll be redirected to Stripe's secure onboarding page, 3) Provide your business information (business name, address, type), 4) Enter your personal details for identity verification (name, date of birth, last 4 digits of your ID), 5) Add your bank account details for payouts, 6) Verify your email and phone number. The entire process typically takes 5-10 minutes. Stripe may request additional documentation for verification."
+      },
+      {
+        q: "Why does Stripe require identity verification (KYC)?",
+        a: "Stripe's Know Your Customer (KYC) requirements are in place to protect you, your customers, and the integrity of the payment system. This verification helps prevent fraud and money laundering, ensures compliance with financial regulations, protects your business from chargebacks and disputes, and builds trust with your customers. Stripe is a globally trusted payment processor used by millions of businesses, including Amazon, Google, and Shopify. Your data is encrypted and handled according to the highest security standards. This verification is a one-time process that enables you to accept payments securely."
+      },
+      {
+        q: "What is the PayPal onboarding process?",
+        a: "Connecting your PayPal account is straightforward. Here's what to expect: 1) Click 'Connect PayPal' in your Settings, 2) You'll be redirected to PayPal's secure authorization page, 3) Log in to your existing PayPal Business account (or create one), 4) Grant Vinylogix permission to process payments on your behalf, 5) Confirm your business details and bank account for payouts, 6) Complete PayPal's verification if required. PayPal may require additional documentation for new business accounts. Once connected, you can accept PayPal payments from customers worldwide."
+      },
+      {
+        q: "Why should I connect a payment provider?",
+        a: "Connecting Stripe or PayPal allows your clients to pay directly through Vinylogix, making the ordering process seamless. Payments go directly to your account (minus fees), orders are automatically marked as paid, and you get a professional checkout experience. Without a connected payment provider, you would need to handle payments manually outside the platform."
       },
       {
         q: "What are the subscription plans?",
@@ -250,7 +266,7 @@ export default function HelpPage() {
           <p>&copy; {new Date().getFullYear()} Vinylogix. All rights reserved.</p>
           <div className="mt-2 flex justify-center gap-4">
             <Link href="/pricing" className="hover:text-foreground">Pricing</Link>
-            <Link href="/features" className="hover:text-foreground">Features</Link>
+            <Link href="/contact" className="hover:text-foreground">Contact</Link>
             <Link href="/" className="hover:text-foreground">Home</Link>
           </div>
         </div>
