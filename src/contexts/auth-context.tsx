@@ -1510,7 +1510,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (loading || isImpersonating) return;
 
-    const publicRoutes = ['/', '/login', '/register/client', '/register', '/features', '/pricing', '/help', '/contact'];
+    const publicRoutes = ['/', '/login', '/register/client', '/register', '/features', '/pricing', '/help', '/contact', '/solutions'];
     const isPublicRoute =
       publicRoutes.includes(pathname) || pathname.startsWith('/register');
     const isAuthRoute =
