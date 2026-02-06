@@ -45,3 +45,4 @@ ui-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 .claude/settings.local.json
+functions/node_modules
