@@ -88,3 +88,38 @@ export async function markNotificationAsRead(notificationId: string): Promise<bo
         return false;
     }
 }
+
+export async function markAllNotificationsAsRead(user: User): Promise<boolean> {
+    if (!user.distributorId) return false;
+
+    const notificationsCollectionRef = collection(db, NOTIFICATIONS_COLLECTION);
+    const q = query(
+        notificationsCollectionRef,
+        where("distributorId", "==", user.distributorId),
+        where("isRead", "==", false)
+    );
+
+    try {
+        const querySnapshot = await getDocs(q);
+        const updates = querySnapshot.docs.map(docSnap =>
+            updateDoc(doc(db, NOTIFICATIONS_COLLECTION, docSnap.id), { isRead: true })
+        );
+        await Promise.all(updates);
+        return true;
+    } catch (error) {
+        console.error("NotificationService: Failed to mark all notifications as read.", error);
+        return false;
+    }
+}
+
+export async function deleteNotification(notificationId: string): Promise<boolean> {
+    const notificationDocRef = doc(db, NOTIFICATIONS_COLLECTION, notificationId);
+    try {
+        const { deleteDoc: deleteDocFn } = await import('firebase/firestore');
+        await deleteDocFn(notificationDocRef);
+        return true;
+    } catch (error) {
+        console.error(`NotificationService: Failed to delete notification ${notificationId}.`, error);
+        return false;
+    }
+}

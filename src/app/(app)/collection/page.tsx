@@ -3,22 +3,24 @@
 import RecordCard from "@/components/records/record-card";
 import RecordFilters from "@/components/records/record-filters";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import type { VinylRecord } from "@/types";
-import { PlusCircle, Search, Music2, LayoutGrid, List, Edit3, Loader2, Library, Heart, AlertTriangle, ArrowLeft, Check } from "lucide-react"; 
+import { PlusCircle, Search, Music2, LayoutGrid, List, Edit3, Loader2, Library, Heart, AlertTriangle, ArrowLeft, Check, Disc3, Calendar, X } from "lucide-react";
 import Link from "next/link";
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import Image from "next/image";
-import { getRecordsByOwner, getInventoryBarcodes } from "@/services/record-service"; 
+import { getRecordsByOwner, getInventoryBarcodes } from "@/services/record-service";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { EmptyState } from "@/components/ui/empty-state";
 
 
 export default function CollectionPage() {
-  const { user, loading: authLoading, toggleFavorite, activeDistributorId } = useAuth(); 
+  const { user, loading: authLoading, toggleFavorite, activeDistributorId } = useAuth();
   const [records, setRecords] = useState<VinylRecord[]>([]);
   const [inventoryBarcodes, setInventoryBarcodes] = useState<Set<string>>(new Set());
   const [isLoadingRecords, setIsLoadingRecords] = useState(true);
@@ -28,6 +30,31 @@ export default function CollectionPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const router = useRouter();
   const { toast } = useToast();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === 'n' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        router.push('/scan');
+      } else if (e.key === 'g' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setViewMode('grid');
+      } else if (e.key === 'l' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setViewMode('list');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [router]);
 
   useEffect(() => {
     if (!authLoading && user && user.role !== 'viewer') {
@@ -150,10 +177,35 @@ export default function CollectionPage() {
    );
  }
 
+  // Collection stats
+  const collectionStats = useMemo(() => {
+    const totalRecords = records.length;
+    const uniqueArtists = new Set(records.map(r => r.artist)).size;
+    const decades = records.reduce((acc, r) => {
+      if (r.year) {
+        const decade = Math.floor(r.year / 10) * 10;
+        acc[decade] = (acc[decade] || 0) + 1;
+      }
+      return acc;
+    }, {} as Record<number, number>);
+    const topDecade = Object.entries(decades).sort((a, b) => b[1] - a[1])[0];
+    const favoritesCount = records.filter(r => user?.favorites?.includes(r.id)).length;
+
+    return { totalRecords, uniqueArtists, topDecade, favoritesCount };
+  }, [records, user?.favorites]);
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-        <h2 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3"><Library className="h-8 w-8 text-primary"/> My Collection</h2>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
+            <Library className="h-8 w-8 text-primary"/>
+            My Collection
+          </h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            Press <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded">/</kbd> to search, <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded">N</kbd> to add new
+          </p>
+        </div>
         <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground">
           <Link href="/scan">
             <span className="flex items-center gap-2">
@@ -164,10 +216,53 @@ export default function CollectionPage() {
         </Button>
       </div>
 
+      {/* Collection Stats */}
+      {records.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          <Badge variant="secondary" className="text-sm py-1.5 px-3">
+            <Disc3 className="h-4 w-4 mr-1.5" />
+            {collectionStats.totalRecords} records
+          </Badge>
+          <Badge variant="outline" className="text-sm py-1.5 px-3">
+            <Music2 className="h-4 w-4 mr-1.5" />
+            {collectionStats.uniqueArtists} artists
+          </Badge>
+          {collectionStats.topDecade && (
+            <Badge variant="outline" className="text-sm py-1.5 px-3">
+              <Calendar className="h-4 w-4 mr-1.5" />
+              Most from {collectionStats.topDecade[0]}s
+            </Badge>
+          )}
+          {collectionStats.favoritesCount > 0 && (
+            <Badge variant="outline" className="text-sm py-1.5 px-3">
+              <Heart className="h-4 w-4 mr-1.5 fill-primary text-primary" />
+              {collectionStats.favoritesCount} favorites
+            </Badge>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row gap-4 items-center">
         <div className="relative w-full md:flex-grow">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <Input type="search" placeholder="Search your collection..." className="pl-10 w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <Input
+            ref={searchInputRef}
+            type="search"
+            placeholder="Search your collection..."
+            className="pl-10 w-full"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          {searchTerm && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+              onClick={() => setSearchTerm("")}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
           <RecordFilters filters={filters} setFilters={setFilters} sortOption={sortOption} setSortOption={setSortOption} filterOptions={dynamicFilterOptions} />
@@ -225,14 +320,28 @@ export default function CollectionPage() {
           </Card>
         )
       ) : (
-          <div className="text-center py-12">
-            <Music2 className="mx-auto h-16 w-16 text-muted-foreground" />
-            <h3 className="mt-4 text-xl font-semibold text-foreground">No Records in Your Collection</h3>
-            <p className="mt-2 text-muted-foreground">
-              {searchTerm || Object.values(filters).some(f => f) ? "Try adjusting your search or filters." : "Your collection is empty. Start by adding some vinyls!"}
-            </p>
-            <Button asChild className="mt-6 bg-accent hover:bg-accent/90 text-accent-foreground"><Link href="/scan"><span className="flex items-center gap-2"><PlusCircle className="mr-2 h-5 w-5" /> Add Vinyl</span></Link></Button>
-          </div>
+          <EmptyState
+            icon={Music2}
+            title={searchTerm || Object.values(filters).some(f => f) ? "No matching records" : "No Records in Your Collection"}
+            description={
+              searchTerm || Object.values(filters).some(f => f)
+                ? "Try adjusting your search or filters."
+                : "Your collection is empty. Start by adding some vinyls!"
+            }
+            action={
+              searchTerm || Object.values(filters).some(f => f) ? (
+                <Button variant="outline" onClick={() => { setSearchTerm(""); setFilters({}); }}>
+                  Clear Filters
+                </Button>
+              ) : (
+                <Button asChild className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                  <Link href="/scan">
+                    <PlusCircle className="mr-2 h-5 w-5" /> Add Vinyl
+                  </Link>
+                </Button>
+              )
+            }
+          />
       )}
     </div>
   );

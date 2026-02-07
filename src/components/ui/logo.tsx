@@ -38,15 +38,14 @@ export function Logo({ width = 140, height = 32, className = '', priority = fals
   }, []);
 
   return (
-    <Image
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
       src={isDark ? '/logo_v2_White.png' : '/logo_v2_Black.png'}
       alt="Vinylogix"
       width={width}
       height={height}
-      className={`h-auto w-auto ${className}`}
-      style={{ maxHeight: `${height}px` }}
-      unoptimized
-      priority={priority}
+      className={className}
+      style={{ maxHeight: `${height}px`, width: 'auto', height: 'auto' }}
     />
   );
 }

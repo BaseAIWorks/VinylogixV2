@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users, Clock, RefreshCw } from "lucide-react";
+import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users, Clock, RefreshCw, Truck, Receipt, CheckCircle2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useEffect } from "react";
 import {
@@ -177,7 +178,10 @@ const LocationManager = ({ title, locations, onUpdateLocations }: { title: strin
 export default function SettingsPage() {
   const { user, logout, updateUserProfile, sendPasswordReset, loading: authLoading, displayBranding, updateMyDistributorSettings, activeDistributor } = useAuth();
   const [isExportingCSV, setIsExportingCSV] = useState(false);
-  
+
+  // Visual save confirmation states
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+
   const [shelfLocations, setShelfLocations] = useState<string[]>([]);
   const [storageLocations, setStorageLocations] = useState<string[]>([]);
   const [isSavingLocations, setIsSavingLocations] = useState(false);
@@ -316,8 +320,15 @@ export default function SettingsPage() {
   const useDifferentBilling = profileForm.watch("useDifferentBillingAddress");
   const lowStockEnabled = notificationsForm.watch("lowStockNotificationsEnabled");
 
+  // Show save success animation
+  const showSaveSuccess = (formName: string) => {
+    setSaveSuccess(formName);
+    setTimeout(() => setSaveSuccess(null), 2000);
+  };
+
   const handleProfileUpdate = async (values: ProfileFormValues) => {
     await updateUserProfile(values);
+    showSaveSuccess('profile');
   };
   
   const handleProfileCompletion = async (values: ProfileFormValues) => {
@@ -330,10 +341,12 @@ export default function SettingsPage() {
 
   const handleBrandingUpdate = async (values: BrandingFormValues) => {
       await updateMyDistributorSettings({ ...values });
+      showSaveSuccess('branding');
   };
-  
+
   const handleDistributorSettingsUpdate = async (values: DistributorSettingsValues) => {
     await updateMyDistributorSettings(values);
+    showSaveSuccess('slug');
   };
 
   const handleNotificationsUpdate = async (values: NotificationsFormValues) => {
@@ -341,20 +354,49 @@ export default function SettingsPage() {
         lowStockNotificationsEnabled: values.lowStockNotificationsEnabled,
         lowStockThreshold: values.lowStockThreshold ? parseInt(values.lowStockThreshold, 10) : undefined,
       });
+      showSaveSuccess('notifications');
   };
-  
+
   const handleCardDisplayUpdate = async (values: CardDisplayFormValues) => {
       await updateMyDistributorSettings({ cardDisplaySettings: values });
+      showSaveSuccess('cardDisplay');
   };
 
   const handleClientMenuUpdate = async (values: ClientMenuFormValues) => {
       await updateMyDistributorSettings({ clientMenuSettings: values });
+      showSaveSuccess('clientMenu');
   }
 
   const handleUpdateLocations = async () => {
     setIsSavingLocations(true);
     await updateMyDistributorSettings({ shelfLocations, storageLocations });
     setIsSavingLocations(false);
+    showSaveSuccess('locations');
+  };
+
+  // Save button with animation
+  const SaveButton = ({ formName, isSubmitting, disabled, children }: { formName: string; isSubmitting: boolean; disabled?: boolean; children?: React.ReactNode }) => {
+    const isSuccess = saveSuccess === formName;
+    return (
+      <Button
+        type="submit"
+        size="sm"
+        disabled={isSubmitting || disabled || authLoading}
+        className={cn(
+          "transition-all duration-300",
+          isSuccess && "bg-green-600 hover:bg-green-600"
+        )}
+      >
+        {isSubmitting ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : isSuccess ? (
+          <CheckCircle2 className="mr-2 h-4 w-4 animate-in zoom-in-50" />
+        ) : (
+          <Save className="mr-2 h-4 w-4" />
+        )}
+        {isSuccess ? "Saved!" : (children || "Save")}
+      </Button>
+    );
   };
 
   const handleStripeConnect = async () => {
@@ -602,14 +644,25 @@ export default function SettingsPage() {
   
   const canUpdateSlug = () => {
     if (!activeDistributor?.slugLastUpdatedAt) return true; // Can always set it the first time
-    const lastUpdate = new Date(activeDistributor.slugLastUpdatedAt);
-    return differenceInDays(new Date(), lastUpdate) >= 30;
+    try {
+      const lastUpdate = new Date(activeDistributor.slugLastUpdatedAt);
+      if (isNaN(lastUpdate.getTime())) return true; // Invalid date, allow update
+      return differenceInDays(new Date(), lastUpdate) >= 30;
+    } catch {
+      return true; // On error, allow update
+    }
   };
-  
+
   const getNextSlugUpdateDate = () => {
     if (!activeDistributor?.slugLastUpdatedAt) return null;
-    const nextDate = addMonths(new Date(activeDistributor.slugLastUpdatedAt), 1);
-    return format(nextDate, 'PPP');
+    try {
+      const lastUpdate = new Date(activeDistributor.slugLastUpdatedAt);
+      if (isNaN(lastUpdate.getTime())) return null; // Invalid date
+      const nextDate = addMonths(lastUpdate, 1);
+      return format(nextDate, 'PPP');
+    } catch {
+      return null; // On error, return null
+    }
   };
 
   if (authLoading) {
@@ -723,10 +776,9 @@ export default function SettingsPage() {
                             </FormItem>
                         )} />
                       </div>
-                      <Button type="submit" size="sm" disabled={brandingForm.formState.isSubmitting || authLoading}>
-                          {brandingForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                      <SaveButton formName="branding" isSubmitting={brandingForm.formState.isSubmitting}>
                           Save Branding
-                      </Button>
+                      </SaveButton>
                     </form>
                   </Form>
                 </CardContent>
@@ -918,6 +970,50 @@ export default function SettingsPage() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* Shipping Settings - Master only */}
+              {isMaster && (
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                      <Truck className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Shipping</CardTitle>
+                    </div>
+                    <CardDescription className="text-sm">Configure shipping methods and rates for your orders.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="rounded-lg border border-dashed p-6 text-center">
+                      <Truck className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-sm font-medium">Shipping Settings Coming Soon</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Configure shipping carriers, zones, and rates for your store.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Tax/VAT Settings - Master only */}
+              {isMaster && (
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                      <Receipt className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Tax / VAT</CardTitle>
+                    </div>
+                    <CardDescription className="text-sm">Configure tax rates for your products and invoices.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="rounded-lg border border-dashed p-6 text-center">
+                      <Receipt className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-sm font-medium">Tax Settings Coming Soon</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Set up VAT rates, tax rules, and automatic tax calculation.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
           )}
 
@@ -962,10 +1058,7 @@ export default function SettingsPage() {
                             <FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="text-sm font-normal">Format</FormLabel></FormItem>
                         )}/>
                       </div>
-                      <Button type="submit" size="sm" disabled={cardDisplayForm.formState.isSubmitting || authLoading}>
-                        {cardDisplayForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                        Save
-                      </Button>
+                      <SaveButton formName="cardDisplay" isSubmitting={cardDisplayForm.formState.isSubmitting} />
                     </form>
                   </Form>
                 </CardContent>
@@ -985,9 +1078,23 @@ export default function SettingsPage() {
                     <LocationManager title="Storage Locations" locations={storageLocations} onUpdateLocations={setStorageLocations} />
                   </div>
                   <div className="flex justify-end pt-4 border-t">
-                    <Button onClick={handleUpdateLocations} size="sm" disabled={isSavingLocations || authLoading}>
-                      {isSavingLocations ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                      Save Locations
+                    <Button
+                      onClick={handleUpdateLocations}
+                      size="sm"
+                      disabled={isSavingLocations || authLoading}
+                      className={cn(
+                        "transition-all duration-300",
+                        saveSuccess === 'locations' && "bg-green-600 hover:bg-green-600"
+                      )}
+                    >
+                      {isSavingLocations ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : saveSuccess === 'locations' ? (
+                        <CheckCircle2 className="mr-2 h-4 w-4 animate-in zoom-in-50" />
+                      ) : (
+                        <Save className="mr-2 h-4 w-4" />
+                      )}
+                      {saveSuccess === 'locations' ? "Saved!" : "Save Locations"}
                     </Button>
                   </div>
                 </CardContent>
@@ -1052,10 +1159,9 @@ export default function SettingsPage() {
                           </FormItem>
                         )} />
                       </div>
-                      <Button type="submit" size="sm" disabled={clientMenuForm.formState.isSubmitting || authLoading}>
-                        {clientMenuForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                      <SaveButton formName="clientMenu" isSubmitting={clientMenuForm.formState.isSubmitting}>
                         Save Menu Settings
-                      </Button>
+                      </SaveButton>
                     </form>
                   </Form>
                 </CardContent>
@@ -1090,10 +1196,7 @@ export default function SettingsPage() {
                           </FormItem>
                         )} />
                       )}
-                      <Button type="submit" size="sm" disabled={notificationsForm.formState.isSubmitting || authLoading}>
-                        {notificationsForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                        Save
-                      </Button>
+                      <SaveButton formName="notifications" isSubmitting={notificationsForm.formState.isSubmitting} />
                     </form>
                   </Form>
                 </CardContent>
@@ -1205,10 +1308,9 @@ export default function SettingsPage() {
                       </>
                     )}
 
-                    <Button type="submit" size="sm" disabled={profileForm.formState.isSubmitting || authLoading}>
-                      {profileForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    <SaveButton formName="profile" isSubmitting={profileForm.formState.isSubmitting}>
                       Save Details
-                    </Button>
+                    </SaveButton>
                   </form>
                 </Form>
               </CardContent>

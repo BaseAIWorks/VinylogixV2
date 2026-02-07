@@ -696,9 +696,34 @@ export async function restoreStockForOrder(items: OrderItem[], actingUser: User)
   }
 }
 
+// Simple stock update for quick adjustments (no auth required for validation)
+export async function updateRecordStock(
+    recordId: string,
+    type: 'shelf' | 'storage',
+    delta: number
+): Promise<void> {
+    const record = await getRecordById(recordId);
+    if (!record) {
+        throw new Error("Record not found.");
+    }
+
+    const currentStock = type === 'shelf'
+        ? Number(record.stock_shelves || 0)
+        : Number(record.stock_storage || 0);
+
+    const newStock = currentStock + delta;
+    if (newStock < 0) {
+        throw new Error("Stock cannot be negative.");
+    }
+
+    const updateField = type === 'shelf' ? 'stock_shelves' : 'stock_storage';
+    const recordRef = doc(db, RECORDS_COLLECTION, recordId);
+    await updateDoc(recordRef, { [updateField]: newStock });
+}
+
 export async function adjustStock(
-    recordId: string, 
-    adjustments: { shelves: number; storage: number, shelf_locations: string[], storage_locations: string[] }, 
+    recordId: string,
+    adjustments: { shelves: number; storage: number, shelf_locations: string[], storage_locations: string[] },
     actingUser: User
 ): Promise<VinylRecord | undefined> {
     const record = await getRecordById(recordId);

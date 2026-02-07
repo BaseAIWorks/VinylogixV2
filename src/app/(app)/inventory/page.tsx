@@ -5,7 +5,7 @@ import CompactRecordCard from "@/components/records/compact-record-card";
 import RecordFilters from "@/components/records/record-filters";
 import { Button } from "@/components/ui/button";
 import type { VinylRecord, SortOption } from "@/types";
-import { PlusCircle, Search, Music2, LayoutGrid, List, Edit3, Loader2, Package, Heart, Store, Warehouse, Info, Disc3, RefreshCw, FilePenLine, Grid3x3, Presentation, ShoppingCart } from "lucide-react"; 
+import { PlusCircle, Search, Music2, LayoutGrid, List, Edit3, Loader2, Package, Heart, Store, Warehouse, Info, Disc3, RefreshCw, FilePenLine, Grid3x3, Presentation, ShoppingCart, Pencil, X, Trash2, Tag, Check, CheckSquare } from "lucide-react";
 import Link from "next/link";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Input } from "@/components/ui/input";
@@ -13,11 +13,14 @@ import { useRouter } from "next/navigation";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import Image from "next/image";
-import { getInventoryRecords } from "@/services/record-service"; 
+import { getInventoryRecords, updateRecordStock } from "@/services/record-service";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { DocumentSnapshot } from "firebase/firestore";
+import { BulkActionsBar } from "@/components/ui/bulk-actions-bar";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 
 
 export default function InventoryPage() {
@@ -36,12 +39,20 @@ export default function InventoryPage() {
   const router = useRouter();
   const [filters, setFilters] = useState<{ location?: string; year?: string; genre?: string; condition?: string; format?: string }>({});
   const [sortOption, setSortOption] = useState<SortOption>("added_at_desc");
-  
+
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'compact'>('grid');
-  
+
+  // Bulk edit mode
+  const [bulkEditMode, setBulkEditMode] = useState(false);
+  const [selectedRecords, setSelectedRecords] = useState<Set<string>>(new Set());
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const observerRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const isOperator = user?.role === 'master' || user?.role === 'worker';
 
   const cardSettings = activeDistributor?.cardDisplaySettings || {
     showTitle: true,
@@ -178,7 +189,105 @@ export default function InventoryPage() {
         addToCart(record, 1, activeDistributorId);
     }
   };
-  
+
+  // Quick stock update handler
+  const handleQuickStockUpdate = useCallback(async (recordId: string, type: 'shelf' | 'storage', delta: number) => {
+    if (!user) return;
+    try {
+      await updateRecordStock(recordId, type, delta);
+      // Update local state
+      setRecords(prev => prev.map(r => {
+        if (r.id === recordId) {
+          const key = type === 'shelf' ? 'stock_shelves' : 'stock_storage';
+          return { ...r, [key]: Math.max(0, (r[key] || 0) + delta) };
+        }
+        return r;
+      }));
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to update stock.", variant: "destructive" });
+      throw error;
+    }
+  }, [user, toast]);
+
+  // Selection handlers
+  const handleSelectRecord = useCallback((recordId: string) => {
+    setSelectedRecords(prev => {
+      const next = new Set(prev);
+      if (next.has(recordId)) {
+        next.delete(recordId);
+      } else {
+        next.add(recordId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedRecords.size === filteredRecords.length) {
+      setSelectedRecords(new Set());
+    } else {
+      setSelectedRecords(new Set(filteredRecords.map(r => r.id)));
+    }
+  }, [filteredRecords, selectedRecords.size]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedRecords(new Set());
+    setBulkEditMode(false);
+  }, []);
+
+  // Bulk delete handler
+  const handleBulkDelete = useCallback(async () => {
+    // This would require a delete function in record-service
+    toast({ title: "Delete", description: `Would delete ${selectedRecords.size} records. Feature coming soon.` });
+  }, [selectedRecords.size, toast]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in inputs
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        // But allow Escape to blur the input
+        if (e.key === 'Escape') {
+          (e.target as HTMLElement).blur();
+        }
+        return;
+      }
+
+      // "/" - Focus search
+      if (e.key === '/' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+
+      // "n" - New record (navigate to add page)
+      if (e.key === 'n' && !e.metaKey && !e.ctrlKey && isOperator) {
+        e.preventDefault();
+        router.push('/scan');
+      }
+
+      // "e" - Toggle bulk edit mode
+      if (e.key === 'e' && !e.metaKey && !e.ctrlKey && isOperator) {
+        e.preventDefault();
+        setBulkEditMode(prev => !prev);
+        if (bulkEditMode) {
+          setSelectedRecords(new Set());
+        }
+      }
+
+      // Escape - Clear selection or exit bulk edit mode
+      if (e.key === 'Escape') {
+        if (selectedRecords.size > 0) {
+          setSelectedRecords(new Set());
+        } else if (bulkEditMode) {
+          setBulkEditMode(false);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [router, isOperator, bulkEditMode, selectedRecords.size]);
+
   useEffect(() => {
     if (isMobile) {
       setViewMode('list');
@@ -186,7 +295,6 @@ export default function InventoryPage() {
   }, [isMobile]);
 
   const pageTitle = user?.role === 'viewer' ? 'Catalog' : 'Inventory';
-  const isOperator = user?.role === 'master' || user?.role === 'worker';
   const activeDistributorName = activeDistributor?.name;
 
   if (authLoading || isFetching) {
@@ -210,16 +318,39 @@ export default function InventoryPage() {
         <div className="flex flex-col md:flex-row gap-4 items-center">
           <div className="relative flex-grow">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-            <Input type="search" placeholder="Search by title, artist, barcode, or location..." className="pl-10 w-full" value={globalSearchTerm} onChange={(e) => setGlobalSearchTerm(e.target.value)} />
+            <Input
+              ref={searchInputRef}
+              type="search"
+              placeholder="Search by title, artist, barcode, or location... (Press /)"
+              className="pl-10 w-full"
+              value={globalSearchTerm}
+              onChange={(e) => setGlobalSearchTerm(e.target.value)}
+            />
           </div>
           <div className="flex flex-shrink-0 items-center gap-2">
-            <RecordFilters 
-              filters={filters} 
-              setFilters={setFilters} 
+            <RecordFilters
+              filters={filters}
+              setFilters={setFilters}
               sortOption={sortOption}
               setSortOption={setSortOption}
               filterOptions={dynamicFilterOptions}
+              activePreset={activePreset || undefined}
+              onApplyPreset={setActivePreset}
             />
+            {isOperator && (
+              <Button
+                variant={bulkEditMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setBulkEditMode(!bulkEditMode);
+                  if (bulkEditMode) setSelectedRecords(new Set());
+                }}
+                className="hidden sm:inline-flex gap-1.5"
+              >
+                {bulkEditMode ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                <span>{bulkEditMode ? "Exit Edit" : "Bulk Edit"}</span>
+              </Button>
+            )}
             {isOperator && user?.discogsUsername && (
                 <Button
                     variant="outline"
@@ -289,19 +420,43 @@ export default function InventoryPage() {
             )}
           </div>
         ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
-              {filteredRecords.map((record) => (
-                <RecordCard 
-                    key={record.id}
-                    record={record}
-                    isOperator={isOperator}
-                    isFavorite={user?.role === 'viewer' && user?.favorites?.includes(record.id)}
-                    onToggleFavorite={user?.role === 'viewer' ? () => handleToggleFavorite(record.id) : undefined}
-                    isInInventory={true}
-                    isInDiscogs={!!(record.discogs_id && discogsInventoryReleaseIds.has(record.discogs_id))}
-                />
-              ))}
-            </div>
+            <>
+              {bulkEditMode && isOperator && (
+                <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg mb-4">
+                  <Checkbox
+                    checked={selectedRecords.size === filteredRecords.length && filteredRecords.length > 0}
+                    onCheckedChange={handleSelectAll}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {selectedRecords.size > 0
+                      ? `${selectedRecords.size} selected`
+                      : "Select all"}
+                  </span>
+                  {selectedRecords.size > 0 && (
+                    <Button variant="ghost" size="sm" onClick={handleClearSelection}>
+                      Clear
+                    </Button>
+                  )}
+                </div>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
+                {filteredRecords.map((record) => (
+                  <RecordCard
+                      key={record.id}
+                      record={record}
+                      isOperator={isOperator}
+                      isFavorite={user?.role === 'viewer' && user?.favorites?.includes(record.id)}
+                      onToggleFavorite={user?.role === 'viewer' ? () => handleToggleFavorite(record.id) : undefined}
+                      isInInventory={true}
+                      isInDiscogs={!!(record.discogs_id && discogsInventoryReleaseIds.has(record.discogs_id))}
+                      onQuickStockUpdate={bulkEditMode && isOperator ? handleQuickStockUpdate : undefined}
+                      isSelected={selectedRecords.has(record.id)}
+                      onSelect={bulkEditMode ? handleSelectRecord : undefined}
+                      showCheckbox={bulkEditMode && isOperator}
+                  />
+                ))}
+              </div>
+            </>
           ) : viewMode === 'compact' ? (
              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
               {filteredRecords.map((record) => (
@@ -454,6 +609,37 @@ export default function InventoryPage() {
              <div className="flex justify-center mt-6">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
+        )}
+
+        {/* Bulk Actions Bar */}
+        <BulkActionsBar
+          selectedCount={selectedRecords.size}
+          onClear={handleClearSelection}
+          actions={[
+            {
+              label: "Batch Edit",
+              icon: Edit3,
+              onClick: () => router.push('/inventory/batch-edit'),
+              variant: "default",
+            },
+            {
+              label: "Delete",
+              icon: Trash2,
+              onClick: handleBulkDelete,
+              variant: "destructive",
+            },
+          ]}
+        />
+
+        {/* Keyboard shortcuts hint */}
+        {isOperator && !isMobile && (
+          <div className="fixed bottom-4 left-4 text-xs text-muted-foreground hidden lg:block">
+            <span className="bg-muted px-1.5 py-0.5 rounded">/</span> Search
+            <span className="mx-2">•</span>
+            <span className="bg-muted px-1.5 py-0.5 rounded">n</span> New
+            <span className="mx-2">•</span>
+            <span className="bg-muted px-1.5 py-0.5 rounded">e</span> Bulk Edit
+          </div>
         )}
       </div>
   );

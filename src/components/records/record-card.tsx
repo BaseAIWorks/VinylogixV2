@@ -4,25 +4,31 @@ import type { VinylRecord, UserRole } from "@/types";
 import Image from "next/image";
 import Link from "next/link";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
-import { Package, Heart, Euro, ShoppingCart, Store, Warehouse, Info, Disc3, Globe, MapPin, CalendarDays } from "lucide-react"; 
+import { Package, Heart, Euro, ShoppingCart, Store, Warehouse, Info, Disc3, Globe, MapPin, CalendarDays, Plus, Minus, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatPriceForDisplay } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "../ui/separator";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 interface RecordCardProps {
   record: VinylRecord;
   isOperator?: boolean;
   isFavorite?: boolean;
   onToggleFavorite?: (recordId: string) => void;
-  isInInventory?: boolean; 
+  isInInventory?: boolean;
   isInDiscogs?: boolean;
+  onQuickStockUpdate?: (recordId: string, type: 'shelf' | 'storage', delta: number) => Promise<void>;
+  isSelected?: boolean;
+  onSelect?: (recordId: string) => void;
+  showCheckbox?: boolean;
 }
 
-export default function RecordCard({ record, isOperator, isFavorite, onToggleFavorite, isInDiscogs }: RecordCardProps) {
+export default function RecordCard({ record, isOperator, isFavorite, onToggleFavorite, isInDiscogs, onQuickStockUpdate, isSelected, onSelect, showCheckbox }: RecordCardProps) {
   const { addToCart, activeDistributorId, activeDistributor } = useAuth();
+  const [isUpdatingStock, setIsUpdatingStock] = useState(false);
+  const [stockUpdateSuccess, setStockUpdateSuccess] = useState<'shelf' | 'storage' | null>(null);
   
   const defaultCardSettings = {
     showTitle: true,
@@ -73,6 +79,29 @@ export default function RecordCard({ record, isOperator, isFavorite, onToggleFav
     }
   };
 
+  const handleQuickStock = async (e: React.MouseEvent, type: 'shelf' | 'storage', delta: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onQuickStockUpdate || isUpdatingStock) return;
+
+    setIsUpdatingStock(true);
+    try {
+      await onQuickStockUpdate(record.id, type, delta);
+      setStockUpdateSuccess(type);
+      setTimeout(() => setStockUpdateSuccess(null), 1000);
+    } catch (error) {
+      console.error('Failed to update stock:', error);
+    } finally {
+      setIsUpdatingStock(false);
+    }
+  };
+
+  const handleSelectClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onSelect?.(record.id);
+  };
+
   const isAvailable = record.isInventoryItem && totalStock > 0;
   const canBePurchased = !isOperator && isAvailable && (record.sellingPrice ?? -1) >= 0;
 
@@ -95,6 +124,21 @@ export default function RecordCard({ record, isOperator, isFavorite, onToggleFav
     <Link href={`/records/${record.id}`} legacyBehavior>
       <a className="block hover:shadow-lg transition-shadow duration-200 rounded-lg group h-full">
         <Card className="h-full flex flex-col overflow-hidden bg-card hover:bg-card/90 transition-colors">
+           {/* Top left - Selection checkbox */}
+           {showCheckbox && onSelect && (
+             <div className="absolute top-2 left-2 z-10">
+               <Button
+                 variant={isSelected ? "default" : "outline"}
+                 size="icon"
+                 onClick={handleSelectClick}
+                 className="h-6 w-6 rounded-full bg-card/70 backdrop-blur-sm"
+                 aria-label={isSelected ? "Deselect" : "Select"}
+               >
+                 {isSelected && <Check className="h-3 w-3" />}
+               </Button>
+             </div>
+           )}
+           {/* Top right - Badges and buttons */}
            <div className="absolute top-2 right-2 z-10 flex flex-col gap-1.5">
             {isOperator && isInDiscogs && (
                  <Badge variant="secondary" className="bg-white/80 backdrop-blur-sm text-black hover:bg-white flex items-center gap-1.5 self-end p-1.5">
@@ -154,16 +198,68 @@ export default function RecordCard({ record, isOperator, isFavorite, onToggleFav
                   <Separator className="my-1"/>
                    <div className="flex items-center gap-4 text-xs">
                         {settings.showShelfStock && (
-                            <span className="flex items-center gap-1.5" title={`Shelves: ${record.stock_shelves || 0}`}>
+                            <div className="flex items-center gap-1.5" title={`Shelves: ${record.stock_shelves || 0}`}>
                                 <Store className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                <span className="text-foreground font-medium">{record.stock_shelves || 0}</span>
-                            </span>
+                                {onQuickStockUpdate ? (
+                                  <div className="flex items-center gap-0.5">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-5 w-5 hover:bg-muted"
+                                      onClick={(e) => handleQuickStock(e, 'shelf', -1)}
+                                      disabled={isUpdatingStock || (record.stock_shelves || 0) <= 0}
+                                    >
+                                      <Minus className="h-3 w-3" />
+                                    </Button>
+                                    <span className={`text-foreground font-medium min-w-[1.5rem] text-center ${stockUpdateSuccess === 'shelf' ? 'text-green-600' : ''}`}>
+                                      {stockUpdateSuccess === 'shelf' ? <Check className="h-3 w-3 inline" /> : record.stock_shelves || 0}
+                                    </span>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-5 w-5 hover:bg-muted"
+                                      onClick={(e) => handleQuickStock(e, 'shelf', 1)}
+                                      disabled={isUpdatingStock}
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <span className="text-foreground font-medium">{record.stock_shelves || 0}</span>
+                                )}
+                            </div>
                         )}
                         {settings.showStorageStock && (
-                            <span className="flex items-center gap-1.5" title={`Storage: ${record.stock_storage || 0}`}>
+                            <div className="flex items-center gap-1.5" title={`Storage: ${record.stock_storage || 0}`}>
                                 <Warehouse className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                                <span className="text-foreground font-medium">{record.stock_storage || 0}</span>
-                            </span>
+                                {onQuickStockUpdate ? (
+                                  <div className="flex items-center gap-0.5">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-5 w-5 hover:bg-muted"
+                                      onClick={(e) => handleQuickStock(e, 'storage', -1)}
+                                      disabled={isUpdatingStock || (record.stock_storage || 0) <= 0}
+                                    >
+                                      <Minus className="h-3 w-3" />
+                                    </Button>
+                                    <span className={`text-foreground font-medium min-w-[1.5rem] text-center ${stockUpdateSuccess === 'storage' ? 'text-green-600' : ''}`}>
+                                      {stockUpdateSuccess === 'storage' ? <Check className="h-3 w-3 inline" /> : record.stock_storage || 0}
+                                    </span>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-5 w-5 hover:bg-muted"
+                                      onClick={(e) => handleQuickStock(e, 'storage', 1)}
+                                      disabled={isUpdatingStock}
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <span className="text-foreground font-medium">{record.stock_storage || 0}</span>
+                                )}
+                            </div>
                         )}
                         {(settings.showShelfStock || settings.showStorageStock) && settings.showTotalStock && <span className="text-muted-foreground">|</span>}
                         {settings.showTotalStock && (

@@ -2,13 +2,14 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Disc3, Loader2, Link as LinkIcon, XCircle, AlertTriangle, ExternalLink, Star, Euro } from "lucide-react";
+import { Disc3, Loader2, Link as LinkIcon, XCircle, AlertTriangle, ExternalLink, Star, Euro, Search, X, Package, Heart } from "lucide-react";
 import Image from "next/image";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import type { DiscogsCollectionRelease, DiscogsWant, DiscogsBasicInformation, DiscogsListing } from "@/types";
 import { getDiscogsCollectionPage, getDiscogsWantlistPage, getRequestOptions, getDiscogsInventoryPage } from "@/services/discogs-user-service";
 import { format } from "date-fns";
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface UnifiedDisplayItem {
   id: number; // release id
@@ -43,8 +45,8 @@ interface UnifiedDisplayItem {
 
 type DataType = 'collection' | 'wantlist' | 'inventory';
 
-const DiscogsDataView = ({ fetchFunction, username, dataType, distributorId }: { 
-    fetchFunction: (username: string, page: number, distributorId?: string) => Promise<any>, 
+const DiscogsDataView = ({ fetchFunction, username, dataType, distributorId }: {
+    fetchFunction: (username: string, page: number, distributorId?: string) => Promise<any>,
     username: string,
     dataType: DataType,
     distributorId?: string
@@ -54,6 +56,30 @@ const DiscogsDataView = ({ fetchFunction, username, dataType, distributorId }: {
     const [isLoading, setIsLoading] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState("");
+
+    // Filter items by search query
+    const filteredItems = useMemo(() => {
+        if (!searchQuery.trim()) return items;
+        const query = searchQuery.toLowerCase();
+        return items.filter(item =>
+            item.basic_information.title.toLowerCase().includes(query) ||
+            item.basic_information.artists.some(a => a.name.toLowerCase().includes(query))
+        );
+    }, [items, searchQuery]);
+
+    // Calculate stats
+    const stats = useMemo(() => {
+        const totalItems = items.length;
+        const totalValue = items.reduce((sum, item) => {
+            if (item.price) {
+                return sum + (item.price.value * (item.quantity || 1));
+            }
+            return sum;
+        }, 0);
+        const uniqueArtists = new Set(items.flatMap(i => i.basic_information.artists.map(a => a.name))).size;
+        return { totalItems, totalValue, uniqueArtists };
+    }, [items]);
 
     const mapDataToUnifiedItems = useCallback((data: any): UnifiedDisplayItem[] => {
         if (dataType === 'collection' && data.releases) {
@@ -206,11 +232,62 @@ const DiscogsDataView = ({ fetchFunction, username, dataType, distributorId }: {
     }
 
     if (items.length === 0) {
-        return <p className="text-center text-muted-foreground p-10">No items found.</p>;
+        return (
+            <EmptyState
+                icon={Disc3}
+                title="No items found"
+                description={`Your Discogs ${dataType} appears to be empty.`}
+            />
+        );
     }
 
     return (
         <div className="space-y-4">
+            {/* Stats and Search */}
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary" className="text-sm">
+                        {stats.totalItems} {dataType === 'inventory' ? 'listings' : 'items'}
+                    </Badge>
+                    {stats.uniqueArtists > 0 && (
+                        <Badge variant="outline" className="text-sm">
+                            {stats.uniqueArtists} artists
+                        </Badge>
+                    )}
+                    {dataType === 'inventory' && stats.totalValue > 0 && (
+                        <Badge variant="outline" className="text-sm">
+                            <Euro className="h-3 w-3 mr-1" />
+                            {stats.totalValue.toFixed(2)} total
+                        </Badge>
+                    )}
+                </div>
+                <div className="relative w-full sm:w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Filter by artist or title..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9 h-9"
+                    />
+                    {searchQuery && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                            onClick={() => setSearchQuery("")}
+                        >
+                            <X className="h-3 w-3" />
+                        </Button>
+                    )}
+                </div>
+            </div>
+
+            {filteredItems.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                    <p>No items match your search.</p>
+                    <Button variant="link" onClick={() => setSearchQuery("")}>Clear filter</Button>
+                </div>
+            ) : (
             <Table>
                 <TableHeader>
                     <TableRow>
@@ -223,7 +300,7 @@ const DiscogsDataView = ({ fetchFunction, username, dataType, distributorId }: {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {items.map(item => (
+                    {filteredItems.map(item => (
                         <TableRow 
                             key={`${item.listingId || item.id}-${item.date_added}`} 
                             className="cursor-pointer hover:bg-muted/50"
@@ -262,6 +339,7 @@ const DiscogsDataView = ({ fetchFunction, username, dataType, distributorId }: {
                     ))}
                 </TableBody>
             </Table>
+            )}
             {nextPageUrl && (
                 <div className="flex justify-center mt-6">
                     <Button onClick={handleLoadMore} disabled={isLoadingMore} className="w-40">

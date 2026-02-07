@@ -1,7 +1,7 @@
 
 "use client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Users, Package, Euro, Music2, AlertTriangle, ShoppingCart, Tags, Loader2, Archive, ListMusic, UserCheck, UserX, DollarSign, TrendingUp, List, Clock, Target } from "lucide-react";
+import { Users, Package, Euro, Music2, AlertTriangle, ShoppingCart, Tags, Loader2, Archive, ListMusic, UserCheck, UserX, DollarSign, TrendingUp, List, Clock, Target, Download, FileText, BarChart3, ArrowUpRight, ArrowDownRight, Calendar, Minus } from "lucide-react";
 import {
   ChartContainer,
   ChartTooltip,
@@ -19,11 +19,18 @@ import type { VinylRecord, User, Order, WorkerPermissions } from "@/types";
 import { format, parseISO, startOfWeek, startOfMonth, startOfYear, isWithinInterval, subDays, subMonths } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatPriceForDisplay } from "@/lib/utils";
+import { formatPriceForDisplay, cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import Image from "next/image";
 import Link from "next/link";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+
+type GlobalDateRange = "7days" | "30days" | "90days" | "year" | "all";
 
 
 interface DatedRecordData {
@@ -40,7 +47,17 @@ const formatDateSafe = (dateString?: string) => {
     }
 };
 
-const StatCard = ({ title, value, subtext, icon: Icon, href }: { title: string, value: string | number, subtext: string, icon: React.ElementType, href?: string }) => {
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  subtext: string;
+  icon: React.ElementType;
+  href?: string;
+  trend?: { value: number; label: string } | null;
+  showTrend?: boolean;
+}
+
+const StatCard = ({ title, value, subtext, icon: Icon, href, trend, showTrend }: StatCardProps) => {
     const content = (
       <Card className={href ? "hover:bg-muted/50 transition-colors" : ""}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -49,7 +66,24 @@ const StatCard = ({ title, value, subtext, icon: Icon, href }: { title: string, 
           </CardHeader>
           <CardContent>
               <div className="text-3xl font-bold text-primary">{value}</div>
-              <p className="text-xs text-muted-foreground">{subtext}</p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">{subtext}</p>
+                {showTrend && trend && (
+                  <div className={cn(
+                    "flex items-center gap-0.5 text-xs font-medium",
+                    trend.value > 0 ? "text-green-600" : trend.value < 0 ? "text-red-600" : "text-muted-foreground"
+                  )}>
+                    {trend.value > 0 ? (
+                      <ArrowUpRight className="h-3 w-3" />
+                    ) : trend.value < 0 ? (
+                      <ArrowDownRight className="h-3 w-3" />
+                    ) : (
+                      <Minus className="h-3 w-3" />
+                    )}
+                    <span>{Math.abs(trend.value)}%</span>
+                  </div>
+                )}
+              </div>
           </CardContent>
       </Card>
     );
@@ -121,6 +155,15 @@ export default function StatsPage() {
   const [showAllFormats, setShowAllFormats] = useState(false);
   const [showAllClients, setShowAllClients] = useState(false);
   const [showAllOperators, setShowAllOperators] = useState(false);
+
+  // Global date range and comparison
+  const [globalDateRange, setGlobalDateRange] = useState<GlobalDateRange>("30days");
+  const [showComparison, setShowComparison] = useState(false);
+
+  // Goal tracking
+  const [monthlyGoal, setMonthlyGoal] = useState<number>(5000);
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  const [tempGoal, setTempGoal] = useState<string>("5000");
 
   // State for favorites dialog
   const [isFavoritesDialogOpen, setIsFavoritesDialogOpen] = useState(false);
@@ -196,11 +239,39 @@ export default function StatsPage() {
   }, [isFavoritesDialogOpen, selectedViewer, toast]);
 
 
+  // Helper to get date range boundaries
+  const getDateRangeBounds = useCallback((range: GlobalDateRange) => {
+    const now = new Date();
+    switch (range) {
+      case "7days": return { start: subDays(now, 7), end: now };
+      case "30days": return { start: subDays(now, 30), end: now };
+      case "90days": return { start: subDays(now, 90), end: now };
+      case "year": return { start: subDays(now, 365), end: now };
+      case "all": return { start: new Date(0), end: now };
+    }
+  }, []);
+
+  // Helper to get previous period bounds for comparison
+  const getPreviousPeriodBounds = useCallback((range: GlobalDateRange) => {
+    const now = new Date();
+    switch (range) {
+      case "7days": return { start: subDays(now, 14), end: subDays(now, 7) };
+      case "30days": return { start: subDays(now, 60), end: subDays(now, 30) };
+      case "90days": return { start: subDays(now, 180), end: subDays(now, 90) };
+      case "year": return { start: subDays(now, 730), end: subDays(now, 365) };
+      case "all": return null; // No previous period for all time
+    }
+  }, []);
+
+  const dateRangeBounds = useMemo(() => getDateRangeBounds(globalDateRange), [globalDateRange, getDateRangeBounds]);
+  const prevPeriodBounds = useMemo(() => getPreviousPeriodBounds(globalDateRange), [globalDateRange, getPreviousPeriodBounds]);
+
   const {
     totalRecords, totalItems, totalPurchasingValue, totalSellingValue,
-    recordsOverTimeData, genreDistribution, formatDistribution, 
+    recordsOverTimeData, genreDistribution, formatDistribution,
     workerStats, viewerStats,
-    salesStats, pendingOrders, awaitingPaymentOrders, mostProfitableRecords, topSellingRecords, topStockedRecords
+    salesStats, pendingOrders, awaitingPaymentOrders, mostProfitableRecords, topSellingRecords, topStockedRecords,
+    currentPeriodStats, previousPeriodStats, monthlyRevenue
   } = useMemo(() => {
     const inventoryRecords = records.filter(r => r.isInventoryItem);
     const clients = allUsers.filter(u => u.accessibleDistributorIds?.includes(user?.distributorId || ''));
@@ -347,17 +418,147 @@ export default function StatsPage() {
         .sort((a, b) => b.totalStock - a.totalStock)
         .slice(0, 20);
 
-    return { 
-        totalRecords, totalItems, totalPurchasingValue, totalSellingValue, 
-        recordsOverTimeData, genreDistribution, formatDistribution, 
-        workerStats, viewerStats,
-        salesStats, pendingOrders, awaitingPaymentOrders, mostProfitableRecords, topSellingRecords, topStockedRecords
+    // Period-based stats for comparison
+    const getOrdersInPeriod = (bounds: { start: Date; end: Date }) => {
+      return orders.filter(o => {
+        try {
+          const orderDate = parseISO(o.createdAt);
+          return isWithinInterval(orderDate, bounds);
+        } catch { return false; }
+      });
     };
-  }, [records, orders, recordsPeriod, allUsers, user]);
+
+    const getRecordsAddedInPeriod = (bounds: { start: Date; end: Date }) => {
+      return inventoryRecords.filter(r => {
+        try {
+          const addedDate = parseISO(r.added_at);
+          return isWithinInterval(addedDate, bounds);
+        } catch { return false; }
+      });
+    };
+
+    const currentPeriodOrders = getOrdersInPeriod(dateRangeBounds);
+    const currentPeriodRecords = getRecordsAddedInPeriod(dateRangeBounds);
+    const paidCurrentOrders = currentPeriodOrders.filter(o => o.status === 'paid');
+
+    const currentPeriodStats = {
+      revenue: paidCurrentOrders.reduce((sum, o) => sum + o.totalAmount, 0),
+      orders: paidCurrentOrders.length,
+      recordsAdded: currentPeriodRecords.length,
+      itemsAdded: currentPeriodRecords.reduce((sum, r) => sum + (Number(r.stock_shelves) || 0) + (Number(r.stock_storage) || 0), 0),
+    };
+
+    let previousPeriodStats = null;
+    if (prevPeriodBounds) {
+      const prevPeriodOrders = getOrdersInPeriod(prevPeriodBounds);
+      const prevPeriodRecords = getRecordsAddedInPeriod(prevPeriodBounds);
+      const paidPrevOrders = prevPeriodOrders.filter(o => o.status === 'paid');
+
+      previousPeriodStats = {
+        revenue: paidPrevOrders.reduce((sum, o) => sum + o.totalAmount, 0),
+        orders: paidPrevOrders.length,
+        recordsAdded: prevPeriodRecords.length,
+        itemsAdded: prevPeriodRecords.reduce((sum, r) => sum + (Number(r.stock_shelves) || 0) + (Number(r.stock_storage) || 0), 0),
+      };
+    }
+
+    // Monthly revenue for goal tracking
+    const thisMonth = startOfMonth(new Date());
+    const monthlyOrders = orders.filter(o => {
+      try {
+        const orderDate = parseISO(o.createdAt);
+        return o.status === 'paid' && isWithinInterval(orderDate, { start: thisMonth, end: new Date() });
+      } catch { return false; }
+    });
+    const monthlyRevenue = monthlyOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+
+    return {
+        totalRecords, totalItems, totalPurchasingValue, totalSellingValue,
+        recordsOverTimeData, genreDistribution, formatDistribution,
+        workerStats, viewerStats,
+        salesStats, pendingOrders, awaitingPaymentOrders, mostProfitableRecords, topSellingRecords, topStockedRecords,
+        currentPeriodStats, previousPeriodStats, monthlyRevenue
+    };
+  }, [records, orders, recordsPeriod, allUsers, user, dateRangeBounds, prevPeriodBounds]);
 
   const handleOpenFavoritesDialog = (viewer: User) => {
     setSelectedViewer(viewer);
     setIsFavoritesDialogOpen(true);
+  };
+
+  // Calculate trend percentage
+  const calculateTrend = useCallback((current: number, previous: number | null): { value: number; label: string } | null => {
+    if (previous === null || previous === 0) return null;
+    const change = ((current - previous) / previous) * 100;
+    return { value: Math.round(change), label: `vs previous period` };
+  }, []);
+
+  // Export to CSV
+  const handleExportCSV = useCallback(() => {
+    const inventoryRecords = records.filter(r => r.isInventoryItem);
+    const headers = ["Title", "Artist", "Genre", "Format", "Purchasing Price", "Selling Price", "Stock (Shelves)", "Stock (Storage)", "Added At"];
+    const rows = inventoryRecords.map(r => [
+      `"${r.title?.replace(/"/g, '""') || ''}"`,
+      `"${r.artist?.replace(/"/g, '""') || ''}"`,
+      `"${(Array.isArray(r.genre) ? r.genre.join(', ') : r.genre || '').replace(/"/g, '""')}"`,
+      `"${r.formatDetails?.replace(/"/g, '""') || ''}"`,
+      r.purchasingPrice || 0,
+      r.sellingPrice || 0,
+      r.stock_shelves || 0,
+      r.stock_storage || 0,
+      r.added_at || ''
+    ].join(','));
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `inventory-report-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Export Complete", description: "Inventory report downloaded as CSV." });
+  }, [records, toast]);
+
+  // Export sales report
+  const handleExportSalesCSV = useCallback(() => {
+    const paidOrders = orders.filter(o => o.status === 'paid');
+    const headers = ["Order ID", "Order Number", "Customer", "Total", "Items", "Status", "Created At"];
+    const rows = paidOrders.map(o => [
+      o.id,
+      o.orderNumber || '',
+      `"${o.customerName?.replace(/"/g, '""') || ''}"`,
+      o.totalAmount,
+      o.items.reduce((sum, item) => sum + item.quantity, 0),
+      o.status,
+      o.createdAt
+    ].join(','));
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `sales-report-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Export Complete", description: "Sales report downloaded as CSV." });
+  }, [orders, toast]);
+
+  const handleSaveGoal = () => {
+    const value = parseFloat(tempGoal);
+    if (!isNaN(value) && value > 0) {
+      setMonthlyGoal(value);
+    }
+    setIsEditingGoal(false);
+  };
+
+  const dateRangeLabels: Record<GlobalDateRange, string> = {
+    "7days": "Last 7 Days",
+    "30days": "Last 30 Days",
+    "90days": "Last 90 Days",
+    "year": "Last Year",
+    "all": "All Time"
   };
   
   const handleCategoryClick = (type: 'genre' | 'format', value: string) => {
@@ -388,8 +589,180 @@ export default function StatsPage() {
     return ( <div className="flex flex-col items-center justify-center h-full text-center p-6"><AlertTriangle className="h-16 w-16 text-destructive mb-4" /><h2 className="text-2xl font-semibold text-destructive">Error Loading Statistics</h2><p className="text-muted-foreground mt-2">{statsError}</p><Button onClick={() => window.location.reload()} className="mt-6">Retry</Button></div> );
   }
 
+  const goalProgress = Math.min((monthlyRevenue / monthlyGoal) * 100, 100);
+
   return (
     <div className="space-y-8">
+        {/* Global Controls */}
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                {/* Date Range Picker */}
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="gap-2">
+                        {dateRangeLabels[globalDateRange]}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      {(Object.keys(dateRangeLabels) as GlobalDateRange[]).map(range => (
+                        <DropdownMenuItem
+                          key={range}
+                          onClick={() => setGlobalDateRange(range)}
+                          className={globalDateRange === range ? "bg-accent" : ""}
+                        >
+                          {dateRangeLabels[range]}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                {/* Comparison Toggle */}
+                {globalDateRange !== "all" && (
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="compare-toggle"
+                      checked={showComparison}
+                      onCheckedChange={setShowComparison}
+                    />
+                    <Label htmlFor="compare-toggle" className="text-sm text-muted-foreground">
+                      Compare to previous period
+                    </Label>
+                  </div>
+                )}
+              </div>
+
+              {/* Export Buttons */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Download className="h-4 w-4" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportCSV}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Inventory Report (CSV)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportSalesCSV}>
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Sales Report (CSV)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Goal Tracking Card */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-primary" />
+                <CardTitle className="text-base">Monthly Sales Goal</CardTitle>
+              </div>
+              {isEditingGoal ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    value={tempGoal}
+                    onChange={(e) => setTempGoal(e.target.value)}
+                    className="w-24 h-8"
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveGoal()}
+                  />
+                  <Button size="sm" variant="outline" onClick={handleSaveGoal}>Save</Button>
+                </div>
+              ) : (
+                <Button size="sm" variant="ghost" onClick={() => { setTempGoal(monthlyGoal.toString()); setIsEditingGoal(true); }}>
+                  Edit Goal
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="flex items-end justify-between">
+                <div>
+                  <span className="text-2xl font-bold text-primary">€{formatPriceForDisplay(monthlyRevenue)}</span>
+                  <span className="text-sm text-muted-foreground"> / €{formatPriceForDisplay(monthlyGoal)}</span>
+                </div>
+                <span className={cn(
+                  "text-sm font-medium",
+                  goalProgress >= 100 ? "text-green-600" : goalProgress >= 75 ? "text-blue-600" : "text-muted-foreground"
+                )}>
+                  {Math.round(goalProgress)}%
+                </span>
+              </div>
+              <Progress value={goalProgress} className="h-2" />
+              <p className="text-xs text-muted-foreground">
+                {goalProgress >= 100
+                  ? "Goal achieved! Great work!"
+                  : `€${formatPriceForDisplay(monthlyGoal - monthlyRevenue)} to go this month`}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Period Summary Cards */}
+        {showComparison && previousPeriodStats && (
+          <Card className="bg-muted/30">
+            <CardContent className="py-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-center">
+                <div>
+                  <p className="text-sm text-muted-foreground">Revenue</p>
+                  <p className="text-lg font-bold">€{formatPriceForDisplay(currentPeriodStats.revenue)}</p>
+                  <div className={cn(
+                    "text-xs font-medium flex items-center justify-center gap-0.5",
+                    currentPeriodStats.revenue > previousPeriodStats.revenue ? "text-green-600" : currentPeriodStats.revenue < previousPeriodStats.revenue ? "text-red-600" : "text-muted-foreground"
+                  )}>
+                    {currentPeriodStats.revenue > previousPeriodStats.revenue ? <ArrowUpRight className="h-3 w-3" /> : currentPeriodStats.revenue < previousPeriodStats.revenue ? <ArrowDownRight className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
+                    {previousPeriodStats.revenue > 0 ? Math.abs(Math.round(((currentPeriodStats.revenue - previousPeriodStats.revenue) / previousPeriodStats.revenue) * 100)) : 0}% vs prev
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Paid Orders</p>
+                  <p className="text-lg font-bold">{currentPeriodStats.orders}</p>
+                  <div className={cn(
+                    "text-xs font-medium flex items-center justify-center gap-0.5",
+                    currentPeriodStats.orders > previousPeriodStats.orders ? "text-green-600" : currentPeriodStats.orders < previousPeriodStats.orders ? "text-red-600" : "text-muted-foreground"
+                  )}>
+                    {currentPeriodStats.orders > previousPeriodStats.orders ? <ArrowUpRight className="h-3 w-3" /> : currentPeriodStats.orders < previousPeriodStats.orders ? <ArrowDownRight className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
+                    {previousPeriodStats.orders > 0 ? Math.abs(Math.round(((currentPeriodStats.orders - previousPeriodStats.orders) / previousPeriodStats.orders) * 100)) : 0}% vs prev
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Records Added</p>
+                  <p className="text-lg font-bold">{currentPeriodStats.recordsAdded}</p>
+                  <div className={cn(
+                    "text-xs font-medium flex items-center justify-center gap-0.5",
+                    currentPeriodStats.recordsAdded > previousPeriodStats.recordsAdded ? "text-green-600" : currentPeriodStats.recordsAdded < previousPeriodStats.recordsAdded ? "text-red-600" : "text-muted-foreground"
+                  )}>
+                    {currentPeriodStats.recordsAdded > previousPeriodStats.recordsAdded ? <ArrowUpRight className="h-3 w-3" /> : currentPeriodStats.recordsAdded < previousPeriodStats.recordsAdded ? <ArrowDownRight className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
+                    {previousPeriodStats.recordsAdded > 0 ? Math.abs(Math.round(((currentPeriodStats.recordsAdded - previousPeriodStats.recordsAdded) / previousPeriodStats.recordsAdded) * 100)) : 0}% vs prev
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Items Added</p>
+                  <p className="text-lg font-bold">{currentPeriodStats.itemsAdded}</p>
+                  <div className={cn(
+                    "text-xs font-medium flex items-center justify-center gap-0.5",
+                    currentPeriodStats.itemsAdded > previousPeriodStats.itemsAdded ? "text-green-600" : currentPeriodStats.itemsAdded < previousPeriodStats.itemsAdded ? "text-red-600" : "text-muted-foreground"
+                  )}>
+                    {currentPeriodStats.itemsAdded > previousPeriodStats.itemsAdded ? <ArrowUpRight className="h-3 w-3" /> : currentPeriodStats.itemsAdded < previousPeriodStats.itemsAdded ? <ArrowDownRight className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
+                    {previousPeriodStats.itemsAdded > 0 ? Math.abs(Math.round(((currentPeriodStats.itemsAdded - previousPeriodStats.itemsAdded) / previousPeriodStats.itemsAdded) * 100)) : 0}% vs prev
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
             <StatCard title="Unique Records" value={totalRecords} subtext="Number of distinct titles" icon={Package} />
             <StatCard title="Total Items in Stock" value={totalItems} subtext="Sum of all quantities" icon={Archive} />

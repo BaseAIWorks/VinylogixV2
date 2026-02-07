@@ -18,7 +18,11 @@ import {
   XCircle,
   ShieldCheck,
   ExternalLink,
+  TrendingUp,
+  Users,
+  Database,
 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNowStrict, format, isPast } from "date-fns";
@@ -55,6 +59,48 @@ const DetailItem = ({
       <div className="text-sm font-medium text-foreground text-right">
         {value}
       </div>
+    </div>
+  );
+};
+
+const UsageProgressBar = ({
+  label,
+  icon: Icon,
+  current,
+  max,
+}: {
+  label: string;
+  icon: React.ElementType;
+  current: number;
+  max: number;
+}) => {
+  const isUnlimited = max === -1;
+  const percentage = isUnlimited ? 0 : Math.min((current / max) * 100, 100);
+  const isNearLimit = !isUnlimited && percentage >= 80;
+  const isAtLimit = !isUnlimited && percentage >= 100;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">{label}</span>
+        </div>
+        <span className={`text-sm font-medium ${isAtLimit ? 'text-destructive' : isNearLimit ? 'text-orange-500' : 'text-muted-foreground'}`}>
+          {current.toLocaleString()} / {isUnlimited ? 'Unlimited' : max.toLocaleString()}
+        </span>
+      </div>
+      {!isUnlimited && (
+        <Progress
+          value={percentage}
+          className={`h-2 ${isAtLimit ? '[&>div]:bg-destructive' : isNearLimit ? '[&>div]:bg-orange-500' : ''}`}
+        />
+      )}
+      {isUnlimited && (
+        <div className="h-2 bg-muted rounded-full overflow-hidden">
+          <div className="h-full w-full bg-gradient-to-r from-primary/20 to-primary/5" />
+        </div>
+      )}
     </div>
   );
 };
@@ -283,80 +329,84 @@ export default function SubscriptionPage() {
                   </Button>
                 </div>
               </div>
-              <div className="p-4 border rounded-lg bg-muted/50">
-                <h4 className="font-semibold mb-3">
-                  Plan Details & Usage
-                </h4>
-                <div className="space-y-2">
-                  <DetailItem label="Trial Status" value={trialStatusNode} />
-                  {activeDistributor?.billingCycle && (
-                    <DetailItem
-                      label="Billing Cycle"
-                      value={
-                        <span className="capitalize">
-                          {activeDistributor.billingCycle}
-                        </span>
-                      }
-                    />
-                  )}
-                  {activeDistributor?.subscriptionCurrentPeriodEnd &&
-                    effectiveSubscription.status !== "canceled" && (
+              <div className="space-y-6">
+                {/* Usage Progress */}
+                <div className="p-4 border rounded-lg bg-muted/50 space-y-4">
+                  <h4 className="font-semibold">Usage</h4>
+                  <UsageProgressBar
+                    label="Records"
+                    icon={Database}
+                    current={recordCount}
+                    max={effectiveSubscription.maxRecords}
+                  />
+                  <UsageProgressBar
+                    label="Users (Operators)"
+                    icon={Users}
+                    current={userCount}
+                    max={effectiveSubscription.maxUsers}
+                  />
+                </div>
+
+                {/* Plan Details */}
+                <div className="p-4 border rounded-lg bg-muted/50">
+                  <h4 className="font-semibold mb-3">Plan Details</h4>
+                  <div className="space-y-2">
+                    <DetailItem label="Trial Status" value={trialStatusNode} />
+                    {activeDistributor?.billingCycle && (
                       <DetailItem
-                        label={
-                          effectiveSubscription.status === "trialing"
-                            ? "Trial Ends"
-                            : "Next Billing Date"
+                        label="Billing Cycle"
+                        value={
+                          <span className="capitalize">
+                            {activeDistributor.billingCycle}
+                          </span>
                         }
-                        value={format(
-                          new Date(
-                            activeDistributor.subscriptionCurrentPeriodEnd
-                          ),
-                          "PPP"
-                        )}
                       />
                     )}
-                  <DetailItem
-                    label="Records"
-                    value={
-                      <span>
-                        {recordCount.toLocaleString()} /{" "}
-                        {effectiveSubscription.maxRecords === -1
-                          ? "Unlimited"
-                          : effectiveSubscription.maxRecords.toLocaleString()}
-                      </span>
-                    }
-                  />
-                  <DetailItem
-                    label="Users (Operators)"
-                    value={
-                      <span>
-                        {userCount.toLocaleString()} /{" "}
-                        {effectiveSubscription.maxUsers === -1
-                          ? "Unlimited"
-                          : effectiveSubscription.maxUsers.toLocaleString()}
-                      </span>
-                    }
-                  />
-                  <DetailItem
-                    label="Order Management"
-                    value={
-                      effectiveSubscription.allowOrders ? (
-                        <CheckCircle className="text-green-500" />
-                      ) : (
-                        <XCircle className="text-destructive" />
-                      )
-                    }
-                  />
-                  <DetailItem
-                    label="AI Features"
-                    value={
-                      effectiveSubscription.allowAiFeatures ? (
-                        <CheckCircle className="text-green-500" />
-                      ) : (
-                        <XCircle className="text-destructive" />
-                      )
-                    }
-                  />
+                    {activeDistributor?.subscriptionCurrentPeriodEnd &&
+                      effectiveSubscription.status !== "canceled" && (
+                        <DetailItem
+                          label={
+                            effectiveSubscription.status === "trialing"
+                              ? "Trial Ends"
+                              : "Next Billing Date"
+                          }
+                          value={format(
+                            new Date(
+                              activeDistributor.subscriptionCurrentPeriodEnd
+                            ),
+                            "PPP"
+                          )}
+                        />
+                      )}
+                    <DetailItem
+                      label="Order Management"
+                      value={
+                        effectiveSubscription.allowOrders ? (
+                          <span className="flex items-center gap-1.5 text-green-600">
+                            <CheckCircle className="h-4 w-4" /> Enabled
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <XCircle className="h-4 w-4" /> Not included
+                          </span>
+                        )
+                      }
+                    />
+                    <DetailItem
+                      label="AI Features"
+                      value={
+                        effectiveSubscription.allowAiFeatures ? (
+                          <span className="flex items-center gap-1.5 text-green-600">
+                            <CheckCircle className="h-4 w-4" /> Enabled
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <XCircle className="h-4 w-4" /> Not included
+                          </span>
+                        )
+                      }
+                    />
+                  </div>
                 </div>
               </div>
             </div>

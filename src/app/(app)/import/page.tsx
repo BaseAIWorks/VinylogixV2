@@ -7,18 +7,19 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { FileDown, FileUp, Info, Loader2, AlertTriangle, ArrowLeft, Disc3, CheckCircle, XCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { FileDown, FileUp, Info, Loader2, AlertTriangle, ArrowLeft, Disc3, CheckCircle, XCircle, Upload, Download, FileSpreadsheet, RefreshCw, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import Papa from "papaparse";
 import type { VinylRecord } from "@/types";
 import { searchDiscogsByBarcode, getDiscogsReleaseDetailsById } from "@/services/discogs-service";
 import { addRecord, getAllInventoryRecords } from "@/services/record-service";
 import { format, parseISO } from "date-fns";
-import { formatPriceForDisplay } from "@/lib/utils";
+import { formatPriceForDisplay, cn } from "@/lib/utils";
 
 type ImportStatus = "idle" | "parsing" | "preview" | "importing" | "complete";
 type RecordPreview = {
@@ -65,11 +66,33 @@ export default function ImportPage() {
     const [importProgress, setImportProgress] = useState(0);
     const [importResults, setImportResults] = useState<{success: number, failed: number}>({ success: 0, failed: 0 });
     const [isExportingCSV, setIsExportingCSV] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
+    const [fileName, setFileName] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
+    const handleDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
+    }, []);
 
+    const handleDragLeave = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+    }, []);
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const files = e.dataTransfer.files;
+        if (files.length > 0 && files[0].type === 'text/csv') {
+            processFile(files[0]);
+        } else {
+            toast({ title: "Invalid File", description: "Please drop a CSV file.", variant: "destructive" });
+        }
+    }, []);
+
+    const processFile = (file: File) => {
+        setFileName(file.name);
         setImportStatus("parsing");
         setPreviews([]);
         setImportProgress(0);
@@ -91,8 +114,41 @@ export default function ImportPage() {
             error: (error) => {
                 toast({ title: "CSV Parsing Error", description: error.message, variant: "destructive" });
                 setImportStatus("idle");
+                setFileName(null);
             }
         });
+    };
+
+    const downloadSampleCSV = () => {
+        const sampleData = [
+            recordHeaders.join(','),
+            '12345,724349107526,Abbey Road,The Beatles,1969,Apple Records,Rock,Classic Rock,UK,LP - Vinyl,Very Good Plus (VG+),Very Good (VG),Original pressing,15.00,45.00,1,A1,0,,SUP001',
+            ',5099907092923,Thriller,Michael Jackson,1982,Epic,Pop,Pop Rock,US,LP - Vinyl,Near Mint (NM),Near Mint (NM),Gatefold sleeve,20.00,60.00,2,B2,1,STOR1,SUP002'
+        ].join('\n');
+
+        const blob = new Blob([`\uFEFF${sampleData}`], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.setAttribute('href', URL.createObjectURL(blob));
+        link.setAttribute('download', 'sample_import.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast({ title: "Sample Downloaded", description: "Check your downloads folder." });
+    };
+
+    const resetImport = () => {
+        setImportStatus("idle");
+        setPreviews([]);
+        setImportProgress(0);
+        setImportResults({ success: 0, failed: 0 });
+        setFileName(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        processFile(file);
     };
 
     const processPreviews = useCallback(async (initialPreviews: RecordPreview[]) => {
@@ -296,10 +352,59 @@ export default function ImportPage() {
                             <TabsTrigger value="export">Export</TabsTrigger>
                         </TabsList>
                         <TabsContent value="import" className="pt-6">
-                           <div className="space-y-4">
-                                <Label htmlFor="csv-upload">CSV File for Import</Label>
-                                <div className="flex gap-4">
-                                   <Input id="csv-upload" type="file" accept=".csv" onChange={handleFileUpload} disabled={importStatus === 'importing' || importStatus === 'parsing'} />
+                            <div className="space-y-6">
+                                {/* Drag and Drop Zone */}
+                                <div
+                                    onDragOver={handleDragOver}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={handleDrop}
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className={cn(
+                                        "relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all",
+                                        isDragging
+                                            ? "border-primary bg-primary/5"
+                                            : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50",
+                                        (importStatus === 'importing' || importStatus === 'parsing') && "opacity-50 pointer-events-none"
+                                    )}
+                                >
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept=".csv"
+                                        onChange={handleFileUpload}
+                                        className="hidden"
+                                        disabled={importStatus === 'importing' || importStatus === 'parsing'}
+                                    />
+                                    <Upload className={cn(
+                                        "h-12 w-12 mx-auto mb-4 transition-colors",
+                                        isDragging ? "text-primary" : "text-muted-foreground"
+                                    )} />
+                                    <p className="text-lg font-medium mb-1">
+                                        {isDragging ? "Drop your CSV file here" : "Drag & drop your CSV file"}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground mb-4">
+                                        or click to browse your files
+                                    </p>
+                                    {fileName && (
+                                        <Badge variant="secondary" className="text-sm">
+                                            <FileSpreadsheet className="h-4 w-4 mr-2" />
+                                            {fileName}
+                                        </Badge>
+                                    )}
+                                </div>
+
+                                {/* Quick Actions */}
+                                <div className="flex flex-wrap gap-3">
+                                    <Button variant="outline" size="sm" onClick={downloadSampleCSV}>
+                                        <Download className="h-4 w-4 mr-2" />
+                                        Download Sample CSV
+                                    </Button>
+                                    {(importStatus === 'preview' || importStatus === 'complete') && (
+                                        <Button variant="outline" size="sm" onClick={resetImport}>
+                                            <RefreshCw className="h-4 w-4 mr-2" />
+                                            Start New Import
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         </TabsContent>
@@ -317,24 +422,37 @@ export default function ImportPage() {
             </Card>
 
             {importStatus === "preview" && previews.length > 0 && (
-                <Card>
+                <Card className="shadow-lg">
                     <CardHeader>
-                       <div className="flex justify-between items-center">
-                         <div>
-                           <CardTitle>Import Preview</CardTitle>
-                           <CardDescription>Review the records to be imported. Records with a green check are matched with Discogs.</CardDescription>
-                         </div>
-                         <Button onClick={handleImport} disabled={importStatus !== 'preview'}>
-                            Confirm and Import {previews.length} Records
-                         </Button>
-                       </div>
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div>
+                                <CardTitle className="flex items-center gap-2">
+                                    <FileSpreadsheet className="h-5 w-5 text-primary" />
+                                    Import Preview
+                                </CardTitle>
+                                <CardDescription>Review the records to be imported. Records with a green check are matched with Discogs.</CardDescription>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <Badge variant="secondary">
+                                    {previews.filter(p => p.status === 'matched').length} matched
+                                </Badge>
+                                <Badge variant="outline">
+                                    {previews.filter(p => p.status === 'fetching' || p.status === 'ready').length} pending
+                                </Badge>
+                                {previews.filter(p => p.status === 'error' || p.status === 'no_match').length > 0 && (
+                                    <Badge variant="destructive">
+                                        {previews.filter(p => p.status === 'error' || p.status === 'no_match').length} issues
+                                    </Badge>
+                                )}
+                            </div>
+                        </div>
                     </CardHeader>
-                    <CardContent>
-                        <div className="max-h-[500px] overflow-y-auto">
+                    <CardContent className="space-y-4">
+                        <div className="max-h-[400px] overflow-y-auto rounded-md border">
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="sticky top-0 bg-card">
                                     <TableRow>
-                                        <TableHead className="w-[40px]">Status</TableHead>
+                                        <TableHead className="w-[60px]">Status</TableHead>
                                         <TableHead>Title</TableHead>
                                         <TableHead>Artist</TableHead>
                                         <TableHead>Barcode</TableHead>
@@ -343,38 +461,102 @@ export default function ImportPage() {
                                 </TableHeader>
                                 <TableBody>
                                     {previews.map((p, index) => (
-                                        <TableRow key={index}>
+                                        <TableRow key={index} className={cn(
+                                            (p.status === 'error' || p.status === 'no_match') && "bg-red-50 dark:bg-red-950/20"
+                                        )}>
                                             <TableCell className="text-center">
-                                                {p.status === "fetching" && <Loader2 className="h-4 w-4 animate-spin"/>}
+                                                {p.status === "ready" && <span className="text-muted-foreground">—</span>}
+                                                {p.status === "fetching" && <Loader2 className="h-4 w-4 animate-spin text-primary"/>}
                                                 {p.status === "matched" && <CheckCircle className="h-4 w-4 text-green-500"/>}
-                                                {(p.status === "no_match" || p.status === "error") && <XCircle className="h-4 w-4 text-destructive"/>}
+                                                {(p.status === "no_match" || p.status === "error") && (
+                                                    <div className="flex items-center gap-1" title={p.error}>
+                                                        <XCircle className="h-4 w-4 text-destructive"/>
+                                                    </div>
+                                                )}
                                             </TableCell>
-                                            <TableCell>{p.csvData.title}</TableCell>
-                                            <TableCell>{p.csvData.artist}</TableCell>
-                                            <TableCell>{p.csvData.barcode}</TableCell>
-                                            <TableCell>{p.discogsDetails?.discogs_id || p.csvData.discogs_id || "N/A"}</TableCell>
+                                            <TableCell className="font-medium">{p.csvData.title || '—'}</TableCell>
+                                            <TableCell>{p.csvData.artist || '—'}</TableCell>
+                                            <TableCell className="font-mono text-sm">{p.csvData.barcode || '—'}</TableCell>
+                                            <TableCell className="font-mono text-sm">{p.discogsDetails?.discogs_id || p.csvData.discogs_id || '—'}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
                             </Table>
                         </div>
+                        <div className="flex flex-col sm:flex-row gap-3 justify-end">
+                            <Button variant="outline" onClick={resetImport}>
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Cancel
+                            </Button>
+                            <Button onClick={handleImport} disabled={previews.some(p => p.status === 'fetching')}>
+                                <Upload className="h-4 w-4 mr-2" />
+                                Import {previews.length} Records
+                            </Button>
+                        </div>
                     </CardContent>
                 </Card>
             )}
-            
+
             {importStatus === "importing" && (
-                <Card>
-                    <CardHeader><CardTitle>Importing...</CardTitle></CardHeader>
-                    <CardContent><Progress value={importProgress} className="w-full" /></CardContent>
+                <Card className="shadow-lg">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                            Importing Records...
+                        </CardTitle>
+                        <CardDescription>Please wait while we import your records. Do not close this page.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <Progress value={importProgress} className="w-full h-3" />
+                        <div className="flex justify-between text-sm text-muted-foreground">
+                            <span>{Math.round(importProgress)}% complete</span>
+                            <span>{Math.round((importProgress / 100) * previews.length)} of {previews.length} records</span>
+                        </div>
+                    </CardContent>
                 </Card>
             )}
-            
+
             {importStatus === "complete" && (
-                <Card>
-                    <CardHeader><CardTitle>Import Complete</CardTitle></CardHeader>
-                    <CardContent>
-                        <p>{importResults.success} records imported successfully.</p>
-                        <p>{importResults.failed} records failed to import.</p>
+                <Card className="shadow-lg">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                            Import Complete
+                        </CardTitle>
+                        <CardDescription>Your import has finished processing.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="p-4 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900">
+                                <p className="text-3xl font-bold text-green-600">{importResults.success}</p>
+                                <p className="text-sm text-green-700 dark:text-green-400">Records imported successfully</p>
+                            </div>
+                            <div className={cn(
+                                "p-4 rounded-lg border",
+                                importResults.failed > 0
+                                    ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900"
+                                    : "bg-muted border-muted-foreground/20"
+                            )}>
+                                <p className={cn(
+                                    "text-3xl font-bold",
+                                    importResults.failed > 0 ? "text-red-600" : "text-muted-foreground"
+                                )}>{importResults.failed}</p>
+                                <p className={cn(
+                                    "text-sm",
+                                    importResults.failed > 0 ? "text-red-700 dark:text-red-400" : "text-muted-foreground"
+                                )}>Records failed to import</p>
+                            </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <Button variant="outline" onClick={resetImport}>
+                                <RefreshCw className="h-4 w-4 mr-2" />
+                                Import More Records
+                            </Button>
+                            <Button onClick={() => router.push('/inventory')}>
+                                <Disc3 className="h-4 w-4 mr-2" />
+                                View Inventory
+                            </Button>
+                        </div>
                     </CardContent>
                 </Card>
             )}
