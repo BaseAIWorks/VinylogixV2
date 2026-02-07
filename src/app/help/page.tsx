@@ -1,14 +1,13 @@
-
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Search, HelpCircle, Disc3, Users, CreditCard, ShieldCheck, Mail, MessageCircle } from "lucide-react";
+import { Search, HelpCircle, Disc3, Users, CreditCard, ShieldCheck, Mail, MessageCircle } from "lucide-react";
+import { Header, Footer } from "@/components/landing";
 
 const faqCategories = [
   {
@@ -160,21 +159,9 @@ export default function HelpPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo.png" alt="Vinylogix" width={120} height={30} style={{ width: 'auto', height: 'auto', maxHeight: '30px' }} unoptimized />
-          </Link>
-          <Button variant="ghost" asChild>
-            <Link href="/">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
-            </Link>
-          </Button>
-        </div>
-      </header>
+      <Header />
 
-      <main className="container mx-auto px-4 py-12 max-w-5xl">
+      <main className="container mx-auto px-4 pt-28 pb-12 max-w-5xl">
         {/* Hero */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold tracking-tight text-primary mb-4">Help Center</h1>
@@ -260,17 +247,7 @@ export default function HelpPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t mt-16 py-8">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Vinylogix. All rights reserved.</p>
-          <div className="mt-2 flex justify-center gap-4">
-            <Link href="/pricing" className="hover:text-foreground">Pricing</Link>
-            <Link href="/contact" className="hover:text-foreground">Contact</Link>
-            <Link href="/" className="hover:text-foreground">Home</Link>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

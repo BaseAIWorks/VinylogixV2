@@ -1,12 +1,10 @@
-
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/use-auth";
-import { ArrowRight, Check, Disc3, BarChart3, ScanLine, ShoppingCart, HardHat, Package, Users, Bot, Building, KeyRound, Palette, Settings, Warehouse, Keyboard, Laptop, Tablet, Smartphone, Instagram, Facebook, Twitter, Linkedin } from "lucide-react";
+import { ArrowRight, Check, Disc3, BarChart3, ScanLine, ShoppingCart, HardHat, Package, Users, Bot, Building, KeyRound, Palette, Settings, Warehouse, Keyboard, Laptop, Tablet, Smartphone } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Header, Footer } from "@/components/landing";
 
 // New component for a single feature highlight with an icon
 const FeatureListItem = ({ icon: Icon, title, description }: { icon: React.ElementType, title: string, description: string }) => (
@@ -52,77 +50,7 @@ const FeatureShowcase = ({ title, description, image, imageAlt, features, revers
 );
 
 
-const PageFooter = () => {
-    const footerLinks = {
-        Product: [
-            { href: "/features", text: "Features" },
-            { href: "/pricing", text: "Pricing" },
-            { href: "/#", text: "Changelog" },
-        ],
-        Company: [
-            { href: "/#", text: "About" },
-            { href: "/#", text: "Team" },
-            { href: "/#", text: "Blog" },
-        ],
-        Resources: [
-            { href: "/#", text: "Contact" },
-            { href: "/#", text: "Support" },
-            { href: "/#", text: "Privacy" },
-        ],
-    };
-
-    return (
-        <footer className="border-t bg-background">
-            <div className="container mx-auto max-w-7xl px-4 py-12">
-                <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
-                <div className="lg:col-span-1">
-                    <div className="flex items-center gap-2">
-                        <Image src="/logo.png" alt="Vinylogix Logo" width={150} height={30} style={{ width: 'auto', height: 'auto', maxHeight: '30px' }} className="object-contain" unoptimized={true} />
-                    </div>
-                    <p className="mt-4 max-w-xs text-muted-foreground">
-                    The ultimate platform for vinyl record stores and collectors to manage their inventory and passion.
-                    </p>
-                    <div className="mt-6 flex gap-4">
-                    <a href="/#" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Instagram"><Instagram className="h-6 w-6" /></a>
-                    <a href="/#" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Facebook"><Facebook className="h-6 w-6" /></a>
-                    <a href="/#" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Twitter"><Twitter className="h-6 w-6" /></a>
-                    <a href="/#" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="LinkedIn"><Linkedin className="h-6 w-6" /></a>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-8 lg:col-span-3 sm:grid-cols-3">
-                    {Object.entries(footerLinks).map(([title, links]) => (
-                        <div key={title}>
-                        <p className="font-semibold text-foreground">{title}</p>
-                        <nav className="mt-4 flex flex-col space-y-2 text-sm text-muted-foreground">
-                            {links.map((link) => (
-                                <Link key={link.href + link.text} href={link.href} className="hover:text-foreground">{link.text}</Link>
-                            ))}
-                        </nav>
-                        </div>
-                    ))}
-                </div>
-                </div>
-                
-                <div className="mt-12 border-t pt-8">
-                <div className="flex flex-col-reverse items-center justify-between gap-4 sm:flex-row">
-                    <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} Vinylogix. All rights reserved.</p>
-                    <div className="flex gap-4 text-sm text-muted-foreground">
-                        <Link href="/#" className="hover:text-foreground">Terms & Conditions</Link>
-                        <Link href="/#" className="hover:text-foreground">Privacy Policy</Link>
-                    </div>
-                </div>
-                </div>
-            </div>
-        </footer>
-    );
-};
-
-
 export default function FeaturesPage() {
-    const { user } = useAuth();
-    const router = useRouter();
-
     const inventoryFeatures = [
         { icon: ScanLine, title: "Instant Barcode Scanning", description: "Quickly add or find records with your device's camera, eliminating tedious manual entry." },
         { icon: Keyboard, title: "Handheld Scanner Support", description: "Optimized workflow for dedicated USB or Bluetooth barcode scanners, enabling rapid-fire inventory processing." },
@@ -153,31 +81,11 @@ export default function FeaturesPage() {
 
     return (
       <div className="flex flex-col min-h-screen bg-background text-foreground">
-        <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur-sm">
-            <div className="container mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
-               <Link href="/" className="flex items-center gap-2">
-                <Image src="/logo.png" alt="Vinylogix Logo" width={180} height={36} style={{ width: 'auto', height: 'auto', maxHeight: '36px' }} className="object-contain" unoptimized={true} />
-              </Link>
-              <div className="hidden items-center gap-4 md:flex">
-                 <Button variant="ghost" onClick={() => router.push('/features')}>Features</Button>
-                 <Button variant="ghost" onClick={() => router.push('/pricing')}>Pricing</Button>
-              </div>
-              <div className="flex items-center gap-2">
-                {user ? (
-                  <Button onClick={() => router.push('/dashboard')}>Login</Button>
-                ) : (
-                  <>
-                    <Button variant="ghost" onClick={() => router.push('/login')}>Log In</Button>
-                    <Button onClick={() => router.push('/register')}>Sign Up</Button>
-                  </>
-                )}
-              </div>
-            </div>
-        </header>
+        <Header />
 
         <main className="flex-grow">
             {/* Hero Section */}
-            <section className="relative overflow-hidden py-24 md:py-32">
+            <section className="relative overflow-hidden pt-32 pb-16 md:pt-40 md:pb-24">
                 <div className="container mx-auto px-4 text-center">
                     <div className="absolute -z-10 -top-1/4 left-1/2 -translate-x-1/2 w-full h-full bg-[radial-gradient(ellipse_40%_50%_at_50%_30%,hsl(var(--primary)/0.15),transparent)]"></div>
                     <h1 className="text-5xl font-extrabold tracking-tight text-primary sm:text-6xl">A Feature for Every Spin</h1>
@@ -240,7 +148,7 @@ export default function FeaturesPage() {
             </section>
         </main>
 
-        <PageFooter />
+        <Footer />
       </div>
     );
 }

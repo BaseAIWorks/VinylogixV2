@@ -2,10 +2,10 @@
 
 import React, { useRef } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { ArrowRight, Gift, Menu, X, Settings, LogOut, LayoutDashboard, ScanLine, Disc3, BarChart3, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Logo } from '@/components/ui/logo';
 import { AnimatedGroup } from '@/components/ui/animated-group';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
@@ -72,7 +72,7 @@ export function ParallaxHero() {
         style={{ y: backgroundY }}
       >
         <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-background to-background" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(124,58,237,0.15),transparent)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(232,106,51,0.15),transparent)]" />
       </motion.div>
 
       {/* Floating vinyl records - parallax layers */}
@@ -273,14 +273,14 @@ export function ParallaxHero() {
                 <div className="relative rounded-xl overflow-hidden">
                   <img
                     className="w-full aspect-[16/9] object-cover hidden dark:block"
-                    src="/Hero-2.png"
+                    src="/Hero-2_Trans.png"
                     alt="Vinylogix dashboard dark mode"
                     width="2700"
                     height="1440"
                   />
                   <img
                     className="w-full aspect-[16/9] object-cover dark:hidden"
-                    src="/Hero-2.png"
+                    src="/Hero-2_Trans.png"
                     alt="Vinylogix dashboard light mode"
                     width="2700"
                     height="1440"
@@ -336,16 +336,7 @@ function HeroHeader() {
           <div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
             <div className="flex w-full justify-between lg:w-auto">
               <Link href="/" aria-label="home" className="flex items-center space-x-2">
-                <Image
-                  src="/logo.png"
-                  alt="Vinylogix Logo"
-                  width={180}
-                  height={36}
-                  style={{ width: 'auto', height: 'auto', maxHeight: '36px' }}
-                  className="object-contain"
-                  unoptimized
-                  priority
-                />
+                <Logo width={180} height={36} priority />
               </Link>
 
               <button

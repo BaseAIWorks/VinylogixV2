@@ -62,7 +62,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Vinylogix" />
         <meta name="format-detection" content="telephone=no" />
-        <meta name="theme-color" content="#673AB7" />
+        <meta name="theme-color" content="#E86A33" />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans`}>
         <Suspense fallback={<Loading />}>

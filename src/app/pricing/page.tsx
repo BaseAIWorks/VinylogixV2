@@ -1,10 +1,7 @@
-
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/use-auth";
-import { ArrowRight, Check, Flame, Instagram, Facebook, Calculator, ScanLine, BarChart3, Users, Building, Gift, Sparkles, Clock } from "lucide-react";
-import Image from "next/image";
+import { ArrowRight, Check, Flame, Calculator, ScanLine, BarChart3, Users, Building, Gift, Clock } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -17,96 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatPriceForDisplay } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-
-
-const PageHeader = () => {
-    const { user } = useAuth();
-    const router = useRouter();
-    return (
-        <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur-sm">
-            <div className="container mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
-                <Link href="/" className="flex items-center gap-2">
-                    <Image src="/logo.png" alt="Vinylogix Logo" width={180} height={36} style={{ width: 'auto', height: 'auto', maxHeight: '36px' }} className="object-contain" unoptimized={true} />
-                </Link>
-                <div className="hidden items-center gap-4 md:flex">
-                    <Button variant="ghost" onClick={() => router.push('/pricing')}>Pricing</Button>
-                </div>
-                <div className="flex items-center gap-2">
-                    {user ? (
-                        <Button onClick={() => router.push('/dashboard')}>Dashboard</Button>
-                    ) : (
-                        <>
-                            <Button variant="ghost" onClick={() => router.push('/login')}>Log In</Button>
-                            <Button onClick={() => router.push('/register')}>Sign Up</Button>
-                        </>
-                    )}
-                </div>
-            </div>
-        </header>
-    )
-};
-
-
-const PageFooter = () => {
-    const footerLinks = {
-        Product: [
-            { href: "/pricing", text: "Pricing" },
-        ],
-        Company: [
-            { href: "/#", text: "About" },
-            { href: "/#", text: "Team" },
-        ],
-        Resources: [
-            { href: "/help", text: "Help & FAQ" },
-            { href: "/contact", text: "Contact Support" },
-            { href: "/#", text: "Privacy Policy" },
-        ],
-    };
-
-    return (
-    <footer className="border-t bg-background">
-        <div className="container mx-auto max-w-7xl px-4 py-12">
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
-            <div className="lg:col-span-1">
-                <div className="flex items-center gap-2">
-                    <Image src="/logo.png" alt="Vinylogix Logo" width={150} height={30} className="h-auto w-auto max-h-[30px]" unoptimized={true} />
-                </div>
-                <p className="mt-4 max-w-xs text-muted-foreground">
-                The ultimate platform for vinyl record stores and collectors to manage their inventory and passion.
-                </p>
-                <div className="mt-6 flex gap-4">
-                <a href="https://www.instagram.com/vinylogix/" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Instagram"><Instagram className="h-6 w-6" /></a>
-                <a href="https://www.facebook.com/vinylogix" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground" aria-label="Facebook"><Facebook className="h-6 w-6" /></a>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-8 lg:col-span-3 sm:grid-cols-3">
-                {Object.entries(footerLinks).map(([title, links]) => (
-                    <div key={title}>
-                        <p className="font-semibold text-foreground">{title}</p>
-                        <nav className="mt-4 flex flex-col space-y-2 text-sm text-muted-foreground">
-                            {links.map((link) => (
-                                <Link key={link.text} href={link.href} className="hover:text-foreground">{link.text}</Link>
-                            ))}
-                        </nav>
-                    </div>
-                ))}
-            </div>
-            </div>
-
-            <div className="mt-12 border-t pt-8">
-            <div className="flex flex-col-reverse items-center justify-between gap-4 sm:flex-row">
-                <p className="text-sm text-muted-foreground">&copy; {new Date().getFullYear()} Vinylogix. All rights reserved.</p>
-                <div className="flex gap-4 text-sm text-muted-foreground">
-                    <Link href="/#" className="hover:text-foreground">Terms & Conditions</Link>
-                    <Link href="/#" className="hover:text-foreground">Privacy Policy</Link>
-                </div>
-            </div>
-            </div>
-        </div>
-    </footer>
-    )
-};
+import { Header, Footer } from "@/components/landing";
 
 const PricingTierComponent = ({
   tierName,
@@ -278,11 +186,11 @@ export default function PricingPage() {
 
     return (
       <div className="flex flex-col min-h-screen bg-background text-foreground">
-        <PageHeader/>
+        <Header />
 
         <main className="flex-grow">
             {/* Hero Section with integrated CTA */}
-            <section className="relative overflow-hidden pt-16 pb-12 md:pt-24 md:pb-16">
+            <section className="relative overflow-hidden pt-28 pb-12 md:pt-36 md:pb-16">
                 {/* Background effects */}
                 <div className="absolute inset-0 z-0">
                     <div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-primary/5 to-transparent" />
@@ -478,7 +386,7 @@ export default function PricingPage() {
             </section>
         </main>
         
-        <PageFooter/>
+        <Footer />
       </div>
     );
 }

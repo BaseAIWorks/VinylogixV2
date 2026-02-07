@@ -13,4 +13,5 @@ export { DeviceExperience } from './DeviceExperience';
 export { PricingPreview } from './PricingPreview';
 export { FinalCTA } from './FinalCTA';
 export { Footer } from './Footer';
+export { Header } from './Header';
 export { VinylRecordSVG, VinylStack } from './VinylRecordSVG';

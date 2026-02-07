@@ -3,9 +3,9 @@
 
 import React from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { ArrowRight, ChevronRight, Menu, X, Settings, LogOut, LayoutDashboard, Gift } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Logo } from '@/components/ui/logo'
 import { AnimatedGroup } from '@/components/ui/animated-group'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
@@ -114,7 +114,7 @@ export function HeroSection() {
                                 {/* Compact Promo Banner */}
                                 <AnimatedGroup variants={transitionVariants}>
                                     <div className="mt-8 mx-auto max-w-xl">
-                                        <div className="rounded-xl bg-primary/10 border border-primary/20 px-6 py-4 backdrop-blur-sm transition-all duration-300 hover:shadow-[0_0_30px_rgba(124,58,237,0.3)] hover:border-primary/40">
+                                        <div className="rounded-xl bg-primary/10 border border-primary/20 px-6 py-4 backdrop-blur-sm transition-all duration-300 hover:shadow-[0_0_30px_rgba(232,106,51,0.3)] hover:border-primary/40">
                                             <div className="flex flex-col items-center gap-2 text-center">
                                                 <div className="flex items-center gap-2">
                                                     <Gift className="h-5 w-5 text-primary shrink-0" />
@@ -191,7 +191,7 @@ export function HeroSection() {
                                 <div className="inset-shadow-2xs ring-background dark:inset-shadow-white/20 bg-background relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15 ring-1">
                                     <img
                                         className="bg-background aspect-15/8 relative hidden rounded-2xl dark:block"
-                                        src="/Hero-2.png"
+                                        src="/Hero-2_Trans.png"
                                         alt="app screen dark mode"
                                         data-ai-hint="app dark mode"
                                         width="2700"
@@ -199,7 +199,7 @@ export function HeroSection() {
                                     />
                                     <img
                                         className="z-2 border-border/25 aspect-15/8 relative rounded-2xl border dark:hidden"
-                                        src="/Hero-2.png"
+                                        src="/Hero-2_Trans.png"
                                         alt="app screen light mode"
                                         data-ai-hint="app light mode"
                                         width="2700"
@@ -252,7 +252,7 @@ const HeroHeader = () => {
                                 href="/"
                                 aria-label="home"
                                 className="flex items-center space-x-2">
-                                <Logo />
+                                <HeaderLogo />
                             </Link>
 
                             <button
@@ -353,17 +353,6 @@ const HeroHeader = () => {
     )
 }
 
-const Logo = ({ className }: { className?: string }) => {
-    return (
-        <Image
-            src="/logo.png"
-            alt="Vinylogix Logo"
-            width={180}
-            height={36}
-            style={{ width: 'auto', height: 'auto', maxHeight: '36px' }}
-            className={cn('object-contain', className)}
-            unoptimized={true}
-            priority
-        />
-    )
+const HeaderLogo = ({ className }: { className?: string }) => {
+    return <Logo width={180} height={36} className={className} priority />;
 }

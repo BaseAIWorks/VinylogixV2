@@ -2,10 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Instagram, Facebook, Twitter, Youtube, Mail, MapPin, Phone } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Instagram, Facebook, Twitter, Youtube, Mail } from 'lucide-react';
+import { Logo } from '@/components/ui/logo';
 
 const footerLinks = {
   Product: [
@@ -59,15 +58,7 @@ export function Footer() {
               className="lg:col-span-2"
             >
               <Link href="/" className="inline-block">
-                <Image
-                  src="/logo.png"
-                  alt="Vinylogix Logo"
-                  width={150}
-                  height={30}
-                  style={{ width: 'auto', height: 'auto', maxHeight: '30px' }}
-                  className="object-contain"
-                  unoptimized
-                />
+                <Logo width={150} height={30} />
               </Link>
               <p className="mt-4 max-w-xs text-muted-foreground">
                 The ultimate platform for vinyl record stores and collectors to

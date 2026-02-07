@@ -2,7 +2,6 @@
 
 import React from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
@@ -30,33 +29,10 @@ import {
   Palette,
   Check,
   Sparkles,
-  Settings,
-  LogOut,
-  LayoutDashboard,
-  Menu,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/hooks/use-auth';
-import { useRouter } from 'next/navigation';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Footer } from '@/components/landing/Footer';
-import type { UserRole } from '@/types';
-
-const roleDisplayNames: Record<UserRole, string> = {
-  master: 'Master',
-  worker: 'Operator',
-  viewer: 'Client',
-  superadmin: 'Super Admin',
-};
+import { Header, Footer } from '@/components/landing';
 
 // ============================================================================
 // MAIN COMPONENT
@@ -72,9 +48,9 @@ export default function SolutionsPage() {
           className="absolute inset-0"
           style={{
             background: `
-              radial-gradient(ellipse 80% 50% at 50% -10%, rgba(124,58,237,0.15), transparent),
-              radial-gradient(ellipse 60% 40% at 80% 50%, rgba(59,130,246,0.08), transparent),
-              radial-gradient(ellipse 60% 40% at 20% 80%, rgba(124,58,237,0.08), transparent)
+              radial-gradient(ellipse 80% 50% at 50% -10%, rgba(232,106,51,0.15), transparent),
+              radial-gradient(ellipse 60% 40% at 80% 50%, rgba(202,138,4,0.08), transparent),
+              radial-gradient(ellipse 60% 40% at 20% 80%, rgba(232,106,51,0.08), transparent)
             `,
           }}
         />
@@ -98,124 +74,12 @@ export default function SolutionsPage() {
 }
 
 // ============================================================================
-// HEADER
-// ============================================================================
-
-const menuItems = [
-  { name: 'Solutions', href: '/solutions' },
-  { name: 'Pricing', href: '/pricing' },
-];
-
-function Header() {
-  const { user, logout } = useAuth();
-  const router = useRouter();
-  const [isScrolled, setIsScrolled] = React.useState(false);
-
-  const getInitials = (email?: string | null) => {
-    if (!email) return 'TU';
-    return email.substring(0, 2).toUpperCase();
-  };
-
-  const displayName = user?.firstName
-    ? `${user.firstName} ${user.lastName || ''}`.trim()
-    : user?.email;
-
-  React.useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  return (
-    <header className="fixed z-50 w-full">
-      <nav className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div
-          className={cn(
-            'mt-4 rounded-2xl px-4 py-3 transition-all duration-300',
-            isScrolled
-              ? 'bg-background/80 backdrop-blur-xl border border-border/50 shadow-lg'
-              : 'bg-transparent'
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center">
-              <Image
-                src="/logo.png"
-                alt="Vinylogix"
-                width={140}
-                height={32}
-                className="h-8 w-auto"
-                unoptimized
-                priority
-              />
-            </Link>
-
-            <div className="hidden md:flex items-center gap-8">
-              {menuItems.map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {item.name}
-                </Link>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-3">
-              {user ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="gap-2">
-                      <span className="hidden sm:inline">{displayName}</span>
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback>{getInitials(user.email)}</AvatarFallback>
-                      </Avatar>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => router.push('/dashboard')}>
-                      <LayoutDashboard className="mr-2 h-4 w-4" />
-                      Dashboard
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/settings')}>
-                      <Settings className="mr-2 h-4 w-4" />
-                      Settings
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={logout}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Log out
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <>
-                  <Button asChild variant="ghost" size="sm">
-                    <Link href="/login">Log in</Link>
-                  </Button>
-                  <Button asChild size="sm">
-                    <Link href="/register/client">Get Started</Link>
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
-    </header>
-  );
-}
-
-// ============================================================================
 // SOLUTIONS HERO
 // ============================================================================
 
 function SolutionsHero() {
   return (
-    <section className="pt-32 pb-16 sm:pt-40 sm:pb-24">
+    <section className="pt-28 pb-10 sm:pt-36 sm:pb-14">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="text-center max-w-4xl mx-auto">
           {/* Badge */}
@@ -335,11 +199,11 @@ function SolutionSection({
   const colors = colorClasses[accentColor];
 
   return (
-    <section className="py-16 sm:py-24 border-t border-border/30">
+    <section className="py-10 sm:py-14 border-t border-border/30">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div
           className={cn(
-            'grid lg:grid-cols-2 gap-12 items-center',
+            'grid lg:grid-cols-2 gap-8 items-center',
             reverse && 'lg:grid-flow-col-dense'
           )}
         >
@@ -479,7 +343,7 @@ function OrderManagementSection() {
       subtitle="From Incoming to Fulfilled"
       description="Track every order from the moment it's placed to delivery. Our intuitive dashboard keeps you in control of your entire fulfillment process."
       features={orderManagementFeatures}
-      imageSrc="/Hero-2.png"
+      imageSrc="/Hero-2_Trans.png"
       imageAlt="Order management dashboard"
       accentColor="primary"
     />
@@ -696,14 +560,14 @@ const itemVariants = {
 
 function AdditionalFeaturesSection() {
   return (
-    <section className="py-16 sm:py-24 border-t border-border/30">
+    <section className="py-10 sm:py-14 border-t border-border/30">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-12"
+          className="text-center mb-8"
         >
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
             And So Much More
@@ -772,7 +636,7 @@ const trustIndicators = [
 
 function FinalCTASection() {
   return (
-    <section className="py-16 sm:py-24 border-t border-border/30">
+    <section className="py-10 sm:py-14 border-t border-border/30">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

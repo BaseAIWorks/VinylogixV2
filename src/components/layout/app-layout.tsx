@@ -38,6 +38,7 @@ import { LayoutDashboard, ScanLine, BarChart3, Settings, LogOut, Menu, Heart, Pa
 import { useAuth } from '@/hooks/use-auth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import Image from 'next/image';
+import { Logo } from '@/components/ui/logo';
 import type { UserRole } from '@/types';
 import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -195,7 +196,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [defaultOpen, setDefaultOpen] = React.useState(!isMobile); 
 
   const companyName = displayBranding?.companyName ?? "Vinylogix";
-  const logoUrl = displayBranding?.logoUrl ?? "/logo.png";
+  const hasCustomLogo = displayBranding?.logoUrl && displayBranding.logoUrl !== '/logo.png';
   
   const clientMenuSettings = activeDistributor?.clientMenuSettings || {
       showCollection: true, showWishlist: true, showScan: true, showDiscogs: true
@@ -281,16 +282,23 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <SidebarHeader className="p-4 flex justify-center items-center">
           <Link href="/dashboard" className="flex items-center gap-2 text-xl font-semibold text-sidebar-primary">
             <div className="w-full h-auto group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:h-8 transition-all flex items-center justify-center">
-              <Image
-                src={logoUrl}
-                alt={`${companyName} Logo`}
-                width={130}
-                height={26}
-                style={{ width: 'auto', height: 'auto', maxWidth: '130px', maxHeight: '26px' }}
-                className="group-data-[collapsible=icon]:max-w-7 group-data-[collapsible=icon]:max-h-7 object-contain"
-                unoptimized={true}
-                onError={(e) => e.currentTarget.src='/logo.png'}
-              />
+              {hasCustomLogo ? (
+                <Image
+                  src={displayBranding!.logoUrl!}
+                  alt={`${companyName} Logo`}
+                  width={130}
+                  height={26}
+                  style={{ width: 'auto', height: 'auto', maxWidth: '130px', maxHeight: '26px' }}
+                  className="group-data-[collapsible=icon]:max-w-7 group-data-[collapsible=icon]:max-h-7 object-contain"
+                  unoptimized={true}
+                />
+              ) : (
+                <Logo
+                  width={130}
+                  height={26}
+                  className="group-data-[collapsible=icon]:max-w-7 group-data-[collapsible=icon]:max-h-7"
+                />
+              )}
             </div>
           </Link>
         </SidebarHeader>
@@ -388,16 +396,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
              </SidebarMenuItem>
            </SidebarMenu>
            <div className="flex items-center justify-center gap-2 text-xs text-sidebar-foreground/60 mt-3">
-              <Image
-                src="/logo.png"
-                alt="Vinylogix Logo"
-                width={120}
-                height={24}
-                style={{ width: 'auto', height: 'auto', maxHeight: '24px' }}
-                className="object-contain"
-                unoptimized={true}
-                onError={(e) => e.currentTarget.src='/logo.png'}
-              />
+              <Logo width={120} height={24} />
               <span className="font-semibold">v1.0.0</span>
           </div>
         </SidebarFooter>

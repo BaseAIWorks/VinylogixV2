@@ -2,24 +2,12 @@
 
 import React, { useRef } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import { Logo } from '@/components/ui/logo';
 import {
   ArrowRight,
   Gift,
-  Menu,
-  X,
-  Settings,
-  LogOut,
-  LayoutDashboard,
-  ScanLine,
   Disc3,
-  Bot,
-  Warehouse,
-  ShoppingCart,
-  BarChart3,
-  CreditCard,
-  HardHat,
   Library,
   ListChecks,
   Heart,
@@ -29,33 +17,28 @@ import {
   Smartphone,
   Check,
   Sparkles,
-  Users,
   Store,
   Instagram,
   Facebook,
+  Scan,
+  Wand2,
+  PackageSearch,
+  Receipt,
+  PieChart,
+  Wallet,
+  Shield,
+  UsersRound,
+  Brush,
+  Bot,
+  Warehouse,
+  HardHat,
+  CreditCard,
+  Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AnimatedGroup } from '@/components/ui/animated-group';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/hooks/use-auth';
-import { useRouter } from 'next/navigation';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { UserRole } from '@/types';
-
-const roleDisplayNames: Record<UserRole, string> = {
-  master: 'Master',
-  worker: 'Operator',
-  viewer: 'Client',
-  superadmin: 'Super Admin',
-};
+import { Header } from './Header';
 
 // ============================================================================
 // MAIN COMPONENT
@@ -74,9 +57,9 @@ export function UnifiedLanding() {
           className="absolute inset-0"
           style={{
             background: `
-              radial-gradient(ellipse 80% 50% at 50% -10%, rgba(124,58,237,0.15), transparent),
-              radial-gradient(ellipse 60% 40% at 80% 50%, rgba(59,130,246,0.08), transparent),
-              radial-gradient(ellipse 60% 40% at 20% 80%, rgba(124,58,237,0.08), transparent)
+              radial-gradient(ellipse 80% 50% at 50% -10%, rgba(232,106,51,0.15), transparent),
+              radial-gradient(ellipse 60% 40% at 80% 50%, rgba(202,138,4,0.08), transparent),
+              radial-gradient(ellipse 60% 40% at 20% 80%, rgba(232,106,51,0.08), transparent)
             `,
           }}
         />
@@ -99,123 +82,13 @@ export function UnifiedLanding() {
 
         {/* Pricing + CTA Combined */}
         <PricingSection />
+
+        {/* Final CTA */}
+        <FinalCTASection />
       </main>
 
       <Footer />
     </div>
-  );
-}
-
-// ============================================================================
-// HEADER
-// ============================================================================
-
-const menuItems = [
-  { name: 'Solutions', href: '/solutions' },
-  { name: 'Pricing', href: '/pricing' },
-];
-
-function Header() {
-  const { user, logout } = useAuth();
-  const router = useRouter();
-  const [menuState, setMenuState] = React.useState(false);
-  const [isScrolled, setIsScrolled] = React.useState(false);
-
-  const getInitials = (email?: string | null) => {
-    if (!email) return 'TU';
-    return email.substring(0, 2).toUpperCase();
-  };
-
-  const displayName = user?.firstName
-    ? `${user.firstName} ${user.lastName || ''}`.trim()
-    : user?.email;
-
-  React.useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  return (
-    <header className="fixed z-50 w-full">
-      <nav className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div
-          className={cn(
-            'mt-4 rounded-2xl px-4 py-3 transition-all duration-300',
-            isScrolled
-              ? 'bg-background/80 backdrop-blur-xl border border-border/50 shadow-lg'
-              : 'bg-transparent'
-          )}
-        >
-          <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center">
-              <Image
-                src="/logo.png"
-                alt="Vinylogix"
-                width={140}
-                height={32}
-                className="h-8 w-auto"
-                unoptimized
-                priority
-              />
-            </Link>
-
-            <div className="hidden md:flex items-center gap-8">
-              {menuItems.map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {item.name}
-                </Link>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-3">
-              {user ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="gap-2">
-                      <span className="hidden sm:inline">{displayName}</span>
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback>{getInitials(user.email)}</AvatarFallback>
-                      </Avatar>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => router.push('/dashboard')}>
-                      <LayoutDashboard className="mr-2 h-4 w-4" />
-                      Dashboard
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push('/settings')}>
-                      <Settings className="mr-2 h-4 w-4" />
-                      Settings
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={logout}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Log out
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <>
-                  <Button asChild variant="ghost" size="sm">
-                    <Link href="/login">Log in</Link>
-                  </Button>
-                  <Button asChild size="sm">
-                    <Link href="/register/client">Get Started</Link>
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
-    </header>
   );
 }
 
@@ -301,11 +174,11 @@ function HeroSection() {
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5, duration: 0.8 }}
-          className="mt-12 sm:mt-16"
+          className="mt-10 sm:mt-12"
         >
           <div className="relative rounded-xl overflow-hidden border border-border/50 shadow-2xl shadow-primary/10">
             <img
-              src="/Hero-2.png"
+              src="/Hero-2_Trans.png"
               alt="Vinylogix Dashboard"
               className="w-full"
             />
@@ -358,53 +231,71 @@ function StatsBar() {
 
 const features = [
   {
-    icon: ScanLine,
+    icon: Scan,
     title: 'Barcode Scanning',
-    description: 'Camera or hardware scanner support for rapid inventory processing.',
-    span: 'col-span-1',
+    description: 'Camera or hardware scanner for rapid inventory.',
+    color: 'bg-orange-500',
   },
   {
-    icon: Disc3,
-    title: 'Discogs Integration',
-    description: 'Auto-sync metadata, tracklists, and cover art.',
-    span: 'col-span-1',
-  },
-  {
-    icon: Bot,
+    icon: Wand2,
     title: 'AI Content',
-    description: 'Generate artist bios and descriptions with Gemini AI.',
-    span: 'col-span-1',
+    description: 'Auto-generate artist bios and descriptions.',
+    color: 'bg-violet-500',
   },
   {
-    icon: Warehouse,
-    title: 'Multi-Location Stock',
-    description: 'Manage shop floor and backroom inventory separately.',
-    span: 'col-span-1',
+    icon: PackageSearch,
+    title: 'Stock Locations',
+    description: 'Manage shop floor and backroom separately.',
+    color: 'bg-emerald-500',
   },
   {
-    icon: ShoppingCart,
+    icon: Receipt,
     title: 'Order Management',
-    description: 'Complete cart and checkout flow with order tracking.',
-    span: 'col-span-1',
+    description: 'Cart, checkout, and real-time tracking.',
+    color: 'bg-sky-500',
   },
   {
-    icon: BarChart3,
+    icon: PieChart,
     title: 'Analytics',
-    description: 'Sales performance, valuation, and insights dashboard.',
-    span: 'col-span-1',
+    description: 'Sales performance and inventory insights.',
+    color: 'bg-pink-500',
+  },
+  {
+    icon: Wallet,
+    title: 'Payments',
+    description: 'Stripe and PayPal with auto invoicing.',
+    color: 'bg-indigo-500',
+  },
+  {
+    icon: Shield,
+    title: 'Access Control',
+    description: 'Role-based permissions for your team.',
+    color: 'bg-amber-500',
+  },
+  {
+    icon: UsersRound,
+    title: 'Client Insights',
+    description: 'View wishlists and customer favorites.',
+    color: 'bg-teal-500',
+  },
+  {
+    icon: Brush,
+    title: 'Custom Branding',
+    description: 'Your logo and name for a branded look.',
+    color: 'bg-rose-500',
   },
 ];
 
 function FeaturesSection() {
   return (
-    <section className="py-16 sm:py-24">
+    <section className="py-10 sm:py-14">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-12"
+          className="text-center mb-10"
         >
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
             Everything You Need
@@ -415,7 +306,7 @@ function FeaturesSection() {
         </motion.div>
 
         {/* Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {features.map((feature, index) => {
             const Icon = feature.icon;
             return (
@@ -424,18 +315,28 @@ function FeaturesSection() {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: index * 0.05 }}
+                transition={{ delay: index * 0.04 }}
                 className={cn(
-                  'group p-5 rounded-xl border border-border/50 bg-card/30',
-                  'hover:border-primary/30 hover:bg-card/50 transition-all duration-300',
-                  feature.span
+                  'group flex items-start gap-3 p-4 rounded-xl',
+                  'border border-border/40 bg-card/30 backdrop-blur-sm',
+                  'hover:bg-card/60 hover:border-primary/30 hover:shadow-md',
+                  'transition-all duration-200'
                 )}
               >
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
-                  <Icon className="w-5 h-5 text-primary" />
+                {/* Icon */}
+                <div className={cn(
+                  'flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center',
+                  feature.color,
+                  'group-hover:scale-105 transition-transform duration-200'
+                )}>
+                  <Icon className="w-5 h-5 text-white" />
                 </div>
-                <h3 className="font-semibold text-foreground mb-1">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground">{feature.description}</p>
+
+                {/* Text */}
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-foreground leading-tight">{feature.title}</h3>
+                  <p className="text-sm text-muted-foreground mt-0.5 leading-snug">{feature.description}</p>
+                </div>
               </motion.div>
             );
           })}
@@ -446,7 +347,7 @@ function FeaturesSection() {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="mt-12 flex items-center justify-center gap-8 text-muted-foreground"
+          className="mt-10 flex items-center justify-center gap-8 text-muted-foreground"
         >
           <div className="flex items-center gap-2">
             <Laptop className="w-5 h-5" />
@@ -471,7 +372,7 @@ function FeaturesSection() {
 // ============================================================================
 
 const distributorFeatures = [
-  { icon: ScanLine, text: 'Barcode scanning (camera + hardware)' },
+  { icon: Scan, text: 'Barcode scanning (camera + hardware)' },
   { icon: Disc3, text: 'Discogs API integration' },
   { icon: Bot, text: 'AI-powered content generation' },
   { icon: Warehouse, text: 'Dual stock locations' },
@@ -488,13 +389,13 @@ const collectorFeatures = [
 
 function PlatformShowcase() {
   return (
-    <section className="py-16 sm:py-24 border-t border-border/30">
+    <section className="py-10 sm:py-14 border-t border-border/30">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-12"
+          className="text-center mb-10"
         >
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
             Built for Everyone
@@ -507,10 +408,11 @@ function PlatformShowcase() {
         <div className="grid md:grid-cols-2 gap-6">
           {/* Distributors Card */}
           <motion.div
+            id="distributors"
             initial={{ opacity: 0, x: -20 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            className="p-6 rounded-2xl border border-border/50 bg-card/30"
+            className="p-6 rounded-2xl border border-border/50 bg-card/30 scroll-mt-24"
           >
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -541,10 +443,11 @@ function PlatformShowcase() {
 
           {/* Collectors Card */}
           <motion.div
+            id="collectors"
             initial={{ opacity: 0, x: 20 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            className="p-6 rounded-2xl border border-border/50 bg-card/30"
+            className="p-6 rounded-2xl border border-border/50 bg-card/30 scroll-mt-24"
           >
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
@@ -617,13 +520,13 @@ const tiers = [
 
 function PricingSection() {
   return (
-    <section className="py-16 sm:py-24 border-t border-border/30">
+    <section className="py-10 sm:py-14 border-t border-border/30">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-12"
+          className="text-center mb-10"
         >
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
             Simple Pricing
@@ -688,7 +591,7 @@ function PricingSection() {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="mt-16 text-center"
+          className="mt-12 text-center"
         >
           <p className="text-muted-foreground mb-4">
             Questions? We're here to help.
@@ -703,21 +606,82 @@ function PricingSection() {
 }
 
 // ============================================================================
+// FINAL CTA SECTION
+// ============================================================================
+
+function FinalCTASection() {
+  return (
+    <section className="py-16 sm:py-20 border-t border-border/30">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary/10 via-primary/5 to-background border border-primary/20"
+        >
+          {/* Background decoration */}
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-3xl" />
+            <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-accent/10 rounded-full blur-3xl" />
+          </div>
+
+          <div className="relative px-6 py-12 sm:px-12 sm:py-16 text-center">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6"
+            >
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium text-primary">Start your 7-day free trial</span>
+            </motion.div>
+
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight mb-4">
+              Ready to Transform Your
+              <span className="block text-primary">Vinyl Business?</span>
+            </h2>
+
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
+              Join hundreds of record stores and collectors who trust Vinylogix
+              to manage their inventory and grow their passion.
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <Button asChild size="lg" className="min-w-[180px]">
+                <Link href="/register">
+                  Get Started Free
+                  <ArrowRight className="ml-2 w-4 h-4" />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="lg" className="min-w-[180px]">
+                <Link href="/contact">Talk to Sales</Link>
+              </Button>
+            </div>
+
+            <p className="mt-6 text-sm text-muted-foreground">
+              No credit card required • Free plan available • Cancel anytime
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// ============================================================================
 // FOOTER
 // ============================================================================
 
 const footerLinks = {
   Product: [
     { href: '/pricing', text: 'Pricing' },
-    { href: '/#', text: 'Features' },
-  ],
-  Company: [
-    { href: '/#', text: 'About' },
-    { href: '/contact', text: 'Contact' },
+    { href: '/solutions', text: 'Solutions' },
+    { href: '/#distributors', text: 'For Distributors' },
+    { href: '/#collectors', text: 'For Collectors' },
   ],
   Resources: [
     { href: '/help', text: 'Help Center' },
-    { href: '/#', text: 'Privacy' },
+    { href: '/contact', text: 'Contact' },
   ],
 };
 
@@ -728,14 +692,7 @@ function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
-            <Image
-              src="/logo.png"
-              alt="Vinylogix"
-              width={120}
-              height={28}
-              className="h-7 w-auto mb-4"
-              unoptimized
-            />
+            <Logo width={120} height={28} className="mb-4" />
             <p className="text-sm text-muted-foreground mb-4">
               The complete platform for vinyl record management.
             </p>

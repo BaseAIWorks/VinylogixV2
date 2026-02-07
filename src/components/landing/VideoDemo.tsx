@@ -15,7 +15,7 @@ interface VideoDemoProps {
 
 export function VideoDemo({
   videoUrl = 'https://www.youtube.com/embed/dQw4w9WgXcQ',
-  thumbnailUrl = '/Hero-2.png',
+  thumbnailUrl = '/Hero-2_Trans.png',
   title = 'See Vinylogix in Action',
   description = 'Watch how Vinylogix transforms vinyl record management with powerful inventory tools, seamless ordering, and beautiful analytics.',
 }: VideoDemoProps) {

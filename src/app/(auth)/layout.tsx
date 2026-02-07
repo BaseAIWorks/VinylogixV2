@@ -4,8 +4,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
+import { Logo } from "@/components/ui/logo";
 
 export default function AuthLayout({
   children,
@@ -33,7 +33,7 @@ export default function AuthLayout({
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-4">
         <div className="mb-8">
           <Link href="/">
-            <Image src="/logo.png" alt="Vinylogix Logo" width={300} height={60} style={{ width: 'auto', height: 'auto' }} className="object-contain" unoptimized={true} priority />
+            <Logo width={300} height={60} priority />
           </Link>
         </div>
         {children}
