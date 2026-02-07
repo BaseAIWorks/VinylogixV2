@@ -181,9 +181,9 @@ const LocationSelector = ({
   label: string;
   onUpdateAvailableLocations: (newLocations: string[]) => void;
 }) => {
-  const { activeDistributor } = useAuth();
+  const { user, activeDistributor } = useAuth();
   const availableLocations = name === 'shelf_locations' ? activeDistributor?.shelfLocations || [] : activeDistributor?.storageLocations || [];
-  const canManageLocations = useAuth().user?.role === 'master';
+  const canManageLocations = user?.role === 'master';
 
   return (
     <Controller
@@ -273,6 +273,7 @@ interface RecordFormProps {
   user: User;
   submitButtonText?: string;
   disableDiscogsFields?: boolean;
+  hideDiscogsPreview?: boolean;
   shelfLocations?: string[];
   storageLocations?: string[];
   suppliers?: Supplier[];
@@ -291,7 +292,7 @@ export const DetailItem = ({ icon: Icon, label, value }: { icon: React.ElementTy
   );
 };
 
-export default function RecordForm({ initialData, onSubmitForm, onSubmitAndScanNext, isSubmittingForm = false, user, submitButtonText = "Save", disableDiscogsFields = false, suppliers }: RecordFormProps) {
+export default function RecordForm({ initialData, onSubmitForm, onSubmitAndScanNext, isSubmittingForm = false, user, submitButtonText = "Save", disableDiscogsFields = false, hideDiscogsPreview = false, suppliers }: RecordFormProps) {
   const { activeDistributor, updateMyDistributorSettings } = useAuth();
   const form = useForm<RecordFormValues>({
     resolver: zodResolver(formSchema),
@@ -329,7 +330,7 @@ export default function RecordForm({ initialData, onSubmitForm, onSubmitAndScanN
     <Form {...form}>
     <form onSubmit={form.handleSubmit(onSubmitForm)} className="space-y-8">
       
-      {initialData?.discogs_id && (
+      {initialData?.discogs_id && !hideDiscogsPreview && (
         <div className="space-y-6">
              <div className="mb-8 p-4 border rounded-lg bg-muted/50 flex flex-col md:flex-row gap-6 items-start">
                 <div className="w-full md:w-1/3 lg:w-1/4 flex-shrink-0">
