@@ -35,9 +35,9 @@ const LocationSelector = ({
     selectedLocations: string[];
     onLocationChange: (recordId: string, type: 'shelf_locations' | 'storage_locations', newLocations: string[]) => void;
 }) => {
-    const { activeDistributor, updateMyDistributorSettings } = useAuth();
+    const { user, activeDistributor, updateMyDistributorSettings } = useAuth();
     const availableLocations = locationType === 'shelf_locations' ? activeDistributor?.shelfLocations || [] : activeDistributor?.storageLocations || [];
-    const canManageLocations = useAuth().user?.role === 'master';
+    const canManageLocations = user?.role === 'master';
     
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
