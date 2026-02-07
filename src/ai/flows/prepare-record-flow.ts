@@ -10,7 +10,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { getDiscogsReleaseDetailsById } from '@/services/discogs-service';
+import { getDiscogsReleaseDetailsById, getDiscogsMarketplaceStats } from '@/services/discogs-service';
 import { generateRecordInfo } from './generate-record-info-flow';
 import type { VinylRecord } from '@/types';
 
@@ -53,7 +53,24 @@ const prepareRecordFlow = ai.defineFlow(
       throw new Error(`Could not fetch details for Discogs ID ${input.discogsId}.`);
     }
 
-    // Step 2: If AI features are allowed, generate artist and album info.
+    // Step 2: Fetch marketplace stats (for median price, etc.)
+    let marketplaceData: Partial<VinylRecord>['discogsMarketplace'] = undefined;
+    try {
+      const marketplaceStats = await getDiscogsMarketplaceStats(input.discogsId.toString(), input.distributorId);
+      if (marketplaceStats) {
+        marketplaceData = {
+          numForSale: marketplaceStats.num_for_sale,
+          lowestPrice: marketplaceStats.lowest_price,
+          medianPrice: marketplaceStats.median_price,
+        };
+      }
+    } catch (marketplaceError) {
+      console.warn(
+        `Marketplace stats fetch failed for Discogs ID ${input.discogsId}, proceeding without it. Error: ${(marketplaceError as Error).message}`
+      );
+    }
+
+    // Step 3: If AI features are allowed, generate artist and album info.
     let aiInfo = { artistBio: '', albumInfo: '' };
     if (input.allowAiFeatures && discogsDetails.artist && discogsDetails.title) {
       try {
@@ -73,12 +90,13 @@ const prepareRecordFlow = ai.defineFlow(
       }
     }
 
-    // Step 3: Combine all data and return it to the client.
+    // Step 4: Combine all data and return it to the client.
     const preparedRecord: Partial<VinylRecord> = {
       ...discogsDetails,
       ...aiInfo,
+      discogsMarketplace: marketplaceData,
     };
-    
+
     return preparedRecord;
   }
 );

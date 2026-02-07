@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import RecordForm, { createFormDefaults, RecordFormValues, RecordFormInputData } from '@/components/records/record-form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowLeft, AlertTriangle, Disc3, Barcode, Search, Edit3, Keyboard, CheckCircle2, Music2, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, ArrowLeft, AlertTriangle, Disc3, Barcode, Search, Edit3, Keyboard, CheckCircle2, Music2, Info, ChevronDown, ChevronUp, Calendar, Tag, Users, TrendingUp, Euro, ShoppingCart, Heart, Star } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 import { addRecord } from '@/services/record-service';
@@ -371,27 +371,134 @@ export default function AddRecordPage() {
                       </p>
                     </div>
 
-                    {/* Quick info pills */}
-                    <div className="flex flex-wrap gap-1.5 mt-4">
-                      {initialData?.year && (
-                        <Badge variant="secondary" className="text-xs">{initialData.year}</Badge>
+                    {/* Release Details */}
+                    <div className="mt-4 space-y-2 text-sm">
+                      {initialData?.releasedDate && (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Calendar className="h-3.5 w-3.5" />
+                          <span>Released: <span className="text-foreground">{initialData.releasedDate}</span></span>
+                        </div>
+                      )}
+                      {!initialData?.releasedDate && initialData?.year && (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Calendar className="h-3.5 w-3.5" />
+                          <span>Year: <span className="text-foreground">{initialData.year}</span></span>
+                        </div>
                       )}
                       {initialData?.label && (
-                        <Badge variant="secondary" className="text-xs truncate max-w-[120px]">{initialData.label}</Badge>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Tag className="h-3.5 w-3.5" />
+                          <span className="truncate">Label: <span className="text-foreground">{initialData.label}</span></span>
+                        </div>
                       )}
                       {initialData?.country && (
-                        <Badge variant="secondary" className="text-xs">{initialData.country}</Badge>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <span className="w-3.5 text-center">🌍</span>
+                          <span>Country: <span className="text-foreground">{initialData.country}</span></span>
+                        </div>
+                      )}
+                      {initialData?.formatDetails && (
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Disc3 className="h-3.5 w-3.5" />
+                          <span className="truncate">Format: <span className="text-foreground">{initialData.formatDetails}</span></span>
+                        </div>
                       )}
                     </div>
 
-                    {/* Genre/Style tags */}
-                    {(initialData?.genre || initialData?.style) && (
-                      <div className="flex flex-wrap gap-1 mt-3">
-                        {(Array.isArray(initialData.genre) ? initialData.genre : initialData.genre?.split(', ')).map((g, i) => (
-                          <Badge key={`genre-${i}`} variant="outline" className="text-xs bg-primary/5">
-                            {g}
-                          </Badge>
-                        ))}
+                    {/* Genre tags */}
+                    {initialData?.genre && (
+                      <div className="mt-4">
+                        <p className="text-xs text-muted-foreground mb-1.5">Genre</p>
+                        <div className="flex flex-wrap gap-1">
+                          {(Array.isArray(initialData.genre) ? initialData.genre : initialData.genre?.split(', ')).map((g, i) => (
+                            <Badge key={`genre-${i}`} variant="secondary" className="text-xs">
+                              {g}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Style tags */}
+                    {initialData?.style && (
+                      <div className="mt-3">
+                        <p className="text-xs text-muted-foreground mb-1.5">Style</p>
+                        <div className="flex flex-wrap gap-1">
+                          {(Array.isArray(initialData.style) ? initialData.style : initialData.style?.split(', ')).map((s, i) => (
+                            <Badge key={`style-${i}`} variant="outline" className="text-xs bg-primary/5">
+                              {s}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Discogs Community Stats */}
+                    {initialData?.discogsCommunity && (
+                      <div className="mt-4 pt-4 border-t">
+                        <p className="text-xs text-muted-foreground mb-2">Discogs Community</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="flex items-center gap-1.5 text-sm">
+                            <Users className="h-3.5 w-3.5 text-blue-500" />
+                            <span className="text-muted-foreground">Have:</span>
+                            <span className="font-medium">{initialData.discogsCommunity.have?.toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-sm">
+                            <Heart className="h-3.5 w-3.5 text-red-500" />
+                            <span className="text-muted-foreground">Want:</span>
+                            <span className="font-medium">{initialData.discogsCommunity.want?.toLocaleString()}</span>
+                          </div>
+                          {initialData.discogsCommunity.rating?.average && (
+                            <div className="col-span-2 flex items-center gap-1.5 text-sm">
+                              <Star className="h-3.5 w-3.5 text-yellow-500" />
+                              <span className="text-muted-foreground">Rating:</span>
+                              <span className="font-medium">{initialData.discogsCommunity.rating.average.toFixed(1)}/5</span>
+                              <span className="text-xs text-muted-foreground">({initialData.discogsCommunity.rating.count} votes)</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Marketplace Stats */}
+                    {initialData?.discogsMarketplace && (
+                      <div className="mt-4 pt-4 border-t">
+                        <p className="text-xs text-muted-foreground mb-2">Marketplace</p>
+                        <div className="space-y-2">
+                          {initialData.discogsMarketplace.medianPrice && (
+                            <div className="flex items-center justify-between bg-green-500/10 rounded-md px-3 py-2">
+                              <div className="flex items-center gap-1.5 text-sm">
+                                <TrendingUp className="h-4 w-4 text-green-600" />
+                                <span className="text-muted-foreground">Median Price</span>
+                              </div>
+                              <span className="font-semibold text-green-600">
+                                {initialData.discogsMarketplace.medianPrice.currency === 'EUR' ? '€' : initialData.discogsMarketplace.medianPrice.currency}
+                                {initialData.discogsMarketplace.medianPrice.value.toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          {initialData.discogsMarketplace.lowestPrice && (
+                            <div className="flex items-center justify-between text-sm">
+                              <div className="flex items-center gap-1.5">
+                                <Euro className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span className="text-muted-foreground">Lowest</span>
+                              </div>
+                              <span className="font-medium">
+                                {initialData.discogsMarketplace.lowestPrice.currency === 'EUR' ? '€' : initialData.discogsMarketplace.lowestPrice.currency}
+                                {initialData.discogsMarketplace.lowestPrice.value.toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          {initialData.discogsMarketplace.numForSale !== undefined && (
+                            <div className="flex items-center justify-between text-sm">
+                              <div className="flex items-center gap-1.5">
+                                <ShoppingCart className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span className="text-muted-foreground">For Sale</span>
+                              </div>
+                              <span className="font-medium">{initialData.discogsMarketplace.numForSale} copies</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
 

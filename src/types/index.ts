@@ -291,6 +291,13 @@ export interface VinylRecord {
     };
   };
 
+  // Discogs Marketplace Stats
+  discogsMarketplace?: {
+    numForSale?: number;
+    lowestPrice?: { value: number; currency: string };
+    medianPrice?: { value: number; currency: string };
+  };
+
   // Supplier info
   supplierId?: string;
 
@@ -488,6 +495,10 @@ export interface ChangelogEntry {
 export interface DiscogsMarketplaceStats {
   num_for_sale?: number;
   lowest_price?: {
+    value: number;
+    currency: string;
+  };
+  median_price?: {
     value: number;
     currency: string;
   };

@@ -90,10 +90,10 @@ export type RecordFormInputData = {
   notes?: string;
   purchasingPrice?: string | number;
   sellingPrice?: string | number;
-  stock_shelves?: string | number; 
+  stock_shelves?: string | number;
   shelf_location?: string;
   shelf_locations?: string | string[];
-  stock_storage?: string | number; 
+  stock_storage?: string | number;
   storage_location?: string;
   storage_locations?: string | string[];
   supplierId?: string;
@@ -105,6 +105,21 @@ export type RecordFormInputData = {
   weightOptionId?: string;
   cover_url?: string;
   dataAiHint?: string;
+  artistBio?: string;
+  albumInfo?: string;
+  discogsCommunity?: {
+    have: number;
+    want: number;
+    rating?: {
+      count: number;
+      average: number;
+    };
+  };
+  discogsMarketplace?: {
+    numForSale?: number;
+    lowestPrice?: { value: number; currency: string };
+    medianPrice?: { value: number; currency: string };
+  };
 };
 
 export const createFormDefaults = (data?: RecordFormInputData): RecordFormInputData => {
@@ -158,6 +173,10 @@ export const createFormDefaults = (data?: RecordFormInputData): RecordFormInputD
     tracklist: data?.tracklist,
     cover_url: data?.cover_url,
     dataAiHint: data?.dataAiHint,
+    artistBio: data?.artistBio,
+    albumInfo: data?.albumInfo,
+    discogsCommunity: data?.discogsCommunity,
+    discogsMarketplace: data?.discogsMarketplace,
   };
 };
 
