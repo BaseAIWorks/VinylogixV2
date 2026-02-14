@@ -200,13 +200,19 @@ export async function createOrder(user: User, cartItems: CartItem[]): Promise<Or
         updatedAt: Timestamp.fromDate(now),
         orderNumber: orderNumber,
     };
-    
+
     // Conditionally add optional fields to avoid writing 'undefined' to Firestore
     if (user.useDifferentBillingAddress && user.billingAddress) {
         newOrderData.billingAddress = user.billingAddress;
     }
     if (user.phoneNumber) {
         newOrderData.phoneNumber = user.phoneNumber;
+    }
+    if (user.companyName) {
+        newOrderData.customerCompanyName = user.companyName;
+    }
+    if (user.vatNumber) {
+        newOrderData.customerVatNumber = user.vatNumber;
     }
     
     const orderDocRef = await addDoc(collection(db, ORDERS_COLLECTION), newOrderData);

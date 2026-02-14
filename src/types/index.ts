@@ -438,6 +438,8 @@ export interface Order {
   viewerId: string;
   viewerEmail: string;
   customerName: string;
+  customerCompanyName?: string; // Client's company name
+  customerVatNumber?: string; // Client's VAT number
   shippingAddress: string;
   billingAddress?: string;
   phoneNumber?: string;

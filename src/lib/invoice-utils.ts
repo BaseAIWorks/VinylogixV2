@@ -68,13 +68,42 @@ export async function generateInvoicePdf(
 
   // Try to load and add logo
   let logoLoaded = false;
+  let logoWidth = 0;
   if (distributor.logoUrl) {
     try {
       const logoBase64 = await loadImageAsBase64(distributor.logoUrl);
       if (logoBase64) {
-        // Add logo (max height 25mm, width proportional)
-        doc.addImage(logoBase64, 'AUTO', margin, currentY, 40, 20);
-        logoLoaded = true;
+        // Create an image element to get natural dimensions
+        const img = new Image();
+        await new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+          img.src = logoBase64;
+        });
+
+        // Calculate dimensions maintaining aspect ratio
+        const maxHeight = 18; // Max height in mm
+        const maxWidth = 45; // Max width in mm
+        let width = img.naturalWidth;
+        let height = img.naturalHeight;
+
+        if (width > 0 && height > 0) {
+          const aspectRatio = width / height;
+
+          // Scale to fit within max dimensions
+          if (height > maxHeight) {
+            height = maxHeight;
+            width = height * aspectRatio;
+          }
+          if (width > maxWidth) {
+            width = maxWidth;
+            height = width / aspectRatio;
+          }
+
+          doc.addImage(logoBase64, 'AUTO', margin, currentY, width, height);
+          logoLoaded = true;
+          logoWidth = width + 5; // Add some spacing
+        }
       }
     } catch (error) {
       console.warn('Could not load logo for invoice:', error);
@@ -82,7 +111,7 @@ export async function generateInvoicePdf(
   }
 
   // Company name (if no logo or alongside logo)
-  const companyInfoX = logoLoaded ? margin + 45 : margin;
+  const companyInfoX = logoLoaded ? margin + logoWidth : margin;
   const companyName = distributor.companyName || distributor.name;
 
   doc.setFontSize(16);
@@ -199,17 +228,27 @@ export async function generateInvoicePdf(
 
   currentY += 6;
 
+  // Customer name
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLORS.text);
   doc.text(order.customerName, margin, currentY);
-
   currentY += 5;
+
+  // Customer company name (if available)
+  if (order.customerCompanyName) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...COLORS.text);
+    doc.text(order.customerCompanyName, margin, currentY);
+    currentY += 4;
+  }
 
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...COLORS.secondary);
 
+  // Shipping address
   const addressLines = order.shippingAddress.split('\n');
   addressLines.forEach((line) => {
     if (line.trim()) {
@@ -218,7 +257,23 @@ export async function generateInvoicePdf(
     }
   });
 
-  currentY += 10;
+  // Customer contact info
+  if (order.viewerEmail) {
+    doc.text(order.viewerEmail, margin, currentY);
+    currentY += 4;
+  }
+  if (order.phoneNumber) {
+    doc.text(order.phoneNumber, margin, currentY);
+    currentY += 4;
+  }
+
+  // Customer VAT number (if available)
+  if (order.customerVatNumber) {
+    doc.text(`VAT: ${order.customerVatNumber}`, margin, currentY);
+    currentY += 4;
+  }
+
+  currentY += 6;
 
   // ============================================
   // ORDER ITEMS TABLE
