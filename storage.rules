@@ -11,8 +11,10 @@ service firebase.storage {
     // Secure the write operation.
     // Only authenticated users can upload files.
     // Further restrictions ensure users can only write to their own designated folders.
+    // Superadmins can write to any folder (for impersonation support).
     match /covers/{distributorId}/{userId}/{fileName} {
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null &&
+        (request.auth.uid == userId || request.auth.token.role == 'superadmin');
     }
   }
 }

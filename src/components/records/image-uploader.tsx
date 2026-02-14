@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ImageIcon, Upload, Loader2, X } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
-import { storage } from '@/lib/firebase';
+import { storage, auth } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useToast } from '@/hooks/use-toast';
 
@@ -73,7 +73,7 @@ const getCroppedImg = (image: HTMLImageElement, crop: Crop): Promise<Blob | null
 
 
 export default function ImageUploader({ onUploadComplete, initialImageUrl }: ImageUploaderProps) {
-  const { user } = useAuth();
+  const { user, isImpersonating } = useAuth();
   const { toast } = useToast();
   const [imgSrc, setImgSrc] = useState('');
   const [crop, setCrop] = useState<Crop>();
@@ -112,22 +112,36 @@ export default function ImageUploader({ onUploadComplete, initialImageUrl }: Ima
       toast({ title: "Crop Error", description: "Please select a crop area first.", variant: "destructive" });
       return;
     }
-    
+
     if (!user || !user.distributorId || !user.uid) {
       toast({ title: "Authentication Error", description: "You must be associated with a distributor to upload images.", variant: "destructive" });
+      return;
+    }
+
+    // Use the actual Firebase Auth user for storage uploads
+    // This ensures the UID matches request.auth.uid in storage rules
+    const currentAuthUser = auth.currentUser;
+    if (!currentAuthUser) {
+      toast({ title: "Authentication Error", description: "Your session has expired. Please refresh the page and try again.", variant: "destructive" });
       return;
     }
 
     setIsLoading(true);
 
     try {
+      // Refresh the auth token to ensure it's valid
+      await currentAuthUser.getIdToken(true);
+
       const croppedBlob = await getCroppedImg(imgRef.current, completedCrop);
       if (!croppedBlob) {
         throw new Error("Failed to create cropped image blob.");
       }
 
       const fileName = `${new Date().getTime()}-${Math.random().toString(36).substring(2)}.jpg`;
-      const filePath = `covers/${user.distributorId}/${user.uid}/${fileName}`;
+      // When impersonating, use the impersonated user's UID (superadmin can write to any folder)
+      // Otherwise, use the actual authenticated user's UID to match storage rules
+      const targetUid = isImpersonating ? user.uid : currentAuthUser.uid;
+      const filePath = `covers/${user.distributorId}/${targetUid}/${fileName}`;
       const storageRef = ref(storage, filePath);
       
       const snapshot = await uploadBytes(storageRef, croppedBlob);
