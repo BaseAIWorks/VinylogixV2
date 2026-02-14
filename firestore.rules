@@ -147,19 +147,28 @@ service cloud.firestore {
     }
     
     match /suppliers/{supplierId} {
+        // Superadmins can manage all suppliers
+        allow read, write, delete: if isSuperAdmin();
+
         // Allow operators to manage suppliers for their distributor
         allow read, write, delete: if isOperatorOf(resource.data.distributorId);
-        
+
         // Allow creating suppliers if user is an operator and the distributorId matches their token
         allow create: if isOperator() && request.resource.data.distributorId == request.auth.token.distributorId;
     }
-    
+
     match /orders/{orderId} {
+        // Superadmins can manage all orders
+        allow read, write, delete: if isSuperAdmin();
+
         allow create: if isSignedIn();
         allow read, update: if isOperatorOf(resource.data.distributorId) || isOwner(resource.data.viewerId);
     }
-    
+
     match /notifications/{notificationId} {
+        // Superadmins can manage all notifications
+        allow read, write, delete: if isSuperAdmin();
+
         allow read, write: if isOperatorOf(resource.data.distributorId);
     }
 
