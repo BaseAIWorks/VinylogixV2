@@ -107,6 +107,17 @@ export async function generateInvoicePdf(
     detailY += 4;
   }
 
+  // City, postcode, country
+  const cityLine = [distributor.postcode, distributor.city].filter(Boolean).join(' ');
+  if (cityLine) {
+    doc.text(cityLine, companyInfoX, detailY);
+    detailY += 4;
+  }
+  if (distributor.country) {
+    doc.text(distributor.country, companyInfoX, detailY);
+    detailY += 4;
+  }
+
   // Contact info
   if (distributor.contactEmail) {
     doc.text(distributor.contactEmail, companyInfoX, detailY);
@@ -116,8 +127,19 @@ export async function generateInvoicePdf(
     doc.text(distributor.phoneNumber, companyInfoX, detailY);
     detailY += 4;
   }
-  if (distributor.website) {
-    doc.text(distributor.website, companyInfoX, detailY);
+
+  // Registration numbers (KVK, VAT)
+  if (distributor.chamberOfCommerce) {
+    doc.text(`KVK: ${distributor.chamberOfCommerce}`, companyInfoX, detailY);
+    detailY += 4;
+  }
+  if (distributor.vatNumber) {
+    doc.text(`VAT: ${distributor.vatNumber}`, companyInfoX, detailY);
+    detailY += 4;
+  }
+  if (distributor.taxId && distributor.taxId !== distributor.vatNumber) {
+    doc.text(`Tax ID: ${distributor.taxId}`, companyInfoX, detailY);
+    detailY += 4;
   }
 
   // ============================================
@@ -195,30 +217,6 @@ export async function generateInvoicePdf(
       currentY += 4;
     }
   });
-
-  // Company registration info on the right
-  const regInfoX = pageWidth / 2 + 10;
-  let regInfoY = currentY - (addressLines.length * 4) - 5;
-
-  if (distributor.chamberOfCommerce || distributor.vatNumber) {
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...COLORS.secondary);
-    doc.text("COMPANY DETAILS", regInfoX, regInfoY);
-    regInfoY += 6;
-
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...COLORS.text);
-
-    if (distributor.chamberOfCommerce) {
-      doc.text(`KVK: ${distributor.chamberOfCommerce}`, regInfoX, regInfoY);
-      regInfoY += 5;
-    }
-    if (distributor.vatNumber) {
-      doc.text(`VAT/Tax ID: ${distributor.vatNumber}`, regInfoX, regInfoY);
-      regInfoY += 5;
-    }
-  }
 
   currentY += 10;
 
