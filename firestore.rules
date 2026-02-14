@@ -103,13 +103,25 @@ service cloud.firestore {
     match /distributors/{distributorId} {
       // Superadmins can manage all distributors.
       allow read, write, delete: if isSuperAdmin();
-      
+
       // Operators can read their own distributor document.
       // Clients can read the document of distributors they have access to.
       allow read: if isSignedIn() && (isOperatorOf(distributorId) || isClientOf(distributorId));
-      
+
       // Only the master of a distributor can update it.
       allow update: if isMasterOf(distributorId);
+
+      // Suppliers subcollection under each distributor
+      match /suppliers/{supplierId} {
+        // Superadmins can manage all suppliers
+        allow read, write, delete: if isSuperAdmin();
+
+        // Operators can manage suppliers for their distributor
+        allow read, write, delete: if isOperatorOf(distributorId);
+
+        // Allow creating suppliers if user is an operator of this distributor
+        allow create: if isOperatorOf(distributorId);
+      }
     }
 
     match /vinylRecords/{recordId} {
