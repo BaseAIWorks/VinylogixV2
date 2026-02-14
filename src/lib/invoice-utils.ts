@@ -288,43 +288,8 @@ export async function generateInvoicePdf(
     rightY += 3.5;
   }
 
-  rightY += 4;
-
-  // Invoice details below client info
-  doc.setFontSize(9);
-  const invoiceNumber = order.orderNumber || order.id.slice(0, 8).toUpperCase();
-
-  doc.setFont("helvetica", "bold");
-  doc.text("Invoice #:", rightColumnX, rightY);
-  doc.setFont("helvetica", "normal");
-  doc.text(invoiceNumber, rightColumnX + 20, rightY);
-  rightY += 4;
-
-  doc.setFont("helvetica", "bold");
-  doc.text("Date:", rightColumnX, rightY);
-  doc.setFont("helvetica", "normal");
-  doc.text(format(new Date(order.createdAt), 'dd MMM yyyy'), rightColumnX + 20, rightY);
-  rightY += 4;
-
-  // Status
-  const statusText = statusConfig[order.status].label;
-  const isPaid = order.status === 'paid' || order.paymentStatus === 'paid';
-
-  doc.setFont("helvetica", "bold");
-  doc.text("Status:", rightColumnX, rightY);
-
-  if (isPaid) {
-    doc.setTextColor(...COLORS.success);
-    doc.setFont("helvetica", "bold");
-    doc.text("PAID", rightColumnX + 20, rightY);
-  } else {
-    doc.setTextColor(...COLORS.secondary);
-    doc.setFont("helvetica", "normal");
-    doc.text(statusText, rightColumnX + 20, rightY);
-  }
-
   // Calculate the maximum Y position from both columns
-  currentY = Math.max(detailY, rightY) + 10;
+  currentY = Math.max(detailY, rightY) + 8;
 
   // ============================================
   // DIVIDER LINE
@@ -335,6 +300,45 @@ export async function generateInvoicePdf(
   doc.line(margin, currentY, pageWidth - margin, currentY);
 
   currentY += 8;
+
+  // ============================================
+  // INVOICE DETAILS (below separator)
+  // ============================================
+
+  const invoiceNumber = order.orderNumber || order.id.slice(0, 8).toUpperCase();
+  const statusText = statusConfig[order.status].label;
+  const isPaid = order.status === 'paid' || order.paymentStatus === 'paid';
+
+  doc.setFontSize(10);
+  doc.setTextColor(...COLORS.text);
+
+  // Invoice number on left
+  doc.setFont("helvetica", "bold");
+  doc.text("Invoice #:", margin, currentY);
+  doc.setFont("helvetica", "normal");
+  doc.text(invoiceNumber, margin + 22, currentY);
+
+  // Date in center
+  const dateText = format(new Date(order.createdAt), 'dd MMM yyyy');
+  doc.setFont("helvetica", "bold");
+  doc.text("Date:", pageWidth / 2 - 20, currentY);
+  doc.setFont("helvetica", "normal");
+  doc.text(dateText, pageWidth / 2 - 5, currentY);
+
+  // Status on right
+  doc.setFont("helvetica", "bold");
+  doc.text("Status:", pageWidth - margin - 35, currentY);
+  if (isPaid) {
+    doc.setTextColor(...COLORS.success);
+    doc.setFont("helvetica", "bold");
+    doc.text("PAID", pageWidth - margin - 15, currentY);
+  } else {
+    doc.setTextColor(...COLORS.secondary);
+    doc.setFont("helvetica", "normal");
+    doc.text(statusText, pageWidth - margin - 15, currentY);
+  }
+
+  currentY += 10;
 
   // ============================================
   // ORDER ITEMS TABLE
