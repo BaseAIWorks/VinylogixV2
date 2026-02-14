@@ -158,9 +158,31 @@ export async function getClientsByDistributorId(distributorId: string): Promise<
     }
 }
 
+// Uses Admin SDK to bypass security rules when called from server
 export async function getMasterUserByDistributorId(distributorId: string): Promise<User | null> {
     if (!distributorId) return null;
-    
+
+    const adminDb = getAdminDb();
+    if (adminDb) {
+        // Server-side: use Admin SDK (bypasses security rules)
+        try {
+            const querySnapshot = await adminDb.collection(USERS_COLLECTION)
+                .where("distributorId", "==", distributorId)
+                .where("role", "==", "master")
+                .limit(1)
+                .get();
+            if (!querySnapshot.empty) {
+                const userDoc = querySnapshot.docs[0];
+                return processUserTimestamps({ ...userDoc.data(), uid: userDoc.id });
+            }
+            return null;
+        } catch (error) {
+            console.error(`UserService (Admin): Error finding master user for distributor ${distributorId}:`, error);
+            throw error;
+        }
+    }
+
+    // Client-side fallback: use client SDK
     const usersCollectionRef = collection(db, USERS_COLLECTION);
     const q = query(
         usersCollectionRef,
