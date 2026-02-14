@@ -1,8 +1,46 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import type { Distributor } from "@/types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+/**
+ * Check if a distributor has completed all required business information.
+ * Required fields: companyName, addressLine1, city, postcode, country, contactEmail
+ * Returns an object with isComplete boolean and list of missing fields.
+ */
+export function checkBusinessProfileComplete(distributor: Distributor | null): {
+  isComplete: boolean;
+  missingFields: string[];
+} {
+  if (!distributor) {
+    return { isComplete: false, missingFields: ['distributor'] };
+  }
+
+  const requiredFields: { key: keyof Distributor; label: string }[] = [
+    { key: 'companyName', label: 'Company Name' },
+    { key: 'addressLine1', label: 'Address' },
+    { key: 'city', label: 'City' },
+    { key: 'postcode', label: 'Postcode' },
+    { key: 'country', label: 'Country' },
+    { key: 'contactEmail', label: 'Contact Email' },
+  ];
+
+  const missingFields: string[] = [];
+
+  for (const field of requiredFields) {
+    const value = distributor[field.key];
+    if (!value || (typeof value === 'string' && value.trim() === '')) {
+      missingFields.push(field.label);
+    }
+  }
+
+  return {
+    isComplete: missingFields.length === 0,
+    missingFields,
+  };
 }
 
 export function formatPriceForDisplay(value?: number | null): string {

@@ -38,7 +38,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { auth } from "@/lib/firebase";
 
 
@@ -67,6 +67,32 @@ const profileFormSchema = z.object({
 const brandingFormSchema = z.object({
   companyName: z.string().optional(),
   logoUrl: z.string().url("Must be a valid URL").or(z.literal("")).optional(),
+});
+
+const legalBusinessFormSchema = z.object({
+  companyName: z.string().min(1, "Company name is required"),
+  addressLine1: z.string().min(1, "Address is required"),
+  addressLine2: z.string().optional(),
+  city: z.string().min(1, "City is required"),
+  postcode: z.string().min(1, "Postcode is required"),
+  country: z.string().min(1, "Country is required"),
+  contactEmail: z.string().email("Valid email is required"),
+  phoneNumber: z.string().optional(),
+  website: z.string().url("Must be a valid URL").or(z.literal("")).optional(),
+  chamberOfCommerce: z.string().optional(), // Business registration (KVK, CIF, etc.)
+  taxId: z.string().optional(), // Tax Identification Number (TIN)
+  isVatRegistered: z.boolean().default(false),
+  vatNumber: z.string().optional(),
+  vatCountry: z.string().optional(),
+}).refine(data => {
+  // If VAT registered, VAT number is required
+  if (data.isVatRegistered && !data.vatNumber) {
+    return false;
+  }
+  return true;
+}, {
+  message: "VAT number is required when VAT registered",
+  path: ["vatNumber"],
 });
 
 const distributorSettingsSchema = z.object({
@@ -101,6 +127,7 @@ const clientMenuFormSchema = z.object({
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 type BrandingFormValues = z.infer<typeof brandingFormSchema>;
+type LegalBusinessFormValues = z.infer<typeof legalBusinessFormSchema>;
 type DistributorSettingsValues = z.infer<typeof distributorSettingsSchema>;
 type NotificationsFormValues = z.infer<typeof notificationsFormSchema>;
 type CardDisplayFormValues = z.infer<typeof cardDisplayFormSchema>;
@@ -193,6 +220,8 @@ export default function SettingsPage() {
 
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
 
 
   const profileForm = useForm<ProfileFormValues>({
@@ -219,7 +248,27 @@ export default function SettingsPage() {
           logoUrl: "",
       }
   });
-  
+
+  const legalBusinessForm = useForm<LegalBusinessFormValues>({
+      resolver: zodResolver(legalBusinessFormSchema),
+      defaultValues: {
+          companyName: "",
+          addressLine1: "",
+          addressLine2: "",
+          city: "",
+          postcode: "",
+          country: "",
+          contactEmail: "",
+          phoneNumber: "",
+          website: "",
+          chamberOfCommerce: "",
+          taxId: "",
+          isVatRegistered: false,
+          vatNumber: "",
+          vatCountry: "",
+      }
+  });
+
   const distributorSettingsForm = useForm<DistributorSettingsValues>({
     resolver: zodResolver(distributorSettingsSchema),
     defaultValues: {
@@ -292,6 +341,27 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (activeDistributor) {
+        legalBusinessForm.reset({
+            companyName: activeDistributor.companyName || "",
+            addressLine1: activeDistributor.addressLine1 || "",
+            addressLine2: activeDistributor.addressLine2 || "",
+            city: activeDistributor.city || "",
+            postcode: activeDistributor.postcode || "",
+            country: activeDistributor.country || "",
+            contactEmail: activeDistributor.contactEmail || "",
+            phoneNumber: activeDistributor.phoneNumber || "",
+            website: activeDistributor.website || "",
+            chamberOfCommerce: activeDistributor.chamberOfCommerce || "",
+            taxId: activeDistributor.taxId || "",
+            isVatRegistered: activeDistributor.isVatRegistered || false,
+            vatNumber: activeDistributor.vatNumber || "",
+            vatCountry: activeDistributor.vatCountry || "",
+        });
+    }
+  }, [activeDistributor, legalBusinessForm]);
+
+  useEffect(() => {
+    if (activeDistributor) {
         notificationsForm.reset({
             lowStockNotificationsEnabled: activeDistributor.lowStockNotificationsEnabled || false,
             lowStockThreshold: activeDistributor.lowStockThreshold?.toString() || "20",
@@ -331,17 +401,20 @@ export default function SettingsPage() {
     showSaveSuccess('profile');
   };
   
-  const handleProfileCompletion = async (values: ProfileFormValues) => {
-    // Save the user profile data first
-    await updateUserProfile(values);
-    // Then mark the distributor profile as complete
-    await updateMyDistributorSettings({ profileComplete: true });
+  const handleProfileCompletion = async (values: LegalBusinessFormValues) => {
+    // Save the business profile data and mark as complete
+    await updateMyDistributorSettings({ ...values, profileComplete: true });
     setIsProfileCompletionDialogOpen(false);
   };
 
   const handleBrandingUpdate = async (values: BrandingFormValues) => {
       await updateMyDistributorSettings({ ...values });
       showSaveSuccess('branding');
+  };
+
+  const handleLegalBusinessUpdate = async (values: LegalBusinessFormValues) => {
+      await updateMyDistributorSettings(values);
+      showSaveSuccess('legalBusiness');
   };
 
   const handleDistributorSettingsUpdate = async (values: DistributorSettingsValues) => {
@@ -674,43 +747,68 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-        {/* Profile Completion Dialog */}
+        {/* Business Profile Completion Dialog */}
         {isMaster && (
           <Dialog open={isProfileCompletionDialogOpen}>
             <DialogContent className="sm:max-w-lg [&>button]:hidden" onInteractOutside={(e) => e.preventDefault()}>
               <DialogHeader>
                   <DialogTitle>Welcome! Complete Your Business Profile</DialogTitle>
                   <DialogDescription>
-                      To ensure your customers have all the necessary details and for invoicing purposes, please complete your business profile.
+                      To ensure your customers have all the necessary details and for invoicing purposes, please complete your business profile. Fields marked with * are required.
                   </DialogDescription>
               </DialogHeader>
-              <Form {...profileForm}>
-                <form onSubmit={profileForm.handleSubmit(handleProfileCompletion)} className="space-y-4 max-h-[70vh] overflow-y-auto pr-4">
+              <Form {...legalBusinessForm}>
+                <form onSubmit={legalBusinessForm.handleSubmit(handleProfileCompletion)} className="space-y-4 max-h-[70vh] overflow-y-auto pr-4">
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField control={profileForm.control} name="companyName" render={({ field }) => (
-                          <FormItem><FormLabel>Company Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                      <FormField control={legalBusinessForm.control} name="companyName" render={({ field }) => (
+                          <FormItem><FormLabel>Company Name <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Your Company B.V." {...field} /></FormControl><FormMessage /></FormItem>
                       )} />
-                       <FormField control={profileForm.control} name="phoneNumber" render={({ field }) => (
-                          <FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                       <FormField control={legalBusinessForm.control} name="contactEmail" render={({ field }) => (
+                          <FormItem><FormLabel>Contact Email <span className="text-destructive">*</span></FormLabel><FormControl><Input type="email" placeholder="info@yourcompany.com" {...field} /></FormControl><FormMessage /></FormItem>
                       )} />
                   </div>
-                  <FormField control={profileForm.control} name="addressLine1" render={({ field }) => (
-                      <FormItem><FormLabel>Address Line 1</FormLabel><FormControl><Input placeholder="Street and number" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormField control={legalBusinessForm.control} name="addressLine1" render={({ field }) => (
+                      <FormItem><FormLabel>Address <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Street and number" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField control={profileForm.control} name="postcode" render={({ field }) => (
-                          <FormItem><FormLabel>Postcode</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField control={legalBusinessForm.control} name="postcode" render={({ field }) => (
+                          <FormItem><FormLabel>Postcode <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="1234 AB" {...field} /></FormControl><FormMessage /></FormItem>
                       )} />
-                      <FormField control={profileForm.control} name="city" render={({ field }) => (
-                          <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                      <FormField control={legalBusinessForm.control} name="city" render={({ field }) => (
+                          <FormItem><FormLabel>City <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="Amsterdam" {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={legalBusinessForm.control} name="country" render={({ field }) => (
+                         <FormItem><FormLabel>Country <span className="text-destructive">*</span></FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger></FormControl><SelectContent>{countries.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
                       )} />
                   </div>
-                  <FormField control={profileForm.control} name="country" render={({ field }) => (
-                     <FormItem><FormLabel>Country</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a country" /></SelectTrigger></FormControl><SelectContent>{countries.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField control={legalBusinessForm.control} name="phoneNumber" render={({ field }) => (
+                          <FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input placeholder="+31 20 1234567" {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={legalBusinessForm.control} name="chamberOfCommerce" render={({ field }) => (
+                          <FormItem><FormLabel>Business Registration Number</FormLabel><FormControl><Input placeholder="12345678" {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                  </div>
+                  <FormField control={legalBusinessForm.control} name="taxId" render={({ field }) => (
+                      <FormItem><FormLabel>Tax ID (TIN)</FormLabel><FormControl><Input placeholder="123456789" {...field} /></FormControl><FormMessage /></FormItem>
                   )} />
+                  <FormField control={legalBusinessForm.control} name="isVatRegistered" render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                          <div className="space-y-0.5">
+                              <FormLabel className="text-sm">VAT Registered</FormLabel>
+                              <FormDescription className="text-xs">Is your company registered for VAT?</FormDescription>
+                          </div>
+                          <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                      </FormItem>
+                  )} />
+                  {legalBusinessForm.watch("isVatRegistered") && (
+                      <FormField control={legalBusinessForm.control} name="vatNumber" render={({ field }) => (
+                          <FormItem><FormLabel>VAT Number <span className="text-destructive">*</span></FormLabel><FormControl><Input placeholder="NL123456789B01" {...field} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                  )}
                   <DialogFooter className="pt-4 border-t sticky bottom-0 bg-background py-4">
-                      <Button type="submit" disabled={profileForm.formState.isSubmitting}>
-                          {profileForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                      <Button type="submit" disabled={legalBusinessForm.formState.isSubmitting}>
+                          {legalBusinessForm.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                           Save Business Details
                       </Button>
                   </DialogFooter>
@@ -720,7 +818,7 @@ export default function SettingsPage() {
           </Dialog>
         )}
 
-        <Tabs defaultValue={isMaster || isSuperAdmin ? "business" : "account"} className="w-full">
+        <Tabs defaultValue={tabParam || (isMaster || isSuperAdmin ? "business" : "account")} className="w-full">
           <TabsList className={`grid w-full mb-6 ${isMaster ? 'grid-cols-4' : isSuperAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
             {(isMaster || isSuperAdmin) && (
               <TabsTrigger value="business" className="gap-2">
@@ -783,6 +881,162 @@ export default function SettingsPage() {
                   </Form>
                 </CardContent>
               </Card>
+
+              {/* Legal Business Information - Master only */}
+              {isMaster && (
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                      <Building2 className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Legal Business Information</CardTitle>
+                    </div>
+                    <CardDescription className="text-sm">Official company details for invoices and legal compliance.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Form {...legalBusinessForm}>
+                      <form onSubmit={legalBusinessForm.handleSubmit(handleLegalBusinessUpdate)} className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField control={legalBusinessForm.control} name="companyName" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Official Company Name <span className="text-destructive">*</span></FormLabel>
+                              <FormControl><Input placeholder="Your Company B.V." {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                          <FormField control={legalBusinessForm.control} name="contactEmail" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Contact Email <span className="text-destructive">*</span></FormLabel>
+                              <FormControl><Input type="email" placeholder="info@yourcompany.com" {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                        </div>
+
+                        <FormField control={legalBusinessForm.control} name="addressLine1" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm">Address <span className="text-destructive">*</span></FormLabel>
+                            <FormControl><Input placeholder="Street and number" {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+                        <FormField control={legalBusinessForm.control} name="addressLine2" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm">Address Line 2</FormLabel>
+                            <FormControl><Input placeholder="Building, suite, etc. (optional)" {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <FormField control={legalBusinessForm.control} name="postcode" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Postcode <span className="text-destructive">*</span></FormLabel>
+                              <FormControl><Input placeholder="1234 AB" {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                          <FormField control={legalBusinessForm.control} name="city" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">City <span className="text-destructive">*</span></FormLabel>
+                              <FormControl><Input placeholder="Amsterdam" {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                          <FormField control={legalBusinessForm.control} name="country" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Country <span className="text-destructive">*</span></FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger></FormControl>
+                                <SelectContent>{countries.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField control={legalBusinessForm.control} name="phoneNumber" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Phone Number</FormLabel>
+                              <FormControl><Input placeholder="+31 20 1234567" {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                          <FormField control={legalBusinessForm.control} name="website" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Website</FormLabel>
+                              <FormControl><Input placeholder="https://yourcompany.com" {...field} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                        </div>
+
+                        <Separator className="my-4" />
+                        <h4 className="text-sm font-medium">Tax & Registration</h4>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField control={legalBusinessForm.control} name="chamberOfCommerce" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Business Registration Number</FormLabel>
+                              <FormControl><Input placeholder="12345678" {...field} /></FormControl>
+                              <FormDescription className="text-xs">Chamber of Commerce (KVK for NL, CIF for ES, etc.)</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                          <FormField control={legalBusinessForm.control} name="taxId" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Tax Identification Number (TIN)</FormLabel>
+                              <FormControl><Input placeholder="123456789" {...field} /></FormControl>
+                              <FormDescription className="text-xs">National tax ID (NIF for ES, BSN for NL, etc.)</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                        </div>
+
+                        <FormField control={legalBusinessForm.control} name="isVatRegistered" render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 mt-4">
+                            <div className="space-y-0.5">
+                              <FormLabel className="text-sm">VAT Registered</FormLabel>
+                              <FormDescription className="text-xs">Is your company registered for VAT?</FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )} />
+
+                        {legalBusinessForm.watch("isVatRegistered") && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 rounded-lg bg-muted/50">
+                            <FormField control={legalBusinessForm.control} name="vatNumber" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-sm">VAT Number <span className="text-destructive">*</span></FormLabel>
+                                <FormControl><Input placeholder="NL123456789B01" {...field} /></FormControl>
+                                <FormDescription className="text-xs">EU VAT identification number</FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                            <FormField control={legalBusinessForm.control} name="vatCountry" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-sm">VAT Country</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                                  <FormControl><SelectTrigger><SelectValue placeholder="Select VAT country" /></SelectTrigger></FormControl>
+                                  <SelectContent>{countries.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                                </Select>
+                                <FormDescription className="text-xs">Country where VAT is registered</FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                          </div>
+                        )}
+
+                        <SaveButton formName="legalBusiness" isSubmitting={legalBusinessForm.formState.isSubmitting}>
+                          Save Business Information
+                        </SaveButton>
+                      </form>
+                    </Form>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Distributor URL - Master only */}
               {isMaster && (
@@ -1231,13 +1485,16 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
-            {/* My Details */}
+            {/* Personal Details - different content based on role */}
             <Card>
               <CardHeader className="pb-4">
                 <div className="flex items-center gap-3">
                   <Home className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-lg">Contact & Address</CardTitle>
+                  <CardTitle className="text-lg">{user?.role === 'viewer' ? 'Contact & Shipping' : 'Personal Details'}</CardTitle>
                 </div>
+                {(isMaster || user?.role === 'worker') && (
+                  <CardDescription className="text-sm">Your personal contact information. Business details are managed in the Business tab.</CardDescription>
+                )}
               </CardHeader>
               <CardContent>
                 <Form {...profileForm}>
@@ -1250,45 +1507,50 @@ export default function SettingsPage() {
                         <FormItem><FormLabel className="text-sm">Last Name</FormLabel><FormControl><Input placeholder="Last Name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                       )} />
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField control={profileForm.control} name="companyName" render={({ field }) => (
-                        <FormItem><FormLabel className="text-sm">Company Name</FormLabel><FormControl><Input placeholder="Company Name" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                      )} />
-                      <FormField control={profileForm.control} name="phoneNumber" render={({ field }) => (
-                        <FormItem><FormLabel className="text-sm">Phone Number</FormLabel><FormControl><Input placeholder="Phone Number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                      )} />
-                    </div>
 
-                    <Separator className="my-4" />
-                    <h4 className="text-sm font-medium">Shipping Address</h4>
+                    {/* Only show company/phone fields for viewers (clients) since business users have this in Business tab */}
+                    {user?.role === 'viewer' && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField control={profileForm.control} name="companyName" render={({ field }) => (
+                          <FormItem><FormLabel className="text-sm">Company Name</FormLabel><FormControl><Input placeholder="Company Name (optional)" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={profileForm.control} name="phoneNumber" render={({ field }) => (
+                          <FormItem><FormLabel className="text-sm">Phone Number</FormLabel><FormControl><Input placeholder="Phone Number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                      </div>
+                    )}
 
-                    <FormField control={profileForm.control} name="addressLine1" render={({ field }) => (
-                      <FormItem><FormLabel className="text-sm">Address Line 1</FormLabel><FormControl><Input placeholder="Street and number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={profileForm.control} name="addressLine2" render={({ field }) => (
-                      <FormItem><FormLabel className="text-sm">Address Line 2</FormLabel><FormControl><Input placeholder="Apartment, suite, etc." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <FormField control={profileForm.control} name="postcode" render={({ field }) => (
-                        <FormItem><FormLabel className="text-sm">Postcode</FormLabel><FormControl><Input placeholder="Postcode" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                      )} />
-                      <FormField control={profileForm.control} name="city" render={({ field }) => (
-                        <FormItem><FormLabel className="text-sm">City</FormLabel><FormControl><Input placeholder="City" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                      )} />
-                      <FormField control={profileForm.control} name="country" render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-sm">Country</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger></FormControl>
-                            <SelectContent>{countries.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )} />
-                    </div>
-
+                    {/* Shipping address - only for viewers (clients) */}
                     {user?.role === 'viewer' && (
                       <>
+                        <Separator className="my-4" />
+                        <h4 className="text-sm font-medium">Shipping Address</h4>
+
+                        <FormField control={profileForm.control} name="addressLine1" render={({ field }) => (
+                          <FormItem><FormLabel className="text-sm">Address Line 1</FormLabel><FormControl><Input placeholder="Street and number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={profileForm.control} name="addressLine2" render={({ field }) => (
+                          <FormItem><FormLabel className="text-sm">Address Line 2</FormLabel><FormControl><Input placeholder="Apartment, suite, etc." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <FormField control={profileForm.control} name="postcode" render={({ field }) => (
+                            <FormItem><FormLabel className="text-sm">Postcode</FormLabel><FormControl><Input placeholder="Postcode" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                          )} />
+                          <FormField control={profileForm.control} name="city" render={({ field }) => (
+                            <FormItem><FormLabel className="text-sm">City</FormLabel><FormControl><Input placeholder="City" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                          )} />
+                          <FormField control={profileForm.control} name="country" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Country</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger></FormControl>
+                                <SelectContent>{countries.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                        </div>
+
                         <Separator className="my-4" />
                         <FormField control={profileForm.control} name="useDifferentBillingAddress" render={({ field }) => (
                           <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3">

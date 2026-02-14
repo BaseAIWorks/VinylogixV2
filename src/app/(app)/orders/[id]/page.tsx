@@ -14,7 +14,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Loader2, ArrowLeft, Package, User, Receipt, Music, CheckCircle, XCircle, Clock, Weight, Printer, Truck, PackageCheck, Hourglass, DollarSign, FileDown } from "lucide-react";
 import { format } from "date-fns";
 import Image from "next/image";
-import { formatPriceForDisplay } from "@/lib/utils";
+import { formatPriceForDisplay, checkBusinessProfileComplete } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { generateInvoicePdf } from "@/lib/invoice-utils";
@@ -78,8 +78,21 @@ export default function OrderDetailPage() {
         fetchOrder();
     }, [fetchOrder]);
 
+    const businessProfileStatus = checkBusinessProfileComplete(activeDistributor);
+
     const handleStatusUpdate = async (newStatus: OrderStatus) => {
         if (!order || !user) return;
+
+        // Block processing/shipped if business profile is incomplete
+        if ((newStatus === 'processing' || newStatus === 'shipped') && !businessProfileStatus.isComplete) {
+            toast({
+                title: "Business Profile Incomplete",
+                description: `Please complete your business profile before processing orders. Missing: ${businessProfileStatus.missingFields.join(', ')}`,
+                variant: "destructive",
+            });
+            return;
+        }
+
         setIsUpdating(true);
         try {
             const updatedOrder = await updateOrderStatus(order.id, newStatus, user);

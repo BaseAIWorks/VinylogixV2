@@ -44,6 +44,19 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.accessibleDistributorIds.hasAny([distributorId]);
     }
 
+    // Fallback check: Is the user the master of this distributor based on the distributor document?
+    // This is used when custom claims aren't synced yet.
+    function isMasterByDocument(distributorId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/distributors/$(distributorId)) &&
+             get(/databases/$(database)/documents/distributors/$(distributorId)).data.masterUserUid == request.auth.uid;
+    }
+
+    // Combined check: Is user an operator either by token claims OR by document lookup
+    function isOperatorOfWithFallback(distributorId) {
+      return isOperatorOf(distributorId) || isMasterByDocument(distributorId);
+    }
+
     // SECURITY: Check if sensitive fields are being modified
     // These fields control permissions and should NEVER be self-modifiable
     function sensitiveFieldsUnchanged() {
@@ -106,21 +119,27 @@ service cloud.firestore {
 
       // Operators can read their own distributor document.
       // Clients can read the document of distributors they have access to.
-      allow read: if isSignedIn() && (isOperatorOf(distributorId) || isClientOf(distributorId));
+      // Also allow if the user is the masterUserUid (covers case where custom claims aren't synced yet).
+      allow read: if isSignedIn() && (
+        isOperatorOf(distributorId) ||
+        isClientOf(distributorId) ||
+        resource.data.masterUserUid == request.auth.uid
+      );
 
       // Only the master of a distributor can update it.
-      allow update: if isMasterOf(distributorId);
+      // Also allow if the user is the masterUserUid (covers case where custom claims aren't synced yet).
+      allow update: if isMasterOf(distributorId) || (isSignedIn() && resource.data.masterUserUid == request.auth.uid);
 
       // Suppliers subcollection under each distributor
       match /suppliers/{supplierId} {
         // Superadmins can manage all suppliers
         allow read, write, delete: if isSuperAdmin();
 
-        // Operators can manage suppliers for their distributor
-        allow read, write, delete: if isOperatorOf(distributorId);
+        // Operators can manage suppliers for their distributor (with fallback)
+        allow read, write, delete: if isOperatorOfWithFallback(distributorId);
 
-        // Allow creating suppliers if user is an operator of this distributor
-        allow create: if isOperatorOf(distributorId);
+        // Allow creating suppliers if user is an operator of this distributor (with fallback)
+        allow create: if isOperatorOfWithFallback(distributorId);
       }
     }
 
@@ -131,42 +150,42 @@ service cloud.firestore {
                 && (
                      // If it's a personal record, ensure it's not trying to be an inventory item for a distributor
                      (request.resource.data.isInventoryItem == false && !exists(request.resource.data.distributorId)) ||
-                     // If it's an inventory item, the user must be an operator of the claimed distributor
-                     (request.resource.data.isInventoryItem == true && isOperatorOf(request.resource.data.distributorId))
+                     // If it's an inventory item, the user must be an operator of the claimed distributor (with fallback)
+                     (request.resource.data.isInventoryItem == true && isOperatorOfWithFallback(request.resource.data.distributorId))
                    );
 
       // Read permissions are more complex:
       // 1. Superadmins can read anything.
       // 2. You can read your own personal records (that are not inventory items).
-      // 3. Operators can read any record belonging to their distributor.
+      // 3. Operators can read any record belonging to their distributor (with fallback).
       // 4. Clients can read any inventory item from a distributor they have access to.
       allow read: if isSuperAdmin() ||
                    (isOwner(resource.data.ownerUid) && resource.data.isInventoryItem == false) ||
-                   isOperatorOf(resource.data.distributorId) ||
+                   isOperatorOfWithFallback(resource.data.distributorId) ||
                    (resource.data.isInventoryItem == true && isClientOf(resource.data.distributorId));
 
       // Update permissions:
       // 1. Superadmins can update anything.
       // 2. You can update your own personal records.
-      // 3. Operators can update any record belonging to their distributor.
-      allow update: if isSuperAdmin() || isOwner(resource.data.ownerUid) || isOperatorOf(resource.data.distributorId);
+      // 3. Operators can update any record belonging to their distributor (with fallback).
+      allow update: if isSuperAdmin() || isOwner(resource.data.ownerUid) || isOperatorOfWithFallback(resource.data.distributorId);
 
       // Delete permissions:
       // 1. Superadmins can delete anything.
       // 2. You can delete your own personal records.
-      // 3. Operators can delete any record belonging to their distributor.
-      allow delete: if isSuperAdmin() || isOwner(resource.data.ownerUid) || isOperatorOf(resource.data.distributorId);
+      // 3. Operators can delete any record belonging to their distributor (with fallback).
+      allow delete: if isSuperAdmin() || isOwner(resource.data.ownerUid) || isOperatorOfWithFallback(resource.data.distributorId);
     }
     
     match /suppliers/{supplierId} {
         // Superadmins can manage all suppliers
         allow read, write, delete: if isSuperAdmin();
 
-        // Allow operators to manage suppliers for their distributor
-        allow read, write, delete: if isOperatorOf(resource.data.distributorId);
+        // Allow operators to manage suppliers for their distributor (with fallback)
+        allow read, write, delete: if isOperatorOfWithFallback(resource.data.distributorId);
 
-        // Allow creating suppliers if user is an operator and the distributorId matches their token
-        allow create: if isOperator() && request.resource.data.distributorId == request.auth.token.distributorId;
+        // Allow creating suppliers if user is an operator (with fallback)
+        allow create: if isSignedIn() && isOperatorOfWithFallback(request.resource.data.distributorId);
     }
 
     match /orders/{orderId} {
@@ -174,14 +193,16 @@ service cloud.firestore {
         allow read, write, delete: if isSuperAdmin();
 
         allow create: if isSignedIn();
-        allow read, update: if isOperatorOf(resource.data.distributorId) || isOwner(resource.data.viewerId);
+        // Allow operators (with fallback) or the viewer who placed the order
+        allow read, update: if isOperatorOfWithFallback(resource.data.distributorId) || isOwner(resource.data.viewerId);
     }
 
     match /notifications/{notificationId} {
         // Superadmins can manage all notifications
         allow read, write, delete: if isSuperAdmin();
 
-        allow read, write: if isOperatorOf(resource.data.distributorId);
+        // Allow operators (with fallback) to read/write notifications for their distributor
+        allow read, write: if isOperatorOfWithFallback(resource.data.distributorId);
     }
 
     match /settings/{docId} {

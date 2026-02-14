@@ -12,7 +12,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
 import { format, parseISO, differenceInDays } from "date-fns";
-import { formatPriceForDisplay } from "@/lib/utils";
+import { formatPriceForDisplay, checkBusinessProfileComplete } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KanbanBoard } from "@/components/fulfillment/kanban-board";
@@ -36,7 +36,7 @@ const statusColors: Record<OrderStatus, string> = {
 };
 
 export default function FulfillmentPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, activeDistributor } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -88,8 +88,21 @@ export default function FulfillmentPage() {
     return { paidCount, processingCount, shippedCount, urgentCount };
   }, [orders]);
 
+  const businessProfileStatus = checkBusinessProfileComplete(activeDistributor);
+
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
     if (!user) return;
+
+    // Block processing/shipped if business profile is incomplete
+    if ((newStatus === 'processing' || newStatus === 'shipped') && !businessProfileStatus.isComplete) {
+      toast({
+        title: "Business Profile Incomplete",
+        description: `Please complete your business profile before processing orders. Missing: ${businessProfileStatus.missingFields.join(', ')}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       await updateOrderStatus(orderId, newStatus, user);
       toast({
@@ -141,6 +154,17 @@ export default function FulfillmentPage() {
   // Bulk actions
   const handleBulkStatusUpdate = async (newStatus: OrderStatus) => {
     if (!user || selectedOrders.size === 0) return;
+
+    // Block processing/shipped if business profile is incomplete
+    if ((newStatus === 'processing' || newStatus === 'shipped') && !businessProfileStatus.isComplete) {
+      toast({
+        title: "Business Profile Incomplete",
+        description: `Please complete your business profile before processing orders. Missing: ${businessProfileStatus.missingFields.join(', ')}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsProcessingBulk(true);
     try {
       const updates = Array.from(selectedOrders).map(orderId =>

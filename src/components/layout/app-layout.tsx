@@ -53,6 +53,7 @@ import { Loader2 } from "lucide-react";
 import { Textarea } from '../ui/textarea';
 import { GlobalSearch } from './global-search';
 import { Separator } from "@/components/ui/separator";
+import { checkBusinessProfileComplete } from "@/lib/utils";
 
 
 interface AppLayoutProps {
@@ -413,6 +414,29 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 <Button variant="ghost" size="sm" onClick={stopImpersonating} className="text-yellow-900 hover:bg-yellow-500 hover:text-yellow-900">
                     <X className="mr-2 h-4 w-4" />
                     Stop Impersonating
+                </Button>
+            </div>
+        )}
+        {/* Business Profile Incomplete Banner */}
+        {user?.role === 'master' && activeDistributor && !checkBusinessProfileComplete(activeDistributor).isComplete && (
+            <div className="sticky top-0 z-40 flex items-center justify-between bg-orange-500 px-4 py-2 text-white shadow-md">
+                <div className="flex items-center gap-2">
+                    <Building className="h-5 w-5" />
+                    <p className="font-medium text-sm">
+                        Complete your business profile to accept orders and generate invoices.
+                        <span className="hidden sm:inline text-orange-100 ml-2">
+                            Missing: {checkBusinessProfileComplete(activeDistributor).missingFields.join(', ')}
+                        </span>
+                    </p>
+                </div>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => router.push('/settings?tab=business')}
+                    className="text-white hover:bg-orange-600 hover:text-white"
+                >
+                    <Settings2 className="mr-2 h-4 w-4" />
+                    Complete Profile
                 </Button>
             </div>
         )}

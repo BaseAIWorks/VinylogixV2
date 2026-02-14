@@ -134,10 +134,16 @@ export interface Distributor {
   createdAt: string; // ISO date string
   addressLine1?: string;
   addressLine2?: string;
+  city?: string;
+  postcode?: string;
+  country?: string;
   phoneNumber?: string;
   website?: string;
-  chamberOfCommerce?: string;
+  chamberOfCommerce?: string; // Business registration number (KVK, CIF, etc.)
+  taxId?: string; // Tax Identification Number (TIN)
+  isVatRegistered?: boolean;
   vatNumber?: string;
+  vatCountry?: string;
   subscription?: SubscriptionInfo;
   companyName?: string; // Custom branding name
   logoUrl?: string; // Custom branding logo URL
