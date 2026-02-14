@@ -716,9 +716,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const userWithRole = await fetchUserRole(firebaseUser);
 
         if (userWithRole) {
-          // Force token refresh for master/worker to ensure custom claims are synced
+          // Force token refresh to ensure custom claims are synced
           // This handles the race condition where Cloud Function sets claims after login
-          if (userWithRole.role === 'master' || userWithRole.role === 'worker') {
+          if (userWithRole.role === 'master' || userWithRole.role === 'worker' || userWithRole.role === 'superadmin') {
             const maxRetries = 3;
             const retryDelay = 1000; // 1 second
 

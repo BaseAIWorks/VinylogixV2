@@ -166,6 +166,15 @@ service cloud.firestore {
     match /settings/{docId} {
       // Superadmins can manage all settings.
       allow read, write: if isSuperAdmin();
+      // Branding settings are public (company name, logo) for the login page
+      // Other settings require authentication
+      allow read: if docId == 'branding' || isSignedIn();
+    }
+
+    match /changelog/{entryId} {
+      // Superadmins can manage changelog entries.
+      allow read, write, delete: if isSuperAdmin();
+      // All authenticated users can read changelog entries.
       allow read: if isSignedIn();
     }
   }
