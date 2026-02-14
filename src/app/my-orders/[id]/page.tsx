@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { getOrderById } from "@/services/order-service";
+import { getDistributorById } from "@/services/distributor-service";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,8 +14,9 @@ import { format } from "date-fns";
 import Image from "next/image";
 import { formatPriceForDisplay } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 import { generateInvoicePdf } from "@/lib/invoice-utils";
-import type { Order, OrderStatus } from "@/types";
+import type { Order, OrderStatus, Distributor } from "@/types";
 import ProtectedRoute from "@/components/layout/protected-route";
 
 const statusConfig: Record<OrderStatus, { icon: React.ElementType, color: string, label: string }> = {
@@ -31,9 +33,11 @@ export default function ClientOrderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
+  const { toast } = useToast();
   const orderId = typeof params.id === 'string' ? params.id : '';
 
   const [order, setOrder] = useState<Order | null>(null);
+  const [distributor, setDistributor] = useState<Distributor | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -49,6 +53,14 @@ export default function ClientOrderDetailPage() {
         // Verify this order belongs to current user
         if (fetchedOrder && fetchedOrder.viewerId === user.uid) {
           setOrder(fetchedOrder);
+
+          // Fetch distributor info for invoice
+          if (fetchedOrder.distributorId) {
+            const distributorData = await getDistributorById(fetchedOrder.distributorId);
+            if (distributorData) {
+              setDistributor(distributorData);
+            }
+          }
         } else {
           router.push('/my-orders');
         }
@@ -63,9 +75,16 @@ export default function ClientOrderDetailPage() {
     fetchOrder();
   }, [orderId, user, router]);
 
-  const handleDownloadInvoice = () => {
-    if (order) {
-      generateInvoicePdf(order);
+  const handleDownloadInvoice = async () => {
+    if (!order || !distributor) {
+      toast({ title: "Error", description: "Unable to generate invoice.", variant: "destructive" });
+      return;
+    }
+    try {
+      await generateInvoicePdf(order, distributor);
+    } catch (error) {
+      console.error("Failed to generate invoice:", error);
+      toast({ title: "Error", description: "Failed to generate invoice PDF.", variant: "destructive" });
     }
   };
 
