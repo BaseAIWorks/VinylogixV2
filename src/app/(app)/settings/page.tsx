@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users, Clock, RefreshCw, Truck, Receipt, CheckCircle2 } from "lucide-react";
+import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users, Clock, RefreshCw, Truck, Receipt, CheckCircle2, FileText, Landmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useEffect } from "react";
@@ -124,6 +124,14 @@ const clientMenuFormSchema = z.object({
     showDiscogs: z.boolean().default(true),
 });
 
+const invoiceSettingsFormSchema = z.object({
+    invoicePaymentTerms: z.string().optional(),
+    invoiceNotes: z.string().optional(),
+    invoiceFooterText: z.string().optional(),
+    invoiceBankDetails: z.string().optional(),
+    invoiceShowBankDetails: z.boolean().default(false),
+});
+
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 type BrandingFormValues = z.infer<typeof brandingFormSchema>;
@@ -132,6 +140,7 @@ type DistributorSettingsValues = z.infer<typeof distributorSettingsSchema>;
 type NotificationsFormValues = z.infer<typeof notificationsFormSchema>;
 type CardDisplayFormValues = z.infer<typeof cardDisplayFormSchema>;
 type ClientMenuFormValues = z.infer<typeof clientMenuFormSchema>;
+type InvoiceSettingsFormValues = z.infer<typeof invoiceSettingsFormSchema>;
 
 
 const roleDisplayNames: Record<UserRole, string> = {
@@ -312,6 +321,17 @@ export default function SettingsPage() {
       defaultValues: defaultClientMenuSettings,
   });
 
+  const invoiceSettingsForm = useForm<InvoiceSettingsFormValues>({
+      resolver: zodResolver(invoiceSettingsFormSchema),
+      defaultValues: {
+          invoicePaymentTerms: "",
+          invoiceNotes: "",
+          invoiceFooterText: "",
+          invoiceBankDetails: "",
+          invoiceShowBankDetails: false,
+      },
+  });
+
   useEffect(() => {
     if (user) {
         profileForm.reset({
@@ -379,12 +399,19 @@ export default function SettingsPage() {
             ...defaultClientMenuSettings,
             ...(activeDistributor.clientMenuSettings || {}),
         });
-        
+        invoiceSettingsForm.reset({
+            invoicePaymentTerms: activeDistributor.invoicePaymentTerms || "",
+            invoiceNotes: activeDistributor.invoiceNotes || "",
+            invoiceFooterText: activeDistributor.invoiceFooterText || "",
+            invoiceBankDetails: activeDistributor.invoiceBankDetails || "",
+            invoiceShowBankDetails: activeDistributor.invoiceShowBankDetails || false,
+        });
+
         if (activeDistributor.profileComplete === false) {
           setIsProfileCompletionDialogOpen(true);
         }
     }
-  }, [activeDistributor, notificationsForm, distributorSettingsForm, cardDisplayForm, clientMenuForm]);
+  }, [activeDistributor, notificationsForm, distributorSettingsForm, cardDisplayForm, clientMenuForm, invoiceSettingsForm]);
 
 
   const useDifferentBilling = profileForm.watch("useDifferentBillingAddress");
@@ -439,6 +466,11 @@ export default function SettingsPage() {
       await updateMyDistributorSettings({ clientMenuSettings: values });
       showSaveSuccess('clientMenu');
   }
+
+  const handleInvoiceSettingsUpdate = async (values: InvoiceSettingsFormValues) => {
+      await updateMyDistributorSettings(values);
+      showSaveSuccess('invoiceSettings');
+  };
 
   const handleUpdateLocations = async () => {
     setIsSavingLocations(true);
@@ -1265,6 +1297,99 @@ export default function SettingsPage() {
                         Set up VAT rates, tax rules, and automatic tax calculation.
                       </p>
                     </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Invoice Settings - Master only */}
+              {isMaster && (
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Invoice Settings</CardTitle>
+                    </div>
+                    <CardDescription className="text-sm">Customize the content that appears on your invoices.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Form {...invoiceSettingsForm}>
+                      <form onSubmit={invoiceSettingsForm.handleSubmit(handleInvoiceSettingsUpdate)} className="space-y-4">
+                        <FormField control={invoiceSettingsForm.control} name="invoicePaymentTerms" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm">Payment Terms</FormLabel>
+                            <FormControl>
+                              <Input placeholder="e.g., Payment due within 14 days" {...field} />
+                            </FormControl>
+                            <FormDescription className="text-xs">Displayed on invoices to inform customers of payment expectations.</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+
+                        <FormField control={invoiceSettingsForm.control} name="invoiceNotes" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm">Default Invoice Notes</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="e.g., Thank you for your purchase! For any questions, contact us at..."
+                                className="min-h-[80px]"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormDescription className="text-xs">These notes will appear in the notes section of every invoice.</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+
+                        <FormField control={invoiceSettingsForm.control} name="invoiceFooterText" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm">Footer Message</FormLabel>
+                            <FormControl>
+                              <Input placeholder="e.g., Thank you for your business!" {...field} />
+                            </FormControl>
+                            <FormDescription className="text-xs">A short message shown at the bottom of the invoice.</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+
+                        <Separator className="my-4" />
+
+                        <FormField control={invoiceSettingsForm.control} name="invoiceShowBankDetails" render={({ field }) => (
+                          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                            <div className="space-y-0.5">
+                              <FormLabel className="text-sm">Show Bank Details</FormLabel>
+                              <FormDescription className="text-xs">Display bank account information for wire transfers.</FormDescription>
+                            </div>
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                          </FormItem>
+                        )} />
+
+                        {invoiceSettingsForm.watch("invoiceShowBankDetails") && (
+                          <FormField control={invoiceSettingsForm.control} name="invoiceBankDetails" render={({ field }) => (
+                            <FormItem className="p-4 rounded-lg bg-muted/50">
+                              <FormLabel className="text-sm flex items-center gap-2">
+                                <Landmark className="h-4 w-4" />
+                                Bank Account Details
+                              </FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="Bank: ING Bank&#10;IBAN: NL00 INGB 0000 0000 00&#10;BIC/SWIFT: INGBNL2A&#10;Account holder: Your Company B.V."
+                                  className="min-h-[100px] font-mono text-sm"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormDescription className="text-xs">Enter your bank details. This will be shown on invoices for customers who prefer wire transfers.</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                        )}
+
+                        <SaveButton formName="invoiceSettings" isSubmitting={invoiceSettingsForm.formState.isSubmitting}>
+                          Save Invoice Settings
+                        </SaveButton>
+                      </form>
+                    </Form>
                   </CardContent>
                 </Card>
               )}

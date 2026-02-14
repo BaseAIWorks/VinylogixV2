@@ -172,6 +172,13 @@ export interface Distributor {
   paypalMerchantId?: string; // PayPal merchant account ID
   paypalEmail?: string; // PayPal account email
   paypalAccountStatus?: 'pending' | 'verified' | 'restricted';
+
+  // Invoice Settings
+  invoicePaymentTerms?: string; // e.g., "Payment due within 14 days"
+  invoiceNotes?: string; // Default notes to include on invoices
+  invoiceFooterText?: string; // Custom footer message
+  invoiceBankDetails?: string; // Bank account details for wire transfers
+  invoiceShowBankDetails?: boolean; // Whether to show bank details on invoices
 }
 
 export interface BrandingSettings {

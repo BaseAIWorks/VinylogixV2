@@ -300,6 +300,24 @@ export async function generateInvoicePdf(
   currentY += 20;
 
   // ============================================
+  // PAYMENT TERMS (from distributor settings)
+  // ============================================
+
+  const paymentTerms = distributor.invoicePaymentTerms;
+  if (paymentTerms && order.paymentStatus !== 'paid') {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...COLORS.text);
+    doc.text("Payment Terms:", totalsX - 40, currentY);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...COLORS.secondary);
+    const termsLines = doc.splitTextToSize(paymentTerms, 80);
+    doc.text(termsLines, totalsX - 40, currentY + 5);
+    currentY += (termsLines.length * 5) + 10;
+  }
+
+  // ============================================
   // PAYMENT INFO (if paid)
   // ============================================
 
@@ -321,10 +339,37 @@ export async function generateInvoicePdf(
   }
 
   // ============================================
-  // NOTES SECTION (if provided)
+  // BANK DETAILS (from distributor settings)
   // ============================================
 
-  if (options?.notes) {
+  if (distributor.invoiceShowBankDetails && distributor.invoiceBankDetails && order.paymentStatus !== 'paid') {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...COLORS.secondary);
+    doc.text("BANK DETAILS", margin, currentY);
+
+    currentY += 6;
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...COLORS.text);
+
+    const bankLines = distributor.invoiceBankDetails.split('\n');
+    bankLines.forEach((line) => {
+      if (line.trim()) {
+        doc.text(line.trim(), margin, currentY);
+        currentY += 4;
+      }
+    });
+
+    currentY += 6;
+  }
+
+  // ============================================
+  // NOTES SECTION (from options or distributor settings)
+  // ============================================
+
+  const notesText = options?.notes || distributor.invoiceNotes;
+  if (notesText) {
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...COLORS.secondary);
@@ -337,7 +382,7 @@ export async function generateInvoicePdf(
 
     // Split notes into lines that fit the page width
     const maxWidth = pageWidth - (margin * 2);
-    const notesLines = doc.splitTextToSize(options.notes, maxWidth);
+    const notesLines = doc.splitTextToSize(notesText, maxWidth);
     doc.text(notesLines, margin, currentY);
 
     currentY += (notesLines.length * 5) + 10;
@@ -359,7 +404,7 @@ export async function generateInvoicePdf(
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...COLORS.secondary);
 
-  const footerMessage = options?.footerText || "Thank you for your business!";
+  const footerMessage = options?.footerText || distributor.invoiceFooterText || "Thank you for your business!";
   doc.text(footerMessage, pageWidth / 2, footerY, { align: 'center' });
 
   // Contact info in footer
