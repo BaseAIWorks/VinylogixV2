@@ -76,11 +76,31 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 }
 
 // Fetches ONLY operators (master/worker) for a distributor
+// Uses Admin SDK to bypass security rules when called from server
 export async function getUsersByDistributorId(distributorId: string): Promise<User[]> {
     if (!distributorId) {
         console.log("getUsersByDistributorId: No distributorId provided, returning empty array.");
         return [];
     }
+
+    const adminDb = getAdminDb();
+    if (adminDb) {
+        // Server-side: use Admin SDK (bypasses security rules)
+        console.log(`getUsersByDistributorId (Admin): Executing query for distributorId: ${distributorId}`);
+        try {
+            const querySnapshot = await adminDb.collection(USERS_COLLECTION)
+                .where("distributorId", "==", distributorId)
+                .where("role", "in", ["master", "worker"])
+                .get();
+            console.log(`getUsersByDistributorId (Admin): Found ${querySnapshot.docs.length} operators.`);
+            return querySnapshot.docs.map(docSnap => processUserTimestamps({ ...docSnap.data(), uid: docSnap.id }));
+        } catch (error) {
+            console.error(`UserService (Admin): Error fetching operators for distributor ${distributorId}:`, error);
+            throw error;
+        }
+    }
+
+    // Client-side fallback: use client SDK
     console.log(`getUsersByDistributorId: Executing query for distributorId: ${distributorId}`);
     const usersCollectionRef = collection(db, USERS_COLLECTION);
     try {
@@ -99,23 +119,42 @@ export async function getUsersByDistributorId(distributorId: string): Promise<Us
 }
 
 // Fetches all users who have client access to a distributor (viewers, masters, and workers with accessibleDistributorIds)
+// Uses Admin SDK to bypass security rules when called from server
 export async function getClientsByDistributorId(distributorId: string): Promise<User[]> {
     if (!distributorId) {
         console.log("getClientsByDistributorId: No distributorId provided, returning empty array.");
         return [];
     }
+
+    const adminDb = getAdminDb();
+    if (adminDb) {
+        // Server-side: use Admin SDK (bypasses security rules)
+        console.log(`getClientsByDistributorId (Admin): Executing query for distributorId: ${distributorId}`);
+        try {
+            const querySnapshot = await adminDb.collection(USERS_COLLECTION)
+                .where("accessibleDistributorIds", "array-contains", distributorId)
+                .get();
+            console.log(`getClientsByDistributorId (Admin): Found ${querySnapshot.docs.length} clients.`);
+            return querySnapshot.docs.map(docSnap => processUserTimestamps({ ...docSnap.data(), uid: docSnap.id }));
+        } catch (error) {
+            console.error(`UserService (Admin): Error fetching clients for distributor ${distributorId}:`, error);
+            throw error;
+        }
+    }
+
+    // Client-side fallback: use client SDK
     console.log(`getClientsByDistributorId: Executing query for distributorId: ${distributorId}`);
     const usersCollectionRef = collection(db, USERS_COLLECTION);
     try {
         let q = query(usersCollectionRef);
         q = query(q, where("accessibleDistributorIds", "array-contains", distributorId));
-        
+
         const querySnapshot = await getDocs(q);
         console.log(`getClientsByDistributorId: Found ${querySnapshot.docs.length} clients.`);
         return querySnapshot.docs.map(docSnap => processUserTimestamps({ ...docSnap.data(), uid: docSnap.id }));
     } catch (error: any) {
         console.error(`UserService: Error fetching clients for distributor ${distributorId}. This may be due to a missing Firestore index. Please check the browser console for an index creation link.`, error);
-        throw error; 
+        throw error;
     }
 }
 
