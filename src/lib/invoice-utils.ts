@@ -110,101 +110,221 @@ export async function generateInvoicePdf(
     }
   }
 
-  // Company name (if no logo or alongside logo)
+  // ============================================
+  // LEFT SIDE - Distributor/Seller Info
+  // ============================================
+
   const companyInfoX = logoLoaded ? margin + logoWidth : margin;
   const companyName = distributor.companyName || distributor.name;
+  const labelWidth = 18; // Width for labels
 
-  doc.setFontSize(16);
+  doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLORS.text);
   doc.text(companyName, companyInfoX, currentY + 6);
 
-  // Company details below name
-  doc.setFontSize(9);
+  // Company details with labels
+  doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...COLORS.secondary);
 
   let detailY = currentY + 12;
 
   // Address
-  if (distributor.addressLine1) {
-    doc.text(distributor.addressLine1, companyInfoX, detailY);
-    detailY += 4;
-  }
-  if (distributor.addressLine2) {
-    doc.text(distributor.addressLine2, companyInfoX, detailY);
-    detailY += 4;
+  const fullAddress = [
+    distributor.addressLine1,
+    distributor.addressLine2,
+    [distributor.postcode, distributor.city].filter(Boolean).join(' '),
+    distributor.country
+  ].filter(Boolean).join(', ');
+
+  if (fullAddress) {
+    doc.setFont("helvetica", "bold");
+    doc.text("ADDRESS:", companyInfoX, detailY);
+    doc.setFont("helvetica", "normal");
+    // Split address if too long
+    const addressLines = doc.splitTextToSize(fullAddress, 70);
+    doc.text(addressLines, companyInfoX + labelWidth, detailY);
+    detailY += (addressLines.length * 3.5);
   }
 
-  // City, postcode, country
-  const cityLine = [distributor.postcode, distributor.city].filter(Boolean).join(' ');
-  if (cityLine) {
-    doc.text(cityLine, companyInfoX, detailY);
-    detailY += 4;
-  }
-  if (distributor.country) {
-    doc.text(distributor.country, companyInfoX, detailY);
-    detailY += 4;
-  }
-
-  // Contact info
-  if (distributor.contactEmail) {
-    doc.text(distributor.contactEmail, companyInfoX, detailY);
-    detailY += 4;
-  }
   if (distributor.phoneNumber) {
-    doc.text(distributor.phoneNumber, companyInfoX, detailY);
-    detailY += 4;
+    doc.setFont("helvetica", "bold");
+    doc.text("TEL:", companyInfoX, detailY);
+    doc.setFont("helvetica", "normal");
+    doc.text(distributor.phoneNumber, companyInfoX + labelWidth, detailY);
+    detailY += 3.5;
   }
 
-  // Registration numbers (KVK, VAT)
+  if (distributor.contactEmail) {
+    doc.setFont("helvetica", "bold");
+    doc.text("E-MAIL:", companyInfoX, detailY);
+    doc.setFont("helvetica", "normal");
+    doc.text(distributor.contactEmail, companyInfoX + labelWidth, detailY);
+    detailY += 3.5;
+  }
+
+  if (distributor.website) {
+    doc.setFont("helvetica", "bold");
+    doc.text("WEB:", companyInfoX, detailY);
+    doc.setFont("helvetica", "normal");
+    doc.text(distributor.website, companyInfoX + labelWidth, detailY);
+    detailY += 3.5;
+  }
+
   if (distributor.chamberOfCommerce) {
-    doc.text(`KVK: ${distributor.chamberOfCommerce}`, companyInfoX, detailY);
-    detailY += 4;
+    doc.setFont("helvetica", "bold");
+    doc.text("KVK:", companyInfoX, detailY);
+    doc.setFont("helvetica", "normal");
+    doc.text(distributor.chamberOfCommerce, companyInfoX + labelWidth, detailY);
+    detailY += 3.5;
   }
+
+  if (distributor.iban) {
+    doc.setFont("helvetica", "bold");
+    doc.text("IBAN:", companyInfoX, detailY);
+    doc.setFont("helvetica", "normal");
+    doc.text(distributor.iban, companyInfoX + labelWidth, detailY);
+    detailY += 3.5;
+  }
+
+  if (distributor.bic) {
+    doc.setFont("helvetica", "bold");
+    doc.text("BIC:", companyInfoX, detailY);
+    doc.setFont("helvetica", "normal");
+    doc.text(distributor.bic, companyInfoX + labelWidth, detailY);
+    detailY += 3.5;
+  }
+
   if (distributor.vatNumber) {
-    doc.text(`VAT: ${distributor.vatNumber}`, companyInfoX, detailY);
-    detailY += 4;
+    doc.setFont("helvetica", "bold");
+    doc.text("TAX:", companyInfoX, detailY);
+    doc.setFont("helvetica", "normal");
+    doc.text(distributor.vatNumber, companyInfoX + labelWidth, detailY);
+    detailY += 3.5;
   }
+
   if (distributor.taxId && distributor.taxId !== distributor.vatNumber) {
-    doc.text(`Tax ID: ${distributor.taxId}`, companyInfoX, detailY);
-    detailY += 4;
+    doc.setFont("helvetica", "bold");
+    doc.text("NIF:", companyInfoX, detailY);
+    doc.setFont("helvetica", "normal");
+    doc.text(distributor.taxId, companyInfoX + labelWidth, detailY);
+    detailY += 3.5;
   }
 
   // ============================================
-  // INVOICE TITLE - Right aligned
+  // RIGHT SIDE - Invoice Title & Client Info
   // ============================================
 
-  doc.setFontSize(28);
+  const rightColumnX = pageWidth / 2 + 10;
+  let rightY = currentY;
+
+  // INVOICE title
+  doc.setFontSize(24);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLORS.text);
-  doc.text("INVOICE", pageWidth - margin, currentY + 6, { align: 'right' });
+  doc.text("INVOICE", pageWidth - margin, rightY + 6, { align: 'right' });
 
-  // Invoice details
+  rightY += 14;
+
+  // Client info header
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...COLORS.secondary);
+  doc.text("BILL TO:", rightColumnX, rightY);
+
+  rightY += 5;
+
+  // Customer name
   doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...COLORS.text);
+  doc.text(order.customerName, rightColumnX, rightY);
+  rightY += 4;
+
+  // Customer company name (if available)
+  if (order.customerCompanyName) {
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(order.customerCompanyName, rightColumnX, rightY);
+    rightY += 3.5;
+  }
+
+  doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...COLORS.secondary);
 
-  const invoiceNumber = order.orderNumber || order.id.slice(0, 8).toUpperCase();
-  doc.text(`Invoice #: ${invoiceNumber}`, pageWidth - margin, currentY + 14, { align: 'right' });
-  doc.text(`Date: ${format(new Date(order.createdAt), 'dd MMM yyyy')}`, pageWidth - margin, currentY + 20, { align: 'right' });
+  // Shipping address
+  const clientAddressLines = order.shippingAddress.split('\n');
+  clientAddressLines.forEach((line) => {
+    if (line.trim()) {
+      doc.text(line.trim(), rightColumnX, rightY);
+      rightY += 3.5;
+    }
+  });
 
-  // Status badge
+  // Customer contact info with labels
+  if (order.viewerEmail) {
+    doc.setFont("helvetica", "bold");
+    doc.text("E-MAIL:", rightColumnX, rightY);
+    doc.setFont("helvetica", "normal");
+    doc.text(order.viewerEmail, rightColumnX + labelWidth, rightY);
+    rightY += 3.5;
+  }
+  if (order.phoneNumber) {
+    doc.setFont("helvetica", "bold");
+    doc.text("TEL:", rightColumnX, rightY);
+    doc.setFont("helvetica", "normal");
+    doc.text(order.phoneNumber, rightColumnX + labelWidth, rightY);
+    rightY += 3.5;
+  }
+
+  // Customer VAT number (if available)
+  if (order.customerVatNumber) {
+    doc.setFont("helvetica", "bold");
+    doc.text("VAT:", rightColumnX, rightY);
+    doc.setFont("helvetica", "normal");
+    doc.text(order.customerVatNumber, rightColumnX + labelWidth, rightY);
+    rightY += 3.5;
+  }
+
+  rightY += 4;
+
+  // Invoice details below client info
+  doc.setFontSize(9);
+  const invoiceNumber = order.orderNumber || order.id.slice(0, 8).toUpperCase();
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Invoice #:", rightColumnX, rightY);
+  doc.setFont("helvetica", "normal");
+  doc.text(invoiceNumber, rightColumnX + 20, rightY);
+  rightY += 4;
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Date:", rightColumnX, rightY);
+  doc.setFont("helvetica", "normal");
+  doc.text(format(new Date(order.createdAt), 'dd MMM yyyy'), rightColumnX + 20, rightY);
+  rightY += 4;
+
+  // Status
   const statusText = statusConfig[order.status].label;
   const isPaid = order.status === 'paid' || order.paymentStatus === 'paid';
 
-  doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
+  doc.text("Status:", rightColumnX, rightY);
 
   if (isPaid) {
     doc.setTextColor(...COLORS.success);
-    doc.text("PAID", pageWidth - margin, currentY + 28, { align: 'right' });
+    doc.setFont("helvetica", "bold");
+    doc.text("PAID", rightColumnX + 20, rightY);
   } else {
     doc.setTextColor(...COLORS.secondary);
-    doc.text(statusText.toUpperCase(), pageWidth - margin, currentY + 28, { align: 'right' });
+    doc.setFont("helvetica", "normal");
+    doc.text(statusText, rightColumnX + 20, rightY);
   }
 
-  currentY += 45;
+  // Calculate the maximum Y position from both columns
+  currentY = Math.max(detailY, rightY) + 10;
 
   // ============================================
   // DIVIDER LINE
@@ -214,66 +334,7 @@ export async function generateInvoicePdf(
   doc.setLineWidth(0.5);
   doc.line(margin, currentY, pageWidth - margin, currentY);
 
-  currentY += 10;
-
-  // ============================================
-  // BILLING INFO SECTION
-  // ============================================
-
-  // Bill To section
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...COLORS.secondary);
-  doc.text("BILL TO", margin, currentY);
-
-  currentY += 6;
-
-  // Customer name
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...COLORS.text);
-  doc.text(order.customerName, margin, currentY);
-  currentY += 5;
-
-  // Customer company name (if available)
-  if (order.customerCompanyName) {
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...COLORS.text);
-    doc.text(order.customerCompanyName, margin, currentY);
-    currentY += 4;
-  }
-
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...COLORS.secondary);
-
-  // Shipping address
-  const addressLines = order.shippingAddress.split('\n');
-  addressLines.forEach((line) => {
-    if (line.trim()) {
-      doc.text(line.trim(), margin, currentY);
-      currentY += 4;
-    }
-  });
-
-  // Customer contact info
-  if (order.viewerEmail) {
-    doc.text(order.viewerEmail, margin, currentY);
-    currentY += 4;
-  }
-  if (order.phoneNumber) {
-    doc.text(order.phoneNumber, margin, currentY);
-    currentY += 4;
-  }
-
-  // Customer VAT number (if available)
-  if (order.customerVatNumber) {
-    doc.text(`VAT: ${order.customerVatNumber}`, margin, currentY);
-    currentY += 4;
-  }
-
-  currentY += 6;
+  currentY += 8;
 
   // ============================================
   // ORDER ITEMS TABLE

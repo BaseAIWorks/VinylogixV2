@@ -128,8 +128,10 @@ const invoiceSettingsFormSchema = z.object({
     invoicePaymentTerms: z.string().optional(),
     invoiceNotes: z.string().optional(),
     invoiceFooterText: z.string().optional(),
-    invoiceBankDetails: z.string().optional(),
     invoiceShowBankDetails: z.boolean().default(false),
+    iban: z.string().optional(),
+    bic: z.string().optional(),
+    bankName: z.string().optional(),
 });
 
 
@@ -327,8 +329,10 @@ export default function SettingsPage() {
           invoicePaymentTerms: "",
           invoiceNotes: "",
           invoiceFooterText: "",
-          invoiceBankDetails: "",
           invoiceShowBankDetails: false,
+          iban: "",
+          bic: "",
+          bankName: "",
       },
   });
 
@@ -403,8 +407,10 @@ export default function SettingsPage() {
             invoicePaymentTerms: activeDistributor.invoicePaymentTerms || "",
             invoiceNotes: activeDistributor.invoiceNotes || "",
             invoiceFooterText: activeDistributor.invoiceFooterText || "",
-            invoiceBankDetails: activeDistributor.invoiceBankDetails || "",
             invoiceShowBankDetails: activeDistributor.invoiceShowBankDetails || false,
+            iban: activeDistributor.iban || "",
+            bic: activeDistributor.bic || "",
+            bankName: activeDistributor.bankName || "",
         });
 
         if (activeDistributor.profileComplete === false) {
@@ -1356,8 +1362,8 @@ export default function SettingsPage() {
                         <FormField control={invoiceSettingsForm.control} name="invoiceShowBankDetails" render={({ field }) => (
                           <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
                             <div className="space-y-0.5">
-                              <FormLabel className="text-sm">Show Bank Details</FormLabel>
-                              <FormDescription className="text-xs">Display bank account information for wire transfers.</FormDescription>
+                              <FormLabel className="text-sm">Show Bank Details on Invoice</FormLabel>
+                              <FormDescription className="text-xs">Display IBAN and BIC for wire transfers.</FormDescription>
                             </div>
                             <FormControl>
                               <Switch checked={field.value} onCheckedChange={field.onChange} />
@@ -1365,25 +1371,42 @@ export default function SettingsPage() {
                           </FormItem>
                         )} />
 
-                        {invoiceSettingsForm.watch("invoiceShowBankDetails") && (
-                          <FormField control={invoiceSettingsForm.control} name="invoiceBankDetails" render={({ field }) => (
-                            <FormItem className="p-4 rounded-lg bg-muted/50">
-                              <FormLabel className="text-sm flex items-center gap-2">
-                                <Landmark className="h-4 w-4" />
-                                Bank Account Details
-                              </FormLabel>
+                        <div className="p-4 rounded-lg bg-muted/50 space-y-4">
+                          <div className="flex items-center gap-2">
+                            <Landmark className="h-4 w-4 text-primary" />
+                            <span className="text-sm font-medium">Bank Account Details</span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField control={invoiceSettingsForm.control} name="iban" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-sm">IBAN</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="NL00 INGB 0000 0000 00" className="font-mono" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                            <FormField control={invoiceSettingsForm.control} name="bic" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-sm">BIC / SWIFT</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="INGBNL2A" className="font-mono" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )} />
+                          </div>
+                          <FormField control={invoiceSettingsForm.control} name="bankName" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Bank Name</FormLabel>
                               <FormControl>
-                                <Textarea
-                                  placeholder="Bank: ING Bank&#10;IBAN: NL00 INGB 0000 0000 00&#10;BIC/SWIFT: INGBNL2A&#10;Account holder: Your Company B.V."
-                                  className="min-h-[100px] font-mono text-sm"
-                                  {...field}
-                                />
+                                <Input placeholder="ING Bank" {...field} />
                               </FormControl>
-                              <FormDescription className="text-xs">Enter your bank details. This will be shown on invoices for customers who prefer wire transfers.</FormDescription>
                               <FormMessage />
                             </FormItem>
                           )} />
-                        )}
+                          <p className="text-xs text-muted-foreground">These details will appear on invoices when "Show Bank Details" is enabled.</p>
+                        </div>
 
                         <SaveButton formName="invoiceSettings" isSubmitting={invoiceSettingsForm.formState.isSubmitting}>
                           Save Invoice Settings

@@ -177,8 +177,13 @@ export interface Distributor {
   invoicePaymentTerms?: string; // e.g., "Payment due within 14 days"
   invoiceNotes?: string; // Default notes to include on invoices
   invoiceFooterText?: string; // Custom footer message
-  invoiceBankDetails?: string; // Bank account details for wire transfers
+  invoiceBankDetails?: string; // Bank account details for wire transfers (legacy/notes)
   invoiceShowBankDetails?: boolean; // Whether to show bank details on invoices
+
+  // Bank Details (structured)
+  iban?: string;
+  bic?: string;
+  bankName?: string;
 }
 
 export interface BrandingSettings {
