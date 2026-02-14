@@ -11,7 +11,7 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyBNHIP0cIjg8abv8jLZ5bT6hlwRBJt01qQ",
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "vinylogix-v1.firebaseapp.com",
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "vinylogix-v1",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "vinylogix-v1.appspot.com",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "vinylogix-v1.firebasestorage.app",
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "709401169654",
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:709401169654:web:93a83783ae8bfe62e1a6d7",
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-Q91D5J3W1M",
