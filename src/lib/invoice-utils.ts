@@ -195,31 +195,31 @@ export async function generateInvoicePdf(
     leftY += 4;
   }
 
-  // Website
-  if (distributor.website) {
-    doc.text(distributor.website, leftColumnX, leftY);
-    leftY += 4;
-  }
-
   // ---- BILL TO content (right column) ----
   let rightY = currentY;
 
-  // Customer name
+  // Customer company name first (if available), otherwise personal name
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLORS.text);
-  doc.text(order.customerName, rightColumnX, rightY);
-  rightY += 5;
+
+  if (order.customerCompanyName) {
+    doc.text(order.customerCompanyName, rightColumnX, rightY);
+    rightY += 4;
+    // Personal name below company name
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...COLORS.secondary);
+    doc.text(order.customerName, rightColumnX, rightY);
+    rightY += 4;
+  } else {
+    doc.text(order.customerName, rightColumnX, rightY);
+    rightY += 5;
+  }
 
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...COLORS.secondary);
-
-  // Customer company (if available)
-  if (order.customerCompanyName) {
-    doc.text(order.customerCompanyName, rightColumnX, rightY);
-    rightY += 4;
-  }
 
   // Shipping address
   const clientAddressLines = order.shippingAddress.split('\n');
@@ -315,8 +315,8 @@ export async function generateInvoicePdf(
     startY: currentY,
     theme: 'plain',
     styles: {
-      fontSize: 10,
-      cellPadding: { top: 6, right: 4, bottom: 6, left: 4 },
+      fontSize: 9,
+      cellPadding: { top: 3, right: 3, bottom: 3, left: 3 },
       lineColor: COLORS.border,
       lineWidth: 0,
       textColor: COLORS.text,
@@ -326,12 +326,13 @@ export async function generateInvoicePdf(
       textColor: COLORS.white,
       fontStyle: 'bold',
       halign: 'left',
+      cellPadding: { top: 3, right: 3, bottom: 3, left: 3 },
     },
     columnStyles: {
       0: { cellWidth: 'auto', halign: 'left' },
-      1: { cellWidth: 25, halign: 'center' },
-      2: { cellWidth: 32, halign: 'right' },
-      3: { cellWidth: 35, halign: 'right', fontStyle: 'bold' },
+      1: { cellWidth: 20, halign: 'center' },
+      2: { cellWidth: 28, halign: 'right' },
+      3: { cellWidth: 32, halign: 'right', fontStyle: 'bold' },
     },
     alternateRowStyles: {
       fillColor: COLORS.white,
@@ -344,10 +345,6 @@ export async function generateInvoicePdf(
       if (data.section === 'body') {
         data.cell.styles.lineWidth = { bottom: 0.1 };
         data.cell.styles.lineColor = COLORS.border;
-      }
-      // Style artist name (second line) in gray
-      if (data.column.index === 0 && data.section === 'body') {
-        // The cell contains title\nartist, we style via cell properties
       }
     },
   });
