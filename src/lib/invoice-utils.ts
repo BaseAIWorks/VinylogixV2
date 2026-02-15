@@ -255,7 +255,7 @@ export async function generateInvoicePdf(
   // ============================================
 
   const boxWidth = (pageWidth - margin * 2) / 3;
-  const boxHeight = 16;
+  const boxHeight = 8;
   const invoiceNumber = order.orderNumber || order.id.slice(0, 8).toUpperCase();
   const dateText = format(new Date(order.createdAt), 'dd MMM yyyy');
   const statusText = statusConfig[order.status].label;
@@ -272,20 +272,20 @@ export async function generateInvoicePdf(
   // Box 3 - Status
   doc.rect(margin + boxWidth * 2, currentY, boxWidth, boxHeight);
 
-  // Box labels (small, gray, top of box)
+  // Box content - label and value inline
   doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
   doc.setTextColor(...COLORS.secondary);
-  doc.text("Invoice #", margin + 4, currentY + 5);
-  doc.text("Date", margin + boxWidth + 4, currentY + 5);
-  doc.text("Status", margin + boxWidth * 2 + 4, currentY + 5);
+  doc.setFont("helvetica", "normal");
+  doc.text("Invoice #", margin + 3, currentY + 5);
+  doc.text("Date", margin + boxWidth + 3, currentY + 5);
+  doc.text("Status", margin + boxWidth * 2 + 3, currentY + 5);
 
-  // Box values (larger, bold)
-  doc.setFontSize(11);
+  // Box values - positioned after labels
+  doc.setFontSize(8);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLORS.text);
-  doc.text(invoiceNumber, margin + 4, currentY + 12);
-  doc.text(dateText, margin + boxWidth + 4, currentY + 12);
+  doc.text(invoiceNumber, margin + 22, currentY + 5);
+  doc.text(dateText, margin + boxWidth + 15, currentY + 5);
 
   // Status with color
   if (isPaid) {
@@ -293,7 +293,7 @@ export async function generateInvoicePdf(
   } else {
     doc.setTextColor(...COLORS.accent);
   }
-  doc.text(statusText, margin + boxWidth * 2 + 4, currentY + 12);
+  doc.text(statusText, margin + boxWidth * 2 + 17, currentY + 5);
 
   currentY += boxHeight + 10;
 
