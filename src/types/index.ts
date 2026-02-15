@@ -179,6 +179,7 @@ export interface Distributor {
   invoiceFooterText?: string; // Custom footer message
   invoiceBankDetails?: string; // Bank account details for wire transfers (legacy/notes)
   invoiceShowBankDetails?: boolean; // Whether to show bank details on invoices
+  invoiceCustomTextPosition?: 'above_items' | 'below_items'; // Where to place payment terms/notes
 
   // Bank Details (structured)
   iban?: string;

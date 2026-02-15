@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users, Clock, RefreshCw, Truck, Receipt, CheckCircle2, FileText, Landmark } from "lucide-react";
+import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users, Clock, RefreshCw, Truck, Receipt, CheckCircle2, FileText, Landmark, Bold, Italic, Underline, Strikethrough, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useEffect } from "react";
@@ -129,6 +129,7 @@ const invoiceSettingsFormSchema = z.object({
     invoiceNotes: z.string().optional(),
     invoiceFooterText: z.string().optional(),
     invoiceShowBankDetails: z.boolean().default(false),
+    invoiceCustomTextPosition: z.enum(['above_items', 'below_items']).default('below_items'),
     iban: z.string().optional(),
     bic: z.string().optional(),
     bankName: z.string().optional(),
@@ -330,6 +331,7 @@ export default function SettingsPage() {
           invoiceNotes: "",
           invoiceFooterText: "",
           invoiceShowBankDetails: false,
+          invoiceCustomTextPosition: "below_items",
           iban: "",
           bic: "",
           bankName: "",
@@ -408,6 +410,7 @@ export default function SettingsPage() {
             invoiceNotes: activeDistributor.invoiceNotes || "",
             invoiceFooterText: activeDistributor.invoiceFooterText || "",
             invoiceShowBankDetails: activeDistributor.invoiceShowBankDetails || false,
+            invoiceCustomTextPosition: activeDistributor.invoiceCustomTextPosition || "below_items",
             iban: activeDistributor.iban || "",
             bic: activeDistributor.bic || "",
             bankName: activeDistributor.bankName || "",
@@ -1263,50 +1266,6 @@ export default function SettingsPage() {
                 </Card>
               )}
 
-              {/* Shipping Settings - Master only */}
-              {isMaster && (
-                <Card>
-                  <CardHeader className="pb-4">
-                    <div className="flex items-center gap-3">
-                      <Truck className="h-5 w-5 text-primary" />
-                      <CardTitle className="text-lg">Shipping</CardTitle>
-                    </div>
-                    <CardDescription className="text-sm">Configure shipping methods and rates for your orders.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="rounded-lg border border-dashed p-6 text-center">
-                      <Truck className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                      <p className="text-sm font-medium">Shipping Settings Coming Soon</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Configure shipping carriers, zones, and rates for your store.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Tax/VAT Settings - Master only */}
-              {isMaster && (
-                <Card>
-                  <CardHeader className="pb-4">
-                    <div className="flex items-center gap-3">
-                      <Receipt className="h-5 w-5 text-primary" />
-                      <CardTitle className="text-lg">Tax / VAT</CardTitle>
-                    </div>
-                    <CardDescription className="text-sm">Configure tax rates for your products and invoices.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="rounded-lg border border-dashed p-6 text-center">
-                      <Receipt className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                      <p className="text-sm font-medium">Tax Settings Coming Soon</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Set up VAT rates, tax rules, and automatic tax calculation.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
               {/* Invoice Settings - Master only */}
               {isMaster && (
                 <Card>
@@ -1324,9 +1283,34 @@ export default function SettingsPage() {
                           <FormItem>
                             <FormLabel className="text-sm">Payment Terms</FormLabel>
                             <FormControl>
-                              <Input placeholder="e.g., Payment due within 14 days" {...field} />
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-1 p-1 border rounded-md bg-muted/30 w-fit">
+                                  <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Bold: wrap text with **text**"
+                                    onClick={() => { const ta = document.getElementById('paymentTerms') as HTMLTextAreaElement; if(ta) { const start = ta.selectionStart; const end = ta.selectionEnd; const text = field.value || ''; const selected = text.substring(start, end); const newText = text.substring(0, start) + '**' + selected + '**' + text.substring(end); field.onChange(newText); } }}>
+                                    <Bold className="h-4 w-4" />
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Italic: wrap text with *text*"
+                                    onClick={() => { const ta = document.getElementById('paymentTerms') as HTMLTextAreaElement; if(ta) { const start = ta.selectionStart; const end = ta.selectionEnd; const text = field.value || ''; const selected = text.substring(start, end); const newText = text.substring(0, start) + '*' + selected + '*' + text.substring(end); field.onChange(newText); } }}>
+                                    <Italic className="h-4 w-4" />
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Underline: wrap text with __text__"
+                                    onClick={() => { const ta = document.getElementById('paymentTerms') as HTMLTextAreaElement; if(ta) { const start = ta.selectionStart; const end = ta.selectionEnd; const text = field.value || ''; const selected = text.substring(start, end); const newText = text.substring(0, start) + '__' + selected + '__' + text.substring(end); field.onChange(newText); } }}>
+                                    <Underline className="h-4 w-4" />
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Strikethrough: wrap text with ~~text~~"
+                                    onClick={() => { const ta = document.getElementById('paymentTerms') as HTMLTextAreaElement; if(ta) { const start = ta.selectionStart; const end = ta.selectionEnd; const text = field.value || ''; const selected = text.substring(start, end); const newText = text.substring(0, start) + '~~' + selected + '~~' + text.substring(end); field.onChange(newText); } }}>
+                                    <Strikethrough className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                <Textarea
+                                  id="paymentTerms"
+                                  placeholder="e.g., Payment due within 14 days&#10;&#10;Use **bold**, *italic*, __underline__, or ~~strikethrough~~ for formatting"
+                                  className="min-h-[80px]"
+                                  {...field}
+                                />
+                              </div>
                             </FormControl>
-                            <FormDescription className="text-xs">Displayed on invoices to inform customers of payment expectations.</FormDescription>
+                            <FormDescription className="text-xs">Displayed on invoices to inform customers of payment expectations. Use markdown for formatting.</FormDescription>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -1335,13 +1319,63 @@ export default function SettingsPage() {
                           <FormItem>
                             <FormLabel className="text-sm">Default Invoice Notes</FormLabel>
                             <FormControl>
-                              <Textarea
-                                placeholder="e.g., Thank you for your purchase! For any questions, contact us at..."
-                                className="min-h-[80px]"
-                                {...field}
-                              />
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-1 p-1 border rounded-md bg-muted/30 w-fit">
+                                  <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Bold: wrap text with **text**"
+                                    onClick={() => { const ta = document.getElementById('invoiceNotes') as HTMLTextAreaElement; if(ta) { const start = ta.selectionStart; const end = ta.selectionEnd; const text = field.value || ''; const selected = text.substring(start, end); const newText = text.substring(0, start) + '**' + selected + '**' + text.substring(end); field.onChange(newText); } }}>
+                                    <Bold className="h-4 w-4" />
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Italic: wrap text with *text*"
+                                    onClick={() => { const ta = document.getElementById('invoiceNotes') as HTMLTextAreaElement; if(ta) { const start = ta.selectionStart; const end = ta.selectionEnd; const text = field.value || ''; const selected = text.substring(start, end); const newText = text.substring(0, start) + '*' + selected + '*' + text.substring(end); field.onChange(newText); } }}>
+                                    <Italic className="h-4 w-4" />
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Underline: wrap text with __text__"
+                                    onClick={() => { const ta = document.getElementById('invoiceNotes') as HTMLTextAreaElement; if(ta) { const start = ta.selectionStart; const end = ta.selectionEnd; const text = field.value || ''; const selected = text.substring(start, end); const newText = text.substring(0, start) + '__' + selected + '__' + text.substring(end); field.onChange(newText); } }}>
+                                    <Underline className="h-4 w-4" />
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Strikethrough: wrap text with ~~text~~"
+                                    onClick={() => { const ta = document.getElementById('invoiceNotes') as HTMLTextAreaElement; if(ta) { const start = ta.selectionStart; const end = ta.selectionEnd; const text = field.value || ''; const selected = text.substring(start, end); const newText = text.substring(0, start) + '~~' + selected + '~~' + text.substring(end); field.onChange(newText); } }}>
+                                    <Strikethrough className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                                <Textarea
+                                  id="invoiceNotes"
+                                  placeholder="e.g., Thank you for your purchase! For any questions, contact us at...&#10;&#10;Use **bold**, *italic*, __underline__, or ~~strikethrough~~ for formatting"
+                                  className="min-h-[80px]"
+                                  {...field}
+                                />
+                              </div>
                             </FormControl>
                             <FormDescription className="text-xs">These notes will appear in the notes section of every invoice.</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+
+                        <FormField control={invoiceSettingsForm.control} name="invoiceCustomTextPosition" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm">Custom Text Position</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select position" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="above_items">
+                                  <div className="flex items-center gap-2">
+                                    <ArrowUp className="h-4 w-4" />
+                                    <span>Above item list (below invoice details)</span>
+                                  </div>
+                                </SelectItem>
+                                <SelectItem value="below_items">
+                                  <div className="flex items-center gap-2">
+                                    <ArrowDown className="h-4 w-4" />
+                                    <span>Below item list (after totals)</span>
+                                  </div>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormDescription className="text-xs">Choose where Payment Terms and Notes appear on the invoice.</FormDescription>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -1413,6 +1447,50 @@ export default function SettingsPage() {
                         </SaveButton>
                       </form>
                     </Form>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Shipping Settings - Master only */}
+              {isMaster && (
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                      <Truck className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Shipping</CardTitle>
+                    </div>
+                    <CardDescription className="text-sm">Configure shipping methods and rates for your orders.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="rounded-lg border border-dashed p-6 text-center">
+                      <Truck className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-sm font-medium">Shipping Settings Coming Soon</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Configure shipping carriers, zones, and rates for your store.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Tax/VAT Settings - Master only */}
+              {isMaster && (
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                      <Receipt className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Tax / VAT</CardTitle>
+                    </div>
+                    <CardDescription className="text-sm">Configure tax rates for your products and invoices.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="rounded-lg border border-dashed p-6 text-center">
+                      <Receipt className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-sm font-medium">Tax Settings Coming Soon</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Set up VAT rates, tax rules, and automatic tax calculation.
+                      </p>
+                    </div>
                   </CardContent>
                 </Card>
               )}

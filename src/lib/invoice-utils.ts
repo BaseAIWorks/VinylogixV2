@@ -298,6 +298,82 @@ export async function generateInvoicePdf(
   currentY += boxHeight + 10;
 
   // ============================================
+  // HELPER: Render custom text sections (Payment Terms, Bank Details, Notes)
+  // ============================================
+  const renderCustomTextSections = () => {
+    const paymentTerms = distributor.invoicePaymentTerms;
+    const notesText = options?.notes || distributor.invoiceNotes;
+
+    // Clean markdown formatting for PDF display
+    const cleanMarkdown = (text: string) => text
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/__([^_]+)__/g, '$1')
+      .replace(/~~([^~]+)~~/g, '$1');
+
+    // Payment Terms
+    if (paymentTerms) {
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...COLORS.text);
+      doc.text("Payment Terms:", margin, currentY);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...COLORS.secondary);
+      const cleanTerms = cleanMarkdown(paymentTerms);
+      const termsLines = doc.splitTextToSize(cleanTerms, pageWidth - margin * 2);
+      doc.text(termsLines, margin, currentY + 5);
+      currentY += (termsLines.length * 4) + 10;
+    }
+
+    // Bank Details (if enabled)
+    if (distributor.invoiceShowBankDetails && order.paymentStatus !== 'paid') {
+      const hasBankDetails = distributor.iban || distributor.bic || distributor.bankName;
+      if (hasBankDetails) {
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(...COLORS.text);
+        doc.text("Bank Details:", margin, currentY);
+
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(...COLORS.secondary);
+
+        const bankParts = [];
+        if (distributor.bankName) bankParts.push(distributor.bankName);
+        if (distributor.iban) bankParts.push(`IBAN: ${distributor.iban}`);
+        if (distributor.bic) bankParts.push(`BIC: ${distributor.bic}`);
+
+        doc.text(bankParts.join(' · '), margin + 24, currentY);
+        currentY += 8;
+      }
+    }
+
+    // Notes
+    if (notesText) {
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...COLORS.text);
+      doc.text("Notes:", margin, currentY);
+
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...COLORS.secondary);
+      const cleanNotes = cleanMarkdown(notesText);
+      const notesLines = doc.splitTextToSize(cleanNotes, pageWidth - margin * 2);
+      doc.text(notesLines, margin, currentY + 5);
+      currentY += (notesLines.length * 4) + 10;
+    }
+  };
+
+  // Check if custom text should be placed above items
+  const customTextPosition = distributor.invoiceCustomTextPosition || 'below_items';
+
+  // ============================================
+  // CUSTOM TEXT ABOVE ITEMS (if configured)
+  // ============================================
+  if (customTextPosition === 'above_items') {
+    renderCustomTextSections();
+  }
+
+  // ============================================
   // ORDER ITEMS TABLE
   // ============================================
 
@@ -385,63 +461,10 @@ export async function generateInvoicePdf(
   currentY += 15;
 
   // ============================================
-  // PAYMENT TERMS (if unpaid)
+  // CUSTOM TEXT BELOW ITEMS (default position)
   // ============================================
-
-  const paymentTerms = distributor.invoicePaymentTerms;
-  if (paymentTerms && order.paymentStatus !== 'paid') {
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...COLORS.text);
-    doc.text("Payment Terms:", margin, currentY);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...COLORS.secondary);
-    const termsLines = doc.splitTextToSize(paymentTerms, pageWidth - margin * 2 - 30);
-    doc.text(termsLines, margin + 28, currentY);
-    currentY += (termsLines.length * 4) + 6;
-  }
-
-  // ============================================
-  // BANK DETAILS (if unpaid and enabled)
-  // ============================================
-
-  if (distributor.invoiceShowBankDetails && order.paymentStatus !== 'paid') {
-    const hasBankDetails = distributor.iban || distributor.bic || distributor.bankName;
-    if (hasBankDetails) {
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...COLORS.text);
-      doc.text("Bank Details:", margin, currentY);
-
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...COLORS.secondary);
-
-      const bankParts = [];
-      if (distributor.bankName) bankParts.push(distributor.bankName);
-      if (distributor.iban) bankParts.push(`IBAN: ${distributor.iban}`);
-      if (distributor.bic) bankParts.push(`BIC: ${distributor.bic}`);
-
-      doc.text(bankParts.join(' · '), margin + 24, currentY);
-      currentY += 8;
-    }
-  }
-
-  // ============================================
-  // NOTES SECTION
-  // ============================================
-
-  const notesText = options?.notes || distributor.invoiceNotes;
-  if (notesText) {
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...COLORS.text);
-    doc.text("Notes:", margin, currentY);
-
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...COLORS.secondary);
-    const notesLines = doc.splitTextToSize(notesText, pageWidth - margin * 2);
-    doc.text(notesLines, margin, currentY + 5);
-    currentY += (notesLines.length * 4) + 10;
+  if (customTextPosition === 'below_items') {
+    renderCustomTextSections();
   }
 
   // ============================================
