@@ -52,9 +52,32 @@ service cloud.firestore {
              get(/databases/$(database)/documents/distributors/$(distributorId)).data.masterUserUid == request.auth.uid;
     }
 
+    // Fallback check: Is the user a worker of this distributor based on their user document?
+    // This is used when custom claims aren't synced yet.
+    function isWorkerByDocument(distributorId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'worker' &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.distributorId == distributorId;
+    }
+
+    // Fallback check: Is the user a client/viewer with access to this distributor based on their user document?
+    // This is used when custom claims aren't synced yet.
+    function isClientByDocument(distributorId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'viewer' &&
+             distributorId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accessibleDistributorIds;
+    }
+
     // Combined check: Is user an operator either by token claims OR by document lookup
     function isOperatorOfWithFallback(distributorId) {
-      return isOperatorOf(distributorId) || isMasterByDocument(distributorId);
+      return isOperatorOf(distributorId) || isMasterByDocument(distributorId) || isWorkerByDocument(distributorId);
+    }
+
+    // Combined check: Is user a client either by token claims OR by document lookup
+    function isClientOfWithFallback(distributorId) {
+      return isClientOf(distributorId) || isClientByDocument(distributorId);
     }
 
     // SECURITY: Check if sensitive fields are being modified
@@ -119,10 +142,10 @@ service cloud.firestore {
 
       // Operators can read their own distributor document.
       // Clients can read the document of distributors they have access to.
-      // Also allow if the user is the masterUserUid (covers case where custom claims aren't synced yet).
+      // Fallbacks are used when custom claims aren't synced yet after login.
       allow read: if isSignedIn() && (
-        isOperatorOf(distributorId) ||
-        isClientOf(distributorId) ||
+        isOperatorOfWithFallback(distributorId) ||
+        isClientOfWithFallback(distributorId) ||
         resource.data.masterUserUid == request.auth.uid
       );
 
@@ -158,11 +181,11 @@ service cloud.firestore {
       // 1. Superadmins can read anything.
       // 2. You can read your own personal records (that are not inventory items).
       // 3. Operators can read any record belonging to their distributor (with fallback).
-      // 4. Clients can read any inventory item from a distributor they have access to.
+      // 4. Clients can read any inventory item from a distributor they have access to (with fallback).
       allow read: if isSuperAdmin() ||
                    (isOwner(resource.data.ownerUid) && resource.data.isInventoryItem == false) ||
                    isOperatorOfWithFallback(resource.data.distributorId) ||
-                   (resource.data.isInventoryItem == true && isClientOf(resource.data.distributorId));
+                   (resource.data.isInventoryItem == true && isClientOfWithFallback(resource.data.distributorId));
 
       // Update permissions:
       // 1. Superadmins can update anything.
