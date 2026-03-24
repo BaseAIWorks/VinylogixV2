@@ -523,8 +523,8 @@ export default function InventoryPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[60px] sm:w-[80px] p-2 sm:p-4"></TableHead>
-                      {cardSettings.showTitle && <TableHead>Title</TableHead>}
                       {cardSettings.showArtist && <TableHead>Artist</TableHead>}
+                      {cardSettings.showTitle && <TableHead>Title</TableHead>}
                       {cardSettings.showYear && <TableHead className="hidden md:table-cell">Year</TableHead>}
                       {cardSettings.showShelfStock && <TableHead className="hidden md:table-cell">Shelf</TableHead>}
                       {cardSettings.showStorageStock && <TableHead className="hidden md:table-cell">Storage</TableHead>}
@@ -558,8 +558,8 @@ export default function InventoryPage() {
                                   unoptimized={record.cover_url?.includes('discogs.com')}
                                 />
                             </TableCell>
-                            {cardSettings.showTitle && <TableCell className="font-bold py-2 px-2 sm:px-4 align-top">{record.title}</TableCell>}
-                            {cardSettings.showArtist && <TableCell className="text-sm text-muted-foreground py-2 px-2 sm:px-4 align-top">{record.artist}</TableCell>}
+                            {cardSettings.showArtist && <TableCell className="font-bold py-2 px-2 sm:px-4 align-top">{record.artist}</TableCell>}
+                            {cardSettings.showTitle && <TableCell className="text-sm text-muted-foreground py-2 px-2 sm:px-4 align-top">{record.title}</TableCell>}
                             {cardSettings.showYear && <TableCell className="hidden md:table-cell align-middle text-sm">{record.year || 'N/A'}</TableCell>}
                             
                             {user?.role !== 'viewer' ? (

@@ -176,8 +176,8 @@ export default function RecordCard({ record, isOperator, isFavorite, onToggleFav
             </div>
           </CardHeader>
           <CardContent className="p-4 flex-grow flex flex-col">
-            {settings.showTitle && <p className="text-lg font-semibold leading-tight mb-1 truncate" title={record.title}>{record.title}</p>}
-            {settings.showArtist && <p className="text-sm text-muted-foreground truncate mb-2" title={record.artist}>{record.artist}</p>}
+            {settings.showArtist && <p className="text-lg font-semibold leading-tight mb-1 truncate" title={record.artist}>{record.artist}</p>}
+            {settings.showTitle && <p className="text-sm text-muted-foreground truncate mb-2" title={record.title}>{record.title}</p>}
             
             <div className="flex flex-col gap-1.5 text-sm mt-auto pt-2">
               <div className="flex items-center gap-4 text-xs">

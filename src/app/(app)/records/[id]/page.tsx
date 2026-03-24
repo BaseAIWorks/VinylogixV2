@@ -631,8 +631,8 @@ export default function RecordDetailPage() {
               <CardHeader className="p-0 pb-4">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h2 className="text-3xl font-bold tracking-tight text-primary">{record.title}</h2>
-                    <h3 className="text-xl text-muted-foreground">{record.artist}</h3>
+                    <h2 className="text-3xl font-bold tracking-tight text-primary">{record.artist}</h2>
+                    <h3 className="text-xl text-muted-foreground">{record.title}</h3>
                   </div>
                    <div className="flex items-center flex-shrink-0 gap-2 md:hidden">
                     {record.discogs_id && (
