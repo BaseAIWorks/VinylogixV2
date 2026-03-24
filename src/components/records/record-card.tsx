@@ -23,9 +23,10 @@ interface RecordCardProps {
   isSelected?: boolean;
   onSelect?: (recordId: string) => void;
   showCheckbox?: boolean;
+  onNavigate?: (recordId: string) => void;
 }
 
-export default function RecordCard({ record, isOperator, isFavorite, onToggleFavorite, isInDiscogs, onQuickStockUpdate, isSelected, onSelect, showCheckbox }: RecordCardProps) {
+export default function RecordCard({ record, isOperator, isFavorite, onToggleFavorite, isInDiscogs, onQuickStockUpdate, isSelected, onSelect, showCheckbox, onNavigate }: RecordCardProps) {
   const { addToCart, activeDistributorId, activeDistributor } = useAuth();
   const [isUpdatingStock, setIsUpdatingStock] = useState(false);
   const [stockUpdateSuccess, setStockUpdateSuccess] = useState<'shelf' | 'storage' | null>(null);
@@ -120,9 +121,11 @@ export default function RecordCard({ record, isOperator, isFavorite, onToggleFav
   const formats = record.formatDetails?.split(',').map(f => f.trim()) || [];
   const displayFormats = formats.length > 3 ? `${formats.slice(0, 3).join(', ')}, and more...` : formats.join(', ');
 
+  const handleClick = onNavigate ? (e: React.MouseEvent) => { e.preventDefault(); onNavigate(record.id); } : undefined;
+
   return (
     <Link href={`/records/${record.id}`} legacyBehavior>
-      <a className="block hover:shadow-lg transition-shadow duration-200 rounded-lg group h-full">
+      <a className="block hover:shadow-lg transition-shadow duration-200 rounded-lg group h-full" onClick={handleClick}>
         <Card className="h-full flex flex-col overflow-hidden bg-card hover:bg-card/90 transition-colors">
            {/* Top left - Selection checkbox */}
            {showCheckbox && onSelect && (

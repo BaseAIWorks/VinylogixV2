@@ -54,6 +54,42 @@ export default function InventoryPage() {
 
   const isOperator = user?.role === 'master' || user?.role === 'worker';
 
+  // Cache key for scroll restoration
+  const cacheKey = `inventory_cache_${activeDistributorId}`;
+
+  // Restore cached records and scroll position on mount
+  useEffect(() => {
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const { records: cachedRecords, scrollY, hasMore: cachedHasMore } = JSON.parse(cached);
+        if (cachedRecords?.length > 0) {
+          setRecords(cachedRecords);
+          setHasMore(cachedHasMore ?? true);
+          setIsFetching(false);
+          // Restore scroll after render
+          requestAnimationFrame(() => {
+            window.scrollTo(0, scrollY || 0);
+          });
+          sessionStorage.removeItem(cacheKey);
+          return;
+        }
+      }
+    } catch {}
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save state before navigating to a record
+  const navigateToRecord = useCallback((recordId: string) => {
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify({
+        records,
+        scrollY: window.scrollY,
+        hasMore,
+      }));
+    } catch {}
+    router.push(`/records/${recordId}`);
+  }, [cacheKey, records, hasMore, router]);
+
   const cardSettings = activeDistributor?.cardDisplaySettings || {
     showTitle: true,
     showArtist: true,
@@ -125,7 +161,15 @@ export default function InventoryPage() {
     };
   }, [hasMore, isFetchingMore, fetchPaginatedRecords]);
 
+  const hasRestoredCache = useRef(false);
+
   useEffect(() => {
+    // Skip initial fetch if we restored from cache
+    if (records.length > 0 && !hasRestoredCache.current) {
+      hasRestoredCache.current = true;
+      return;
+    }
+    hasRestoredCache.current = true;
     fetchPaginatedRecords(false);
   }, [authLoading, user, activeDistributorId, filters, sortOption]);
   
@@ -453,6 +497,7 @@ export default function InventoryPage() {
                       isSelected={selectedRecords.has(record.id)}
                       onSelect={bulkEditMode ? handleSelectRecord : undefined}
                       showCheckbox={bulkEditMode && isOperator}
+                      onNavigate={navigateToRecord}
                   />
                 ))}
               </div>
@@ -460,13 +505,14 @@ export default function InventoryPage() {
           ) : viewMode === 'compact' ? (
              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
               {filteredRecords.map((record) => (
-                <CompactRecordCard 
+                <CompactRecordCard
                     key={record.id}
                     record={record}
                     isOperator={isOperator}
                     isFavorite={user?.role === 'viewer' && user?.favorites?.includes(record.id)}
                     onToggleFavorite={user?.role === 'viewer' ? () => handleToggleFavorite(record.id) : undefined}
                     isInDiscogs={!!(record.discogs_id && discogsInventoryReleaseIds.has(record.discogs_id))}
+                    onNavigate={navigateToRecord}
                 />
               ))}
             </div>
@@ -499,7 +545,7 @@ export default function InventoryPage() {
                         <TableRow
                           key={record.id}
                           className="cursor-pointer hover:bg-muted/50 transition-colors duration-150"
-                          onClick={() => router.push(`/records/${record.id}`)}
+                          onClick={() => navigateToRecord(record.id)}
                         >
                             <TableCell className="p-1 sm:p-2 align-middle">
                                 <Image

@@ -17,9 +17,10 @@ interface CompactRecordCardProps {
   isFavorite?: boolean;
   onToggleFavorite?: (recordId: string) => void;
   isInDiscogs?: boolean;
+  onNavigate?: (recordId: string) => void;
 }
 
-export default function CompactRecordCard({ record, isOperator, isFavorite, onToggleFavorite, isInDiscogs }: CompactRecordCardProps) {
+export default function CompactRecordCard({ record, isOperator, isFavorite, onToggleFavorite, isInDiscogs, onNavigate }: CompactRecordCardProps) {
   const { addToCart, activeDistributorId } = useAuth();
   
   const totalStock = Number(record.stock_shelves || 0) + Number(record.stock_storage || 0);
@@ -41,9 +42,11 @@ export default function CompactRecordCard({ record, isOperator, isFavorite, onTo
   const isAvailable = record.isInventoryItem && totalStock > 0;
   const canBePurchased = !isOperator && isAvailable && (record.sellingPrice ?? -1) >= 0;
 
+  const handleClick = onNavigate ? (e: React.MouseEvent) => { e.preventDefault(); onNavigate(record.id); } : undefined;
+
   return (
     <Link href={`/records/${record.id}`} legacyBehavior>
-      <a className="block group h-full">
+      <a className="block group h-full" onClick={handleClick}>
         <Card className="h-full flex flex-col overflow-hidden bg-card hover:bg-card/90 transition-colors duration-200">
            <div className="relative">
              <Image
