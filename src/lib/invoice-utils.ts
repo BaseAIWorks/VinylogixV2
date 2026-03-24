@@ -485,9 +485,20 @@ export async function generateInvoicePdf(
 
   currentY = (doc as any).lastAutoTable.finalY + 8;
 
+  // Helper: check if we need a new page, reserving space for footer (~35mm)
+  const footerReserved = 40;
+  const checkPageBreak = (neededSpace: number) => {
+    if (currentY + neededSpace > pageHeight - footerReserved) {
+      doc.addPage();
+      currentY = margin;
+    }
+  };
+
   // ============================================
   // TOTALS SECTION
   // ============================================
+
+  checkPageBreak(30); // totals need ~30mm
 
   const totalsX = pageWidth - margin - 55;
 
@@ -522,11 +533,12 @@ export async function generateInvoicePdf(
   // CUSTOM TEXT BELOW ITEMS (default position)
   // ============================================
   if (customTextPosition === 'below_items') {
+    checkPageBreak(20);
     renderCustomTextSections();
   }
 
   // ============================================
-  // FOOTER
+  // FOOTER (always on the last page)
   // ============================================
 
   // Footer message
