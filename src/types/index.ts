@@ -471,6 +471,8 @@ export interface Order {
   customerName: string;
   customerCompanyName?: string; // Client's company name
   customerVatNumber?: string; // Client's VAT number
+  customerEoriNumber?: string; // Client's EORI number
+  customerChamberOfCommerce?: string; // Client's chamber of commerce / KVK
   shippingAddress: string;
   billingAddress?: string;
   phoneNumber?: string;

@@ -214,6 +214,12 @@ export async function createOrder(user: User, cartItems: CartItem[]): Promise<Or
     if (user.vatNumber) {
         newOrderData.customerVatNumber = user.vatNumber;
     }
+    if (user.eoriNumber) {
+        newOrderData.customerEoriNumber = user.eoriNumber;
+    }
+    if (user.chamberOfCommerce) {
+        newOrderData.customerChamberOfCommerce = user.chamberOfCommerce;
+    }
     
     const orderDocRef = await addDoc(collection(db, ORDERS_COLLECTION), newOrderData);
 

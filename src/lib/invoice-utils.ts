@@ -246,10 +246,19 @@ export async function generateInvoicePdf(
     rightY += 4;
   }
 
-  // Customer VAT
-  if (order.customerVatNumber) {
-    doc.text(`VAT: ${order.customerVatNumber}`, rightColumnX, rightY);
-    rightY += 4;
+  // Customer business details
+  const customerRegParts: string[] = [];
+  if (order.customerChamberOfCommerce) customerRegParts.push(`KVK: ${order.customerChamberOfCommerce}`);
+  if (order.customerVatNumber) customerRegParts.push(`VAT: ${order.customerVatNumber}`);
+  if (order.customerEoriNumber) customerRegParts.push(`EORI: ${order.customerEoriNumber}`);
+
+  if (customerRegParts.length > 0) {
+    const regText = customerRegParts.join(' · ');
+    const regLines = doc.splitTextToSize(regText, columnWidth - 10);
+    regLines.forEach((line: string) => {
+      doc.text(line, rightColumnX, rightY);
+      rightY += 4;
+    });
   }
 
   // Shipping address (if different from billing)
