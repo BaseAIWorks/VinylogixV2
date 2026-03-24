@@ -116,7 +116,7 @@ service cloud.firestore {
       // Anyone can read their own user document.
       // A master user can read any user document within their own distributorship.
       // A superadmin can read any user document.
-      allow read: if isSuperAdmin() || isOwner(userId) || (isMaster() && resource.data.distributorId == request.auth.token.distributorId);
+      allow read: if isSuperAdmin() || isOwner(userId) || (isMaster() && resource.data.distributorId == request.auth.token.distributorId) || (isMaster() && request.auth.token.distributorId in resource.data.accessibleDistributorIds);
 
       // A user can create their own document (on signup).
       // On create, users cannot set themselves as master or superadmin.
