@@ -2,7 +2,7 @@
 
 import type { Order, OrderStatus, OrderItem } from '@/types';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
 
@@ -33,18 +33,20 @@ export async function createOrderFromCheckout(session: Stripe.Checkout.Session):
     throw new Error("No distributorId found in checkout session metadata");
   }
 
-  // Get distributor to increment order counter
+  // Get distributor and atomically increment order counter via transaction
   const distributorDocRef = adminDb.collection('distributors').doc(distributorId);
-  const distributorSnap = await distributorDocRef.get();
 
-  if (!distributorSnap.exists) {
-    throw new Error(`Distributor with ID ${distributorId} not found`);
-  }
-
-  const distributor = distributorSnap.data();
-  const prefix = distributor?.orderIdPrefix || 'ORD';
-  const counter = (distributor?.orderCounter || 0) + 1;
-  const orderNumber = `${prefix}-${counter.toString().padStart(5, '0')}`;
+  const { distributor, orderNumber } = await adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(distributorDocRef);
+    if (!snap.exists) {
+      throw new Error(`Distributor with ID ${distributorId} not found`);
+    }
+    const dist = snap.data()!;
+    const prefix = dist.orderIdPrefix || 'ORD';
+    const cnt = (dist.orderCounter || 0) + 1;
+    tx.update(distributorDocRef, { orderCounter: cnt });
+    return { distributor: dist, orderNumber: `${prefix}-${cnt.toString().padStart(5, '0')}` };
+  });
 
   // Line items are NOT included in webhook events by default
   // We need to retrieve them from Stripe
@@ -164,8 +166,7 @@ export async function createOrderFromCheckout(session: Stripe.Checkout.Session):
   // Create the order
   const orderDocRef = await adminDb.collection(ORDERS_COLLECTION).add(newOrderData);
 
-  // Update distributor order counter
-  await distributorDocRef.update({ orderCounter: counter });
+  // Counter already updated in transaction above
 
   // Create notification for new order
   const notificationData = {
@@ -235,18 +236,20 @@ export async function createOrderFromPayPal(params: {
   const pendingData = pendingOrderSnap.data() as any;
   const distributorId = pendingData.distributorId;
 
-  // Get distributor to increment order counter
+  // Get distributor and atomically increment order counter via transaction
   const distributorDocRef = adminDb.collection('distributors').doc(distributorId);
-  const distributorSnap = await distributorDocRef.get();
 
-  if (!distributorSnap.exists) {
-    throw new Error(`Distributor with ID ${distributorId} not found`);
-  }
-
-  const distributor = distributorSnap.data();
-  const prefix = distributor?.orderIdPrefix || 'ORD';
-  const counter = (distributor?.orderCounter || 0) + 1;
-  const orderNumber = `${prefix}-${counter.toString().padStart(5, '0')}`;
+  const { distributor: paypalDistributor, orderNumber: paypalOrderNumber } = await adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(distributorDocRef);
+    if (!snap.exists) {
+      throw new Error(`Distributor with ID ${distributorId} not found`);
+    }
+    const dist = snap.data()!;
+    const prefix = dist.orderIdPrefix || 'ORD';
+    const cnt = (dist.orderCounter || 0) + 1;
+    tx.update(distributorDocRef, { orderCounter: cnt });
+    return { distributor: dist, orderNumber: `${prefix}-${cnt.toString().padStart(5, '0')}` };
+  });
 
   const now = new Date();
 
@@ -278,7 +281,7 @@ export async function createOrderFromPayPal(params: {
     totalWeight: pendingData.totalWeight || 0,
     createdAt: Timestamp.fromDate(now),
     updatedAt: Timestamp.fromDate(now),
-    orderNumber,
+    orderNumber: paypalOrderNumber,
 
     // Payment fields
     paymentMethod: 'paypal' as const,
@@ -298,8 +301,7 @@ export async function createOrderFromPayPal(params: {
   // Create the order
   const orderDocRef = await adminDb.collection(ORDERS_COLLECTION).add(newOrderData);
 
-  // Update distributor order counter
-  await distributorDocRef.update({ orderCounter: counter });
+  // Counter already updated in transaction above
 
   // Delete the pending order
   await pendingOrderRef.delete();
@@ -331,8 +333,8 @@ export async function createOrderFromPayPal(params: {
     );
 
     // Send to distributor
-    if (distributor?.contactEmail) {
-      sendNewOrderNotification(order, distributor.contactEmail).catch(err =>
+    if (paypalDistributor?.contactEmail) {
+      sendNewOrderNotification(order, paypalDistributor.contactEmail).catch(err =>
         console.error('Failed to send new order notification:', err)
       );
     }

@@ -500,14 +500,24 @@ export default function SettingsPage() {
   }
 
   const handleInvoiceSettingsUpdate = async (values: InvoiceSettingsFormValues) => {
-      await updateMyDistributorSettings({ ...values, paymentAccounts });
+      // Filter out empty/incomplete payment accounts before saving
+      const validAccounts = paymentAccounts.filter(a => {
+          if (a.type === 'bank') return !!(a.iban || a.bankName);
+          if (a.type === 'paypal') return !!a.paypalEmail;
+          if (a.type === 'other') return !!a.details;
+          return false;
+      }).slice(0, 5); // Max 5 accounts
+      await updateMyDistributorSettings({ ...values, paymentAccounts: validAccounts });
+      setPaymentAccounts(validAccounts);
       showSaveSuccess('invoiceSettings');
   };
 
-  // Payment accounts management
+  // Payment accounts management (max 5)
   const addPaymentAccount = useCallback(() => {
-      setPaymentAccounts(prev => [...prev, {
-          id: `pa-${Date.now()}`,
+      setPaymentAccounts(prev => {
+          if (prev.length >= 5) return prev;
+          return [...prev, {
+          id: `pa-${crypto.randomUUID()}`,
           type: 'bank' as PaymentAccountType,
           label: '',
           iban: '',
@@ -516,7 +526,7 @@ export default function SettingsPage() {
           accountHolder: '',
           paypalEmail: '',
           details: '',
-      }]);
+      }]});
   }, []);
 
   const removePaymentAccount = useCallback((id: string) => {

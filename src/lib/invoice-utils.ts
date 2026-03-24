@@ -2,8 +2,7 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { format } from "date-fns";
 import { formatPriceForDisplay } from "./utils";
-import type { Order, OrderStatus, Distributor, User } from "@/types";
-import { getUserById } from "@/services/user-service";
+import type { Order, OrderStatus, Distributor } from "@/types";
 
 const statusConfig: Record<OrderStatus, { label: string }> = {
   pending: { label: 'Pending' },
@@ -42,22 +41,12 @@ export async function generateInvoicePdf(
   distributor: Distributor,
   options?: InvoiceOptions
 ): Promise<void> {
-  // Fetch live client data to fill in any missing business details
-  let clientUser: User | null = null;
-  if (order.viewerId) {
-    try {
-      clientUser = await getUserById(order.viewerId);
-    } catch (err) {
-      console.warn('Could not fetch client user for invoice:', err);
-    }
-  }
-
-  // Enrich order data with live client info (fallback to what's on the order)
-  const customerCompanyName = order.customerCompanyName || clientUser?.companyName;
-  const customerVatNumber = order.customerVatNumber || clientUser?.vatNumber;
-  const customerEoriNumber = order.customerEoriNumber || clientUser?.eoriNumber;
-  const customerChamberOfCommerce = order.customerChamberOfCommerce || clientUser?.chamberOfCommerce;
-  const customerPhone = order.phoneNumber || clientUser?.phoneNumber;
+  // Use order snapshot data for client details (saved at order creation time)
+  const customerCompanyName = order.customerCompanyName;
+  const customerVatNumber = order.customerVatNumber;
+  const customerEoriNumber = order.customerEoriNumber;
+  const customerChamberOfCommerce = order.customerChamberOfCommerce;
+  const customerPhone = order.phoneNumber;
 
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
