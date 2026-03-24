@@ -186,7 +186,7 @@ export async function generateInvoicePdf(
 
   // KVK and NIF/VAT on same line
   const regParts = [];
-  if (distributor.chamberOfCommerce) regParts.push(`KVK: ${distributor.chamberOfCommerce}`);
+  if (distributor.chamberOfCommerce) regParts.push(`CRN: ${distributor.chamberOfCommerce}`);
   if (distributor.taxId) regParts.push(`NIF: ${distributor.taxId}`);
   else if (distributor.vatNumber) regParts.push(`VAT: ${distributor.vatNumber}`);
 
@@ -248,7 +248,7 @@ export async function generateInvoicePdf(
 
   // Customer business details
   const customerRegParts: string[] = [];
-  if (order.customerChamberOfCommerce) customerRegParts.push(`KVK: ${order.customerChamberOfCommerce}`);
+  if (order.customerChamberOfCommerce) customerRegParts.push(`CRN: ${order.customerChamberOfCommerce}`);
   if (order.customerVatNumber) customerRegParts.push(`VAT: ${order.customerVatNumber}`);
   if (order.customerEoriNumber) customerRegParts.push(`EORI: ${order.customerEoriNumber}`);
 
