@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
 
     // 5) Create Checkout Session
     const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card', 'ideal', 'bancontact', 'eps', 'sofort'],
       mode: 'subscription',
       line_items: [
         {
