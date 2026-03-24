@@ -262,8 +262,8 @@ export default function CheckoutPage() {
                                                     <span className="text-white font-bold">S</span>
                                                 </div>
                                                 <div>
-                                                    <Label htmlFor="stripe" className="font-medium cursor-pointer">Credit / Debit Card</Label>
-                                                    <p className="text-sm text-muted-foreground">Pay securely with Stripe</p>
+                                                    <Label htmlFor="stripe" className="font-medium cursor-pointer">iDEAL, Card & more</Label>
+                                                    <p className="text-sm text-muted-foreground">Pay securely via Stripe</p>
                                                 </div>
                                             </div>
                                             {paymentMethod === 'stripe' && <Check className="h-5 w-5 text-primary" />}
