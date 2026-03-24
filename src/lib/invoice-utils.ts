@@ -177,8 +177,11 @@ export async function generateInvoicePdf(
     leftY += addressLines.length * 4;
   }
 
-  // Phone and email on same line
-  const contactLine = [distributor.phoneNumber, distributor.contactEmail].filter(Boolean).join(' · ');
+  // Phone and email on same line (with labels)
+  const distContactParts: string[] = [];
+  if (distributor.phoneNumber) distContactParts.push(`Tel: ${distributor.phoneNumber}`);
+  if (distributor.contactEmail) distContactParts.push(distributor.contactEmail);
+  const contactLine = distContactParts.join(' · ');
   if (contactLine) {
     doc.text(contactLine, leftColumnX, leftY);
     leftY += 4;
@@ -225,40 +228,36 @@ export async function generateInvoicePdf(
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...COLORS.secondary);
 
-  // Bill-to address
-  const billToLines = billToAddress.split('\n');
-  billToLines.forEach((line) => {
-    if (line.trim()) {
-      doc.text(line.trim(), rightColumnX, rightY);
-      rightY += 4;
-    }
-  });
-
-  // Email
-  if (order.viewerEmail) {
-    doc.text(order.viewerEmail, rightColumnX, rightY);
-    rightY += 4;
+  // Bill-to address (compact, comma-separated like distributor)
+  const clientAddressParts = billToAddress.split('\n').map(l => l.trim()).filter(Boolean);
+  if (clientAddressParts.length > 0) {
+    const clientAddressText = clientAddressParts.join(', ');
+    const clientAddrLines = doc.splitTextToSize(clientAddressText, columnWidth - 15);
+    doc.text(clientAddrLines, rightColumnX, rightY);
+    rightY += clientAddrLines.length * 4;
   }
 
-  // Phone
-  if (order.phoneNumber) {
-    doc.text(order.phoneNumber, rightColumnX, rightY);
-    rightY += 4;
+  // Phone, mobile and email on same line (with labels)
+  const clientContactParts: string[] = [];
+  if (order.phoneNumber) clientContactParts.push(`Tel: ${order.phoneNumber}`);
+  if (order.viewerEmail) clientContactParts.push(order.viewerEmail);
+  if (clientContactParts.length > 0) {
+    const contactText = clientContactParts.join(' · ');
+    const contactLines = doc.splitTextToSize(contactText, columnWidth - 10);
+    doc.text(contactLines, rightColumnX, rightY);
+    rightY += contactLines.length * 4;
   }
 
-  // Customer business details
+  // Customer business details on same line (with labels)
   const customerRegParts: string[] = [];
   if (order.customerChamberOfCommerce) customerRegParts.push(`CRN: ${order.customerChamberOfCommerce}`);
   if (order.customerVatNumber) customerRegParts.push(`VAT: ${order.customerVatNumber}`);
   if (order.customerEoriNumber) customerRegParts.push(`EORI: ${order.customerEoriNumber}`);
-
   if (customerRegParts.length > 0) {
     const regText = customerRegParts.join(' · ');
     const regLines = doc.splitTextToSize(regText, columnWidth - 10);
-    regLines.forEach((line: string) => {
-      doc.text(line, rightColumnX, rightY);
-      rightY += 4;
-    });
+    doc.text(regLines, rightColumnX, rightY);
+    rightY += regLines.length * 4;
   }
 
   // Shipping address (if different from billing)
