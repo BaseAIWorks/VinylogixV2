@@ -456,6 +456,15 @@ export default function SettingsPage() {
   };
 
   const handleProfileUpdate = async (values: ProfileFormValues) => {
+    // Clear billing fields if toggle is off
+    if (!values.useDifferentBillingAddress) {
+      values.billingAddressLine1 = '';
+      values.billingAddressLine2 = '';
+      values.billingPostcode = '';
+      values.billingCity = '';
+      values.billingCountry = '';
+      values.billingAddress = '';
+    }
     await updateUserProfile(values);
     showSaveSuccess('profile');
   };

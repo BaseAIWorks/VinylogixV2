@@ -273,7 +273,7 @@ export async function createOrderFromPayPal(params: {
     viewerEmail: pendingData.viewerEmail || payerEmail,
     customerName: pendingData.customerName || payerName,
     shippingAddress: pendingData.shippingAddress || 'No shipping address provided',
-    billingAddress: pendingData.billingAddress,
+    billingAddress: pendingData.billingAddress || pendingData.shippingAddress || 'No shipping address provided',
     phoneNumber: pendingData.phoneNumber,
     items: pendingData.items,
     status: 'paid' as OrderStatus,

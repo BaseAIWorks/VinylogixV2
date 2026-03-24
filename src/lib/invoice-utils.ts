@@ -505,19 +505,9 @@ export async function generateInvoicePdf(
   // TOTALS SECTION
   // ============================================
 
-  checkPageBreak(30); // totals need ~30mm
+  checkPageBreak(20); // totals need ~20mm
 
   const totalsX = pageWidth - margin - 55;
-
-  // Subtotal
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...COLORS.secondary);
-  doc.text("Subtotal:", totalsX, currentY);
-  doc.setTextColor(...COLORS.text);
-  doc.text(`€ ${formatPriceForDisplay(order.totalAmount)}`, pageWidth - margin, currentY, { align: 'right' });
-
-  currentY += 6;
 
   // Divider line
   doc.setDrawColor(...COLORS.border);
@@ -526,7 +516,7 @@ export async function generateInvoicePdf(
 
   currentY += 6;
 
-  // Total (larger, gold/orange)
+  // Total (gold/orange)
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLORS.secondary);
@@ -570,7 +560,6 @@ export async function generateInvoicePdf(
   // Calculate footer position from bottom of current page
   const footerBottomMargin = 8;
   const contactHeight = hasContact ? 5 : 0;
-  const footerTotalHeight = footerTextHeight + contactHeight + 6;
   let lineY = pageHeight - footerBottomMargin - contactHeight - footerTextHeight - 6;
 
   // If content has gone past where footer should be, add new page

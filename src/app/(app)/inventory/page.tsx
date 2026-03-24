@@ -57,6 +57,12 @@ export default function InventoryPage() {
   // Cache key for scroll restoration
   const cacheKey = `inventory_cache_${activeDistributorId}`;
 
+  // Refs for stable navigateToRecord callback (avoids re-rendering all cards)
+  const recordsRef = useRef(records);
+  recordsRef.current = records;
+  const hasMoreRef = useRef(hasMore);
+  hasMoreRef.current = hasMore;
+
   // Restore cached records and scroll position on mount
   useEffect(() => {
     try {
@@ -67,7 +73,6 @@ export default function InventoryPage() {
           setRecords(cachedRecords);
           setHasMore(cachedHasMore ?? true);
           setIsFetching(false);
-          // Restore scroll after render
           requestAnimationFrame(() => {
             window.scrollTo(0, scrollY || 0);
           });
@@ -75,20 +80,36 @@ export default function InventoryPage() {
           return;
         }
       }
-    } catch {}
-  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+    } catch (err) {
+      console.warn('Failed to restore inventory cache:', err);
+    }
+  }, [cacheKey]);
 
-  // Save state before navigating to a record
+  // Save state before navigating to a record (stable callback via refs)
   const navigateToRecord = useCallback((recordId: string) => {
     try {
-      sessionStorage.setItem(cacheKey, JSON.stringify({
-        records,
-        scrollY: window.scrollY,
-        hasMore,
+      // Only cache essential fields to stay within sessionStorage limits
+      const slimRecords = recordsRef.current.map(r => ({
+        id: r.id, title: r.title, artist: r.artist, cover_url: r.cover_url,
+        year: r.year, stock_shelves: r.stock_shelves, stock_storage: r.stock_storage,
+        sellingPrice: r.sellingPrice, isInventoryItem: r.isInventoryItem,
+        isForSale: r.isForSale, formatDetails: r.formatDetails,
+        media_condition: r.media_condition, discogs_id: r.discogs_id,
+        distributorId: r.distributorId, ownerUid: r.ownerUid,
+        shelf_locations: r.shelf_locations, storage_locations: r.storage_locations,
+        genre: r.genre, barcode: r.barcode, added_at: r.added_at,
+        isWishlist: r.isWishlist, dataAiHint: r.dataAiHint,
       }));
-    } catch {}
+      sessionStorage.setItem(cacheKey, JSON.stringify({
+        records: slimRecords,
+        scrollY: window.scrollY,
+        hasMore: hasMoreRef.current,
+      }));
+    } catch (err) {
+      console.warn('Failed to cache inventory state:', err);
+    }
     router.push(`/records/${recordId}`);
-  }, [cacheKey, records, hasMore, router]);
+  }, [cacheKey, router]);
 
   const cardSettings = activeDistributor?.cardDisplaySettings || {
     showTitle: true,

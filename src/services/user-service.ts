@@ -25,11 +25,13 @@ const processUserTimestamps = (userData: any): User => {
   const processed = { ...userData };
   if (processed.createdAt && typeof processed.createdAt.toDate === 'function') {
     processed.createdAt = processed.createdAt.toDate().toISOString();
+  } else if (processed.createdAt && processed.createdAt._seconds) {
+    processed.createdAt = new Date(processed.createdAt._seconds * 1000).toISOString();
   }
   if (processed.lastLoginAt && typeof processed.lastLoginAt.toDate === 'function') {
     processed.lastLoginAt = processed.lastLoginAt.toDate().toISOString();
-  } else if (processed.lastLoginAt && processed.lastLoginAt._seconds) { // Handle Admin SDK Timestamp
-     processed.lastLoginAt = new Date(processed.lastLoginAt._seconds * 1000).toISOString();
+  } else if (processed.lastLoginAt && processed.lastLoginAt._seconds) {
+    processed.lastLoginAt = new Date(processed.lastLoginAt._seconds * 1000).toISOString();
   }
 
   if (processed.loginHistory && Array.isArray(processed.loginHistory)) {
