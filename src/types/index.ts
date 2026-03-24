@@ -181,10 +181,30 @@ export interface Distributor {
   invoiceShowBankDetails?: boolean; // Whether to show bank details on invoices
   invoiceCustomTextPosition?: 'above_items' | 'below_items'; // Where to place payment terms/notes
 
-  // Bank Details (structured)
+  // Bank Details (structured) - legacy single account
   iban?: string;
   bic?: string;
   bankName?: string;
+
+  // Multiple payment accounts
+  paymentAccounts?: PaymentAccount[];
+}
+
+export type PaymentAccountType = 'bank' | 'paypal' | 'other';
+
+export interface PaymentAccount {
+  id: string;
+  type: PaymentAccountType;
+  label?: string; // e.g. "Main Business Account", "PayPal Sales"
+  // Bank fields
+  iban?: string;
+  bic?: string;
+  bankName?: string;
+  accountHolder?: string;
+  // PayPal fields
+  paypalEmail?: string;
+  // Other
+  details?: string; // free-text for custom payment methods
 }
 
 export interface BrandingSettings {

@@ -7,10 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users, Clock, RefreshCw, Truck, Receipt, CheckCircle2, FileText, Landmark, Bold, Italic, Underline, Strikethrough, ArrowUp, ArrowDown } from "lucide-react";
+import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users, Clock, RefreshCw, Truck, Receipt, CheckCircle2, FileText, Landmark, Bold, Italic, Underline, Strikethrough, ArrowUp, ArrowDown, Plus, Trash2, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { UserRole, Distributor, CardDisplaySettings, ClientMenuSettings } from "@/types";
+import type { UserRole, Distributor, CardDisplaySettings, ClientMenuSettings, PaymentAccount, PaymentAccountType } from "@/types";
 import { format, differenceInDays, addMonths } from 'date-fns';
 import { getInventoryRecords } from "@/services/record-service";
 import { formatPriceForDisplay } from "@/lib/utils";
@@ -228,7 +228,7 @@ export default function SettingsPage() {
   const [isRefreshingStripeStatus, setIsRefreshingStripeStatus] = useState(false);
   const [isConnectingPayPal, setIsConnectingPayPal] = useState(false);
   const [isProfileCompletionDialogOpen, setIsProfileCompletionDialogOpen] = useState(false);
-
+  const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([]);
 
   const { toast } = useToast();
   const router = useRouter();
@@ -416,6 +416,22 @@ export default function SettingsPage() {
             bankName: activeDistributor.bankName || "",
         });
 
+        // Load payment accounts (migrate legacy bank details if no accounts exist)
+        if (activeDistributor.paymentAccounts?.length) {
+            setPaymentAccounts(activeDistributor.paymentAccounts);
+        } else if (activeDistributor.iban || activeDistributor.bic || activeDistributor.bankName) {
+            setPaymentAccounts([{
+                id: 'legacy-bank',
+                type: 'bank',
+                label: 'Primary Bank Account',
+                iban: activeDistributor.iban || '',
+                bic: activeDistributor.bic || '',
+                bankName: activeDistributor.bankName || '',
+            }]);
+        } else {
+            setPaymentAccounts([]);
+        }
+
         if (activeDistributor.profileComplete === false) {
           setIsProfileCompletionDialogOpen(true);
         }
@@ -477,9 +493,32 @@ export default function SettingsPage() {
   }
 
   const handleInvoiceSettingsUpdate = async (values: InvoiceSettingsFormValues) => {
-      await updateMyDistributorSettings(values);
+      await updateMyDistributorSettings({ ...values, paymentAccounts });
       showSaveSuccess('invoiceSettings');
   };
+
+  // Payment accounts management
+  const addPaymentAccount = useCallback(() => {
+      setPaymentAccounts(prev => [...prev, {
+          id: `pa-${Date.now()}`,
+          type: 'bank' as PaymentAccountType,
+          label: '',
+          iban: '',
+          bic: '',
+          bankName: '',
+          accountHolder: '',
+          paypalEmail: '',
+          details: '',
+      }]);
+  }, []);
+
+  const removePaymentAccount = useCallback((id: string) => {
+      setPaymentAccounts(prev => prev.filter(a => a.id !== id));
+  }, []);
+
+  const updatePaymentAccount = useCallback((id: string, field: keyof PaymentAccount, value: string) => {
+      setPaymentAccounts(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a));
+  }, []);
 
   const handleUpdateLocations = async () => {
     setIsSavingLocations(true);
@@ -1405,40 +1444,89 @@ export default function SettingsPage() {
                           </FormItem>
                         )} />
 
-                        <div className="p-4 rounded-lg bg-muted/50 space-y-4">
-                          <div className="flex items-center gap-2">
-                            <Landmark className="h-4 w-4 text-primary" />
-                            <span className="text-sm font-medium">Bank Account Details</span>
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Wallet className="h-4 w-4 text-primary" />
+                              <span className="text-sm font-medium">Payment Accounts</span>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" onClick={addPaymentAccount}>
+                              <Plus className="h-4 w-4 mr-1" /> Add Account
+                            </Button>
                           </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField control={invoiceSettingsForm.control} name="iban" render={({ field }) => (
-                              <FormItem>
-                                <FormLabel className="text-sm">IBAN</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="NL00 INGB 0000 0000 00" className="font-mono" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )} />
-                            <FormField control={invoiceSettingsForm.control} name="bic" render={({ field }) => (
-                              <FormItem>
-                                <FormLabel className="text-sm">BIC / SWIFT</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="INGBNL2A" className="font-mono" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )} />
-                          </div>
-                          <FormField control={invoiceSettingsForm.control} name="bankName" render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm">Bank Name</FormLabel>
-                              <FormControl>
-                                <Input placeholder="ING Bank" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )} />
+
+                          {paymentAccounts.length === 0 && (
+                            <p className="text-sm text-muted-foreground text-center py-4 border-2 border-dashed rounded-lg">
+                              No payment accounts added yet. Click "Add Account" to add one.
+                            </p>
+                          )}
+
+                          {paymentAccounts.map((account, index) => (
+                            <div key={account.id} className="p-4 rounded-lg bg-muted/50 space-y-3 relative">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium text-muted-foreground">Account {index + 1}</span>
+                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => removePaymentAccount(account.id)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                  <Label className="text-sm">Account Type</Label>
+                                  <Select value={account.type} onValueChange={(v) => updatePaymentAccount(account.id, 'type', v)}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="bank">Bank Account</SelectItem>
+                                      <SelectItem value="paypal">PayPal</SelectItem>
+                                      <SelectItem value="other">Other</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <Label className="text-sm">Label (optional)</Label>
+                                  <Input placeholder="e.g. Main Business Account" value={account.label || ''} onChange={(e) => updatePaymentAccount(account.id, 'label', e.target.value)} />
+                                </div>
+                              </div>
+
+                              {account.type === 'bank' && (
+                                <div className="space-y-3">
+                                  <div>
+                                    <Label className="text-sm">Account Holder</Label>
+                                    <Input placeholder="Company Name B.V." value={account.accountHolder || ''} onChange={(e) => updatePaymentAccount(account.id, 'accountHolder', e.target.value)} />
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                      <Label className="text-sm">IBAN</Label>
+                                      <Input placeholder="NL00 INGB 0000 0000 00" className="font-mono" value={account.iban || ''} onChange={(e) => updatePaymentAccount(account.id, 'iban', e.target.value)} />
+                                    </div>
+                                    <div>
+                                      <Label className="text-sm">BIC / SWIFT</Label>
+                                      <Input placeholder="INGBNL2A" className="font-mono" value={account.bic || ''} onChange={(e) => updatePaymentAccount(account.id, 'bic', e.target.value)} />
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <Label className="text-sm">Bank Name</Label>
+                                    <Input placeholder="ING Bank" value={account.bankName || ''} onChange={(e) => updatePaymentAccount(account.id, 'bankName', e.target.value)} />
+                                  </div>
+                                </div>
+                              )}
+
+                              {account.type === 'paypal' && (
+                                <div>
+                                  <Label className="text-sm">PayPal Email</Label>
+                                  <Input type="email" placeholder="payments@company.com" value={account.paypalEmail || ''} onChange={(e) => updatePaymentAccount(account.id, 'paypalEmail', e.target.value)} />
+                                </div>
+                              )}
+
+                              {account.type === 'other' && (
+                                <div>
+                                  <Label className="text-sm">Payment Details</Label>
+                                  <Textarea placeholder="Enter payment details..." value={account.details || ''} onChange={(e) => updatePaymentAccount(account.id, 'details', e.target.value)} rows={3} />
+                                </div>
+                              )}
+                            </div>
+                          ))}
+
                           <p className="text-xs text-muted-foreground">These details will appear on invoices when "Show Bank Details" is enabled.</p>
                         </div>
 

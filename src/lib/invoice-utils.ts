@@ -325,25 +325,46 @@ export async function generateInvoicePdf(
       currentY += (termsLines.length * 4) + 10;
     }
 
-    // Bank Details (if enabled)
+    // Payment Account Details (if enabled)
     if (distributor.invoiceShowBankDetails && order.paymentStatus !== 'paid') {
-      const hasBankDetails = distributor.iban || distributor.bic || distributor.bankName;
-      if (hasBankDetails) {
+      const accounts = distributor.paymentAccounts?.length
+        ? distributor.paymentAccounts
+        : (distributor.iban || distributor.bic || distributor.bankName)
+          ? [{ id: 'legacy', type: 'bank' as const, bankName: distributor.bankName, iban: distributor.iban, bic: distributor.bic }]
+          : [];
+
+      if (accounts.length > 0) {
         doc.setFontSize(9);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(...COLORS.text);
-        doc.text("Bank Details:", margin, currentY);
+        doc.text("Payment Details:", margin, currentY);
+        currentY += 5;
 
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(...COLORS.secondary);
+        for (const account of accounts) {
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(...COLORS.secondary);
 
-        const bankParts = [];
-        if (distributor.bankName) bankParts.push(distributor.bankName);
-        if (distributor.iban) bankParts.push(`IBAN: ${distributor.iban}`);
-        if (distributor.bic) bankParts.push(`BIC: ${distributor.bic}`);
-
-        doc.text(bankParts.join(' · '), margin + 24, currentY);
-        currentY += 8;
+          if (account.type === 'bank') {
+            const parts = [];
+            if (account.label) parts.push(account.label);
+            else if (account.bankName) parts.push(account.bankName);
+            if (account.accountHolder) parts.push(`Attn: ${account.accountHolder}`);
+            if (account.iban) parts.push(`IBAN: ${account.iban}`);
+            if (account.bic) parts.push(`BIC: ${account.bic}`);
+            if (!account.label && account.bankName && parts[0] !== account.bankName) parts.unshift(account.bankName);
+            doc.text(parts.join(' · '), margin, currentY);
+          } else if (account.type === 'paypal') {
+            const label = account.label || 'PayPal';
+            doc.text(`${label}: ${account.paypalEmail || ''}`, margin, currentY);
+          } else if (account.type === 'other') {
+            const label = account.label || 'Payment';
+            const detailLines = doc.splitTextToSize(`${label}: ${account.details || ''}`, pageWidth - margin * 2);
+            doc.text(detailLines, margin, currentY);
+            currentY += Math.max(0, (detailLines.length - 1) * 4);
+          }
+          currentY += 5;
+        }
+        currentY += 3;
       }
     }
 
