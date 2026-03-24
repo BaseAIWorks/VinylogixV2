@@ -120,7 +120,7 @@ export async function generateInvoicePdf(
   doc.setTextColor(...COLORS.accent);
   doc.text("INVOICE", pageWidth - margin, currentY + 10, { align: 'right' });
 
-  currentY += 25;
+  currentY += 20;
 
   // ============================================
   // FROM and BILL TO sections
@@ -285,7 +285,7 @@ export async function generateInvoicePdf(
     });
   }
 
-  currentY = Math.max(leftY, rightY) + 8;
+  currentY = Math.max(leftY, rightY) + 5;
 
   // ============================================
   // INVOICE DETAILS BOXES
@@ -332,7 +332,16 @@ export async function generateInvoicePdf(
   }
   doc.text(statusText, margin + boxWidth * 2 + 17, currentY + 5);
 
-  currentY += boxHeight + 10;
+  currentY += boxHeight + 6;
+
+  // Helper: check if we need a new page, reserving space for footer (~35mm)
+  const footerReserved = 40;
+  const checkPageBreak = (neededSpace: number) => {
+    if (currentY + neededSpace > pageHeight - footerReserved) {
+      doc.addPage();
+      currentY = margin;
+    }
+  };
 
   // ============================================
   // HELPER: Render custom text sections (Payment Terms, Bank Details, Notes)
@@ -350,6 +359,7 @@ export async function generateInvoicePdf(
 
     // Payment Terms
     if (paymentTerms) {
+      checkPageBreak(15);
       doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...COLORS.text);
@@ -359,11 +369,12 @@ export async function generateInvoicePdf(
       const cleanTerms = cleanMarkdown(paymentTerms);
       const termsLines = doc.splitTextToSize(cleanTerms, pageWidth - margin * 2);
       doc.text(termsLines, margin, currentY + 5);
-      currentY += (termsLines.length * 4) + 10;
+      currentY += (termsLines.length * 4) + 6;
     }
 
     // Payment Account Details (if enabled)
     if (distributor.invoiceShowBankDetails && order.paymentStatus !== 'paid') {
+      checkPageBreak(15);
       const accounts = distributor.paymentAccounts?.length
         ? distributor.paymentAccounts
         : (distributor.iban || distributor.bic || distributor.bankName)
@@ -401,12 +412,13 @@ export async function generateInvoicePdf(
           }
           currentY += 5;
         }
-        currentY += 3;
+        currentY += 2;
       }
     }
 
     // Notes
     if (notesText) {
+      checkPageBreak(15);
       doc.setFontSize(9);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...COLORS.text);
@@ -417,7 +429,7 @@ export async function generateInvoicePdf(
       const cleanNotes = cleanMarkdown(notesText);
       const notesLines = doc.splitTextToSize(cleanNotes, pageWidth - margin * 2);
       doc.text(notesLines, margin, currentY + 5);
-      currentY += (notesLines.length * 4) + 10;
+      currentY += (notesLines.length * 4) + 6;
     }
   };
 
@@ -437,7 +449,7 @@ export async function generateInvoicePdf(
 
   const tableColumn = ["Item", "Qty", "Unit Price", "Total"];
   const tableRows = order.items.map((item) => [
-    `${item.title}\n${item.artist}`,
+    `${item.artist} – ${item.title}`,
     item.quantity.toString(),
     `€ ${formatPriceForDisplay(item.priceAtTimeOfOrder)}`,
     `€ ${formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}`
@@ -449,8 +461,8 @@ export async function generateInvoicePdf(
     startY: currentY,
     theme: 'plain',
     styles: {
-      fontSize: 9,
-      cellPadding: { top: 3, right: 3, bottom: 3, left: 3 },
+      fontSize: 8,
+      cellPadding: { top: 2, right: 3, bottom: 2, left: 3 },
       lineColor: COLORS.border,
       lineWidth: 0,
       textColor: COLORS.text,
@@ -483,16 +495,7 @@ export async function generateInvoicePdf(
     },
   });
 
-  currentY = (doc as any).lastAutoTable.finalY + 8;
-
-  // Helper: check if we need a new page, reserving space for footer (~35mm)
-  const footerReserved = 40;
-  const checkPageBreak = (neededSpace: number) => {
-    if (currentY + neededSpace > pageHeight - footerReserved) {
-      doc.addPage();
-      currentY = margin;
-    }
-  };
+  currentY = (doc as any).lastAutoTable.finalY + 6;
 
   // ============================================
   // TOTALS SECTION
@@ -527,7 +530,7 @@ export async function generateInvoicePdf(
   doc.setTextColor(...COLORS.accent);
   doc.text(`€ ${formatPriceForDisplay(order.totalAmount)}`, pageWidth - margin, currentY, { align: 'right' });
 
-  currentY += 15;
+  currentY += 10;
 
   // ============================================
   // CUSTOM TEXT BELOW ITEMS (default position)
@@ -545,13 +548,12 @@ export async function generateInvoicePdf(
   const footerMessage = options?.footerText || distributor.invoiceFooterText || "Thank you for your business!";
   const maxFooterWidth = pageWidth - margin * 2;
 
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLORS.text);
   const footerLines: string[] = doc.splitTextToSize(footerMessage, maxFooterWidth);
-  // Limit to 3 lines
   const clampedFooterLines = footerLines.slice(0, 3);
-  const footerLineHeight = 4.5;
+  const footerLineHeight = 4;
   const footerTextHeight = clampedFooterLines.length * footerLineHeight;
 
   // Contact info
@@ -561,10 +563,17 @@ export async function generateInvoicePdf(
   if (distributor.website) contactParts.push(distributor.website);
   const hasContact = contactParts.length > 0;
 
-  // Calculate footer position from bottom
-  const footerBottomMargin = 10;
-  const contactHeight = hasContact ? 6 : 0;
-  const lineY = pageHeight - footerBottomMargin - contactHeight - footerTextHeight - 6;
+  // Calculate footer position from bottom of current page
+  const footerBottomMargin = 8;
+  const contactHeight = hasContact ? 5 : 0;
+  const footerTotalHeight = footerTextHeight + contactHeight + 6;
+  let lineY = pageHeight - footerBottomMargin - contactHeight - footerTextHeight - 6;
+
+  // If content has gone past where footer should be, add new page
+  if (currentY > lineY - 2) {
+    doc.addPage();
+    lineY = pageHeight - footerBottomMargin - contactHeight - footerTextHeight - 6;
+  }
 
   // Gold/orange footer line
   doc.setDrawColor(...COLORS.accent);
@@ -572,7 +581,7 @@ export async function generateInvoicePdf(
   doc.line(margin, lineY, pageWidth - margin, lineY);
 
   // Render footer text lines centered
-  let footerTextY = lineY + 6;
+  let footerTextY = lineY + 5;
   clampedFooterLines.forEach((line: string) => {
     doc.text(line, pageWidth / 2, footerTextY, { align: 'center' });
     footerTextY += footerLineHeight;
@@ -580,7 +589,7 @@ export async function generateInvoicePdf(
 
   // Contact info
   if (hasContact) {
-    doc.setFontSize(8);
+    doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(...COLORS.secondary);
     doc.text(contactParts.join('  |  '), pageWidth / 2, footerTextY + 1, { align: 'center' });
