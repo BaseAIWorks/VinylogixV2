@@ -163,18 +163,18 @@ export async function generateInvoicePdf(
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...COLORS.secondary);
 
-  // Address line
-  const addressParts = [
-    distributor.addressLine1,
+  // Address lines (street on line 1, postcode + city + country on line 2)
+  if (distributor.addressLine1) {
+    doc.text(distributor.addressLine1, leftColumnX, leftY);
+    leftY += 4;
+  }
+  const distCityLine = [
     [distributor.postcode, distributor.city].filter(Boolean).join(' '),
     distributor.country
-  ].filter(Boolean);
-
-  if (addressParts.length > 0) {
-    const addressText = addressParts.join(', ');
-    const addressLines = doc.splitTextToSize(addressText, columnWidth - 15);
-    doc.text(addressLines, leftColumnX, leftY);
-    leftY += addressLines.length * 4;
+  ].filter(Boolean).join(', ');
+  if (distCityLine) {
+    doc.text(distCityLine, leftColumnX, leftY);
+    leftY += 4;
   }
 
   // Phone and email on same line (with labels)
@@ -228,14 +228,12 @@ export async function generateInvoicePdf(
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...COLORS.secondary);
 
-  // Bill-to address (compact, comma-separated like distributor)
-  const clientAddressParts = billToAddress.split('\n').map(l => l.trim()).filter(Boolean);
-  if (clientAddressParts.length > 0) {
-    const clientAddressText = clientAddressParts.join(', ');
-    const clientAddrLines = doc.splitTextToSize(clientAddressText, columnWidth - 15);
-    doc.text(clientAddrLines, rightColumnX, rightY);
-    rightY += clientAddrLines.length * 4;
-  }
+  // Bill-to address (per line: street, then postcode+city, then country)
+  const clientAddressLines = billToAddress.split('\n').map(l => l.trim()).filter(Boolean);
+  clientAddressLines.forEach((line) => {
+    doc.text(line, rightColumnX, rightY);
+    rightY += 4;
+  });
 
   // Phone, mobile and email on same line (with labels)
   const clientContactParts: string[] = [];
