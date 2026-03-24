@@ -124,7 +124,7 @@ const clientMenuFormSchema = z.object({
 const invoiceSettingsFormSchema = z.object({
     invoicePaymentTerms: z.string().optional(),
     invoiceNotes: z.string().optional(),
-    invoiceFooterText: z.string().optional(),
+    invoiceFooterText: z.string().max(240, "Footer text can be at most 240 characters.").optional(),
     invoiceShowBankDetails: z.boolean().default(false),
     invoiceCustomTextPosition: z.enum(['above_items', 'below_items']).default('below_items'),
     iban: z.string().optional(),
@@ -1430,9 +1430,9 @@ export default function SettingsPage() {
                           <FormItem>
                             <FormLabel className="text-sm">Footer Message</FormLabel>
                             <FormControl>
-                              <Input placeholder="e.g., Thank you for your business!" {...field} />
+                              <Textarea placeholder="e.g., Thank you for your business!" rows={3} maxLength={240} {...field} />
                             </FormControl>
-                            <FormDescription className="text-xs">A short message shown at the bottom of the invoice.</FormDescription>
+                            <FormDescription className="text-xs">{(field.value?.length || 0)}/240 characters. Shown at the bottom of the invoice (max 3 lines).</FormDescription>
                             <FormMessage />
                           </FormItem>
                         )} />

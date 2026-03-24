@@ -520,31 +520,49 @@ export async function generateInvoicePdf(
   // FOOTER
   // ============================================
 
-  const footerY = pageHeight - 18;
-
-  // Gold/orange footer line
-  doc.setDrawColor(...COLORS.accent);
-  doc.setLineWidth(1);
-  doc.line(margin, footerY - 6, pageWidth - margin, footerY - 6);
-
   // Footer message
   const footerMessage = options?.footerText || distributor.invoiceFooterText || "Thank you for your business!";
+  const maxFooterWidth = pageWidth - margin * 2;
+
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLORS.text);
-  doc.text(footerMessage, pageWidth / 2, footerY, { align: 'center' });
+  const footerLines: string[] = doc.splitTextToSize(footerMessage, maxFooterWidth);
+  // Limit to 3 lines
+  const clampedFooterLines = footerLines.slice(0, 3);
+  const footerLineHeight = 4.5;
+  const footerTextHeight = clampedFooterLines.length * footerLineHeight;
 
   // Contact info
   const contactParts: string[] = [];
   if (distributor.contactEmail) contactParts.push(distributor.contactEmail);
   if (distributor.phoneNumber) contactParts.push(distributor.phoneNumber);
   if (distributor.website) contactParts.push(distributor.website);
+  const hasContact = contactParts.length > 0;
 
-  if (contactParts.length > 0) {
+  // Calculate footer position from bottom
+  const footerBottomMargin = 10;
+  const contactHeight = hasContact ? 6 : 0;
+  const lineY = pageHeight - footerBottomMargin - contactHeight - footerTextHeight - 6;
+
+  // Gold/orange footer line
+  doc.setDrawColor(...COLORS.accent);
+  doc.setLineWidth(1);
+  doc.line(margin, lineY, pageWidth - margin, lineY);
+
+  // Render footer text lines centered
+  let footerTextY = lineY + 6;
+  clampedFooterLines.forEach((line: string) => {
+    doc.text(line, pageWidth / 2, footerTextY, { align: 'center' });
+    footerTextY += footerLineHeight;
+  });
+
+  // Contact info
+  if (hasContact) {
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(...COLORS.secondary);
-    doc.text(contactParts.join('  |  '), pageWidth / 2, footerY + 5, { align: 'center' });
+    doc.text(contactParts.join('  |  '), pageWidth / 2, footerTextY + 1, { align: 'center' });
   }
 
   // ============================================
