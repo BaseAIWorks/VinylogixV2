@@ -44,8 +44,24 @@ const processUserTimestamps = (userData: any): User => {
 
 export async function getUserById(uid: string): Promise<User | null> {
     if (!uid) return null;
-    const userDocRef = doc(db, USERS_COLLECTION, uid);
 
+    const adminDb = getAdminDb();
+    if (adminDb) {
+        // Server-side: use Admin SDK (bypasses security rules)
+        try {
+            const docSnap = await adminDb.collection(USERS_COLLECTION).doc(uid).get();
+            if (docSnap.exists) {
+                return processUserTimestamps({ ...docSnap.data(), id: docSnap.id, uid: docSnap.id });
+            }
+            return null;
+        } catch (error) {
+            console.error(`UserService (Admin): Error fetching user ${uid}:`, error);
+            throw error;
+        }
+    }
+
+    // Client-side fallback: use client SDK
+    const userDocRef = doc(db, USERS_COLLECTION, uid);
     try {
         const docSnap = await getDoc(userDocRef);
         if (docSnap.exists()) {
@@ -60,6 +76,27 @@ export async function getUserById(uid: string): Promise<User | null> {
 
 export async function getUserByEmail(email: string): Promise<User | null> {
     if (!email) return null;
+
+    const adminDb = getAdminDb();
+    if (adminDb) {
+        // Server-side: use Admin SDK (bypasses security rules)
+        try {
+            const querySnapshot = await adminDb.collection(USERS_COLLECTION)
+                .where("email", "==", email)
+                .limit(1)
+                .get();
+            if (querySnapshot.empty) {
+                return null;
+            }
+            const userDoc = querySnapshot.docs[0];
+            return processUserTimestamps({ ...userDoc.data(), id: userDoc.id, uid: userDoc.id });
+        } catch (error) {
+            console.error(`UserService (Admin): Error fetching user by email ${email}:`, error);
+            throw error;
+        }
+    }
+
+    // Client-side fallback: use client SDK
     const usersCollectionRef = collection(db, USERS_COLLECTION);
     const q = query(usersCollectionRef, where("email", "==", email), limit(1));
     try {
