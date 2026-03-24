@@ -53,15 +53,12 @@ const profileFormSchema = z.object({
   city: z.string().optional(),
   country: z.string().optional(),
   useDifferentBillingAddress: z.boolean().optional(),
-  billingAddress: z.string().optional(),
-}).refine(data => {
-    if (data.useDifferentBillingAddress && !data.billingAddress) {
-        return false;
-    }
-    return true;
-}, {
-    message: "Billing address cannot be empty if it's different from the shipping address.",
-    path: ["billingAddress"],
+  billingAddress: z.string().optional(), // legacy
+  billingAddressLine1: z.string().optional(),
+  billingAddressLine2: z.string().optional(),
+  billingPostcode: z.string().optional(),
+  billingCity: z.string().optional(),
+  billingCountry: z.string().optional(),
 });
 
 const brandingFormSchema = z.object({
@@ -250,6 +247,11 @@ export default function SettingsPage() {
       country: "",
       useDifferentBillingAddress: false,
       billingAddress: "",
+      billingAddressLine1: "",
+      billingAddressLine2: "",
+      billingPostcode: "",
+      billingCity: "",
+      billingCountry: "",
     },
   });
 
@@ -352,6 +354,11 @@ export default function SettingsPage() {
             country: user.country || "",
             useDifferentBillingAddress: user.useDifferentBillingAddress || false,
             billingAddress: user.billingAddress || "",
+            billingAddressLine1: user.billingAddressLine1 || "",
+            billingAddressLine2: user.billingAddressLine2 || "",
+            billingPostcode: user.billingPostcode || "",
+            billingCity: user.billingCity || "",
+            billingCountry: user.billingCountry || "",
         });
     }
   }, [user, profileForm]);
@@ -1873,13 +1880,44 @@ export default function SettingsPage() {
                           </FormItem>
                         )} />
                         {useDifferentBilling && (
-                          <FormField control={profileForm.control} name="billingAddress" render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm">Billing Address</FormLabel>
-                              <FormControl><Textarea placeholder="Full billing address" {...field} value={field.value ?? ''} /></FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )} />
+                          <div className="space-y-3 p-4 rounded-lg bg-muted/50">
+                            <span className="text-sm font-medium">Billing Address</span>
+                            <FormField control={profileForm.control} name="billingAddressLine1" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-sm">Address Line 1</FormLabel>
+                                <FormControl><Input placeholder="Street and number" {...field} value={field.value ?? ''} /></FormControl>
+                              </FormItem>
+                            )} />
+                            <FormField control={profileForm.control} name="billingAddressLine2" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-sm">Address Line 2</FormLabel>
+                                <FormControl><Input placeholder="Apt, suite, etc. (optional)" {...field} value={field.value ?? ''} /></FormControl>
+                              </FormItem>
+                            )} />
+                            <div className="grid grid-cols-2 gap-3">
+                              <FormField control={profileForm.control} name="billingPostcode" render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-sm">Postcode</FormLabel>
+                                  <FormControl><Input placeholder="1234 AB" {...field} value={field.value ?? ''} /></FormControl>
+                                </FormItem>
+                              )} />
+                              <FormField control={profileForm.control} name="billingCity" render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-sm">City</FormLabel>
+                                  <FormControl><Input placeholder="City" {...field} value={field.value ?? ''} /></FormControl>
+                                </FormItem>
+                              )} />
+                            </div>
+                            <FormField control={profileForm.control} name="billingCountry" render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-sm">Country</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value || ''}>
+                                  <FormControl><SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger></FormControl>
+                                  <SelectContent>{countries.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                                </Select>
+                              </FormItem>
+                            )} />
+                          </div>
                         )}
                       </>
                     )}

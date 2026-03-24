@@ -198,6 +198,11 @@ export async function generateInvoicePdf(
   // ---- BILL TO content (right column) ----
   let rightY = currentY;
 
+  const hasSeparateBilling = order.billingAddress && order.billingAddress !== order.shippingAddress;
+
+  // If separate billing, show billing address in BILL TO; shipping below
+  const billToAddress = hasSeparateBilling ? order.billingAddress! : order.shippingAddress;
+
   // Customer company name first (if available), otherwise personal name
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
@@ -206,7 +211,6 @@ export async function generateInvoicePdf(
   if (order.customerCompanyName) {
     doc.text(order.customerCompanyName, rightColumnX, rightY);
     rightY += 4;
-    // Personal name below company name
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(...COLORS.secondary);
@@ -221,9 +225,9 @@ export async function generateInvoicePdf(
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...COLORS.secondary);
 
-  // Shipping address
-  const clientAddressLines = order.shippingAddress.split('\n');
-  clientAddressLines.forEach((line) => {
+  // Bill-to address
+  const billToLines = billToAddress.split('\n');
+  billToLines.forEach((line) => {
     if (line.trim()) {
       doc.text(line.trim(), rightColumnX, rightY);
       rightY += 4;
@@ -246,6 +250,30 @@ export async function generateInvoicePdf(
   if (order.customerVatNumber) {
     doc.text(`VAT: ${order.customerVatNumber}`, rightColumnX, rightY);
     rightY += 4;
+  }
+
+  // Shipping address (if different from billing)
+  if (hasSeparateBilling) {
+    rightY += 4;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...COLORS.secondary);
+    doc.text("SHIP TO", rightColumnX, rightY);
+    rightY += 2;
+    doc.setDrawColor(...COLORS.border);
+    doc.setLineWidth(0.5);
+    doc.line(rightColumnX, rightY, rightColumnX + columnWidth - 10, rightY);
+    rightY += 5;
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...COLORS.secondary);
+    const shipLines = order.shippingAddress.split('\n');
+    shipLines.forEach((line) => {
+      if (line.trim()) {
+        doc.text(line.trim(), rightColumnX, rightY);
+        rightY += 4;
+      }
+    });
   }
 
   currentY = Math.max(leftY, rightY) + 8;

@@ -18,7 +18,15 @@ import { getDistributorById } from "@/services/distributor-service";
 
 const formatAddress = (user: Partial<User>, type: 'shipping' | 'billing' = 'shipping'): string => {
     if (type === 'billing' && user.useDifferentBillingAddress) {
-        return user.billingAddress || "No billing address set.";
+        // Use structured billing address fields if available, else fall back to legacy
+        const billingParts = [
+            user.billingAddressLine1,
+            user.billingAddressLine2,
+            `${user.billingPostcode || ''} ${user.billingCity || ''}`.trim(),
+            user.billingCountry
+        ];
+        const formatted = billingParts.filter(Boolean).join('\n');
+        return formatted || user.billingAddress || "No billing address set.";
     }
 
     const addressParts = [

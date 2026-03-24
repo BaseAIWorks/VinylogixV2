@@ -244,8 +244,13 @@ export type User = {
   postcode?: string;
   city?: string;
   country?: string;
-  billingAddress?: string; 
+  billingAddress?: string; // legacy free-text
   useDifferentBillingAddress?: boolean;
+  billingAddressLine1?: string;
+  billingAddressLine2?: string;
+  billingPostcode?: string;
+  billingCity?: string;
+  billingCountry?: string;
   chamberOfCommerce?: string;
   vatNumber?: string;
   eoriNumber?: string;
