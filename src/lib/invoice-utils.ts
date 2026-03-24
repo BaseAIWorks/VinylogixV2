@@ -2,7 +2,8 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { format } from "date-fns";
 import { formatPriceForDisplay } from "./utils";
-import type { Order, OrderStatus, Distributor } from "@/types";
+import type { Order, OrderStatus, Distributor, User } from "@/types";
+import { getUserById } from "@/services/user-service";
 
 const statusConfig: Record<OrderStatus, { label: string }> = {
   pending: { label: 'Pending' },
@@ -41,6 +42,23 @@ export async function generateInvoicePdf(
   distributor: Distributor,
   options?: InvoiceOptions
 ): Promise<void> {
+  // Fetch live client data to fill in any missing business details
+  let clientUser: User | null = null;
+  if (order.viewerId) {
+    try {
+      clientUser = await getUserById(order.viewerId);
+    } catch (err) {
+      console.warn('Could not fetch client user for invoice:', err);
+    }
+  }
+
+  // Enrich order data with live client info (fallback to what's on the order)
+  const customerCompanyName = order.customerCompanyName || clientUser?.companyName;
+  const customerVatNumber = order.customerVatNumber || clientUser?.vatNumber;
+  const customerEoriNumber = order.customerEoriNumber || clientUser?.eoriNumber;
+  const customerChamberOfCommerce = order.customerChamberOfCommerce || clientUser?.chamberOfCommerce;
+  const customerPhone = order.phoneNumber || clientUser?.phoneNumber;
+
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -211,8 +229,8 @@ export async function generateInvoicePdf(
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLORS.text);
 
-  if (order.customerCompanyName) {
-    doc.text(order.customerCompanyName, rightColumnX, rightY);
+  if (customerCompanyName) {
+    doc.text(customerCompanyName, rightColumnX, rightY);
     rightY += 4;
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
@@ -237,7 +255,7 @@ export async function generateInvoicePdf(
 
   // Phone, mobile and email on same line (with labels)
   const clientContactParts: string[] = [];
-  if (order.phoneNumber) clientContactParts.push(`Tel: ${order.phoneNumber}`);
+  if (customerPhone) clientContactParts.push(`Tel: ${customerPhone}`);
   if (order.viewerEmail) clientContactParts.push(order.viewerEmail);
   if (clientContactParts.length > 0) {
     const contactText = clientContactParts.join(' · ');
@@ -248,9 +266,9 @@ export async function generateInvoicePdf(
 
   // Customer business details on same line (with labels)
   const customerRegParts: string[] = [];
-  if (order.customerChamberOfCommerce) customerRegParts.push(`CRN: ${order.customerChamberOfCommerce}`);
-  if (order.customerVatNumber) customerRegParts.push(`VAT: ${order.customerVatNumber}`);
-  if (order.customerEoriNumber) customerRegParts.push(`EORI: ${order.customerEoriNumber}`);
+  if (customerChamberOfCommerce) customerRegParts.push(`CRN: ${customerChamberOfCommerce}`);
+  if (customerVatNumber) customerRegParts.push(`VAT: ${customerVatNumber}`);
+  if (customerEoriNumber) customerRegParts.push(`EORI: ${customerEoriNumber}`);
   if (customerRegParts.length > 0) {
     const regText = customerRegParts.join(' · ');
     const regLines = doc.splitTextToSize(regText, columnWidth - 10);
