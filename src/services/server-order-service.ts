@@ -112,6 +112,19 @@ export async function createOrderFromCheckout(session: Stripe.Checkout.Session):
   const billingAddress = session.metadata?.billingAddress || shippingAddress;
   const viewerId = session.metadata?.userId || 'unknown';
 
+  // Fetch client user document for business details (VAT, EORI, CRN, company)
+  let clientUser: any = null;
+  if (viewerId !== 'unknown') {
+    try {
+      const userSnap = await adminDb.collection('users').doc(viewerId).get();
+      if (userSnap.exists) {
+        clientUser = userSnap.data();
+      }
+    } catch (err) {
+      console.warn('Could not fetch client user for order enrichment:', err);
+    }
+  }
+
   const newOrderData: any = {
     distributorId,
     viewerId,
@@ -138,7 +151,15 @@ export async function createOrderFromCheckout(session: Stripe.Checkout.Session):
   // Add phone number if available
   if (session.customer_details?.phone) {
     newOrderData.phoneNumber = session.customer_details.phone;
+  } else if (clientUser?.phoneNumber) {
+    newOrderData.phoneNumber = clientUser.phoneNumber;
   }
+
+  // Add client business details from user profile
+  if (clientUser?.companyName) newOrderData.customerCompanyName = clientUser.companyName;
+  if (clientUser?.vatNumber) newOrderData.customerVatNumber = clientUser.vatNumber;
+  if (clientUser?.eoriNumber) newOrderData.customerEoriNumber = clientUser.eoriNumber;
+  if (clientUser?.chamberOfCommerce) newOrderData.customerChamberOfCommerce = clientUser.chamberOfCommerce;
 
   // Create the order
   const orderDocRef = await adminDb.collection(ORDERS_COLLECTION).add(newOrderData);
@@ -229,9 +250,23 @@ export async function createOrderFromPayPal(params: {
 
   const now = new Date();
 
+  // Fetch client user document for business details
+  const paypalViewerId = pendingData.viewerId || 'unknown';
+  let paypalClientUser: any = null;
+  if (paypalViewerId !== 'unknown') {
+    try {
+      const userSnap = await adminDb.collection('users').doc(paypalViewerId).get();
+      if (userSnap.exists) {
+        paypalClientUser = userSnap.data();
+      }
+    } catch (err) {
+      console.warn('Could not fetch client user for PayPal order enrichment:', err);
+    }
+  }
+
   const newOrderData: any = {
     distributorId,
-    viewerId: pendingData.viewerId || 'unknown',
+    viewerId: paypalViewerId,
     viewerEmail: pendingData.viewerEmail || payerEmail,
     customerName: pendingData.customerName || payerName,
     shippingAddress: pendingData.shippingAddress || 'No shipping address provided',
@@ -253,6 +288,12 @@ export async function createOrderFromPayPal(params: {
     paidAt: Timestamp.fromDate(now),
     platformFeeAmount: pendingData.platformFeeAmount,
   };
+
+  // Add client business details from user profile
+  if (paypalClientUser?.companyName) newOrderData.customerCompanyName = paypalClientUser.companyName;
+  if (paypalClientUser?.vatNumber) newOrderData.customerVatNumber = paypalClientUser.vatNumber;
+  if (paypalClientUser?.eoriNumber) newOrderData.customerEoriNumber = paypalClientUser.eoriNumber;
+  if (paypalClientUser?.chamberOfCommerce) newOrderData.customerChamberOfCommerce = paypalClientUser.chamberOfCommerce;
 
   // Create the order
   const orderDocRef = await adminDb.collection(ORDERS_COLLECTION).add(newOrderData);
