@@ -208,48 +208,57 @@ export default function AppLayout({ children }: AppLayoutProps) {
     return email.substring(0, 2).toUpperCase();
   };
 
-  const navItems = [
+  interface NavItem {
+    href: string;
+    label: string;
+    title: string;
+    icon: React.ElementType;
+    roles: string[];
+    setting?: boolean;
+    category?: string;
+  }
+
+  const navItems: NavItem[] = [
     // Superadmin
-    { href: '/admin/dashboard', label: 'Distributors', title: 'Platform Dashboard', icon: Building, roles: ['superadmin']},
-    { href: '/admin/accounts', label: 'All Accounts', title: 'User Management', icon: Users, roles: ['superadmin']},
-    { href: '/admin/statistics', label: 'Platform Stats', title: 'Platform Statistics', icon: BarChart3, roles: ['superadmin']},
-    { href: '/admin/revenue', label: 'Revenue & Orders', title: 'Platform Revenue & Orders', icon: DollarSign, roles: ['superadmin']},
-    { href: '/admin/settings', label: 'Platform Settings', title: 'Platform Settings', icon: Shapes, roles: ['superadmin']},
-    { href: '/admin/changelog', label: 'Manage Changelog', title: 'Changelog Management', icon: Newspaper, roles: ['superadmin']},
-    
-    // All Roles
+    { href: '/admin/dashboard', label: 'Distributors', title: 'Platform Dashboard', icon: Building, roles: ['superadmin'], category: 'Platform' },
+    { href: '/admin/accounts', label: 'All Accounts', title: 'User Management', icon: Users, roles: ['superadmin'], category: 'Platform' },
+    { href: '/admin/statistics', label: 'Platform Stats', title: 'Platform Statistics', icon: BarChart3, roles: ['superadmin'], category: 'Platform' },
+    { href: '/admin/revenue', label: 'Revenue & Orders', title: 'Platform Revenue & Orders', icon: DollarSign, roles: ['superadmin'], category: 'Platform' },
+    { href: '/admin/settings', label: 'Platform Settings', title: 'Platform Settings', icon: Shapes, roles: ['superadmin'], category: 'Platform' },
+    { href: '/admin/changelog', label: 'Manage Changelog', title: 'Changelog Management', icon: Newspaper, roles: ['superadmin'], category: 'Platform' },
+
+    // All Roles - Dashboard
     { href: '/dashboard', label: 'Dashboard', title: 'Dashboard', icon: LayoutDashboard, roles: ['master', 'worker', 'viewer'] },
-    
-    // Viewer Role (Client) - Ordered as per user request
-    { href: '/inventory', label: 'Catalog', title: 'Catalog', icon: Boxes, roles: ['viewer'] },
-    { href: '/collection', label: 'My Collection', title: 'My Collection', icon: Library, roles: ['viewer'], setting: clientMenuSettings.showCollection },
-    { href: '/favorites', label: 'Favorites', title: 'My Favorites', icon: Heart, roles: ['viewer'] },
-    { href: '/wishlist', label: 'My Wishlist', title: 'My Wishlist', icon: ListChecks, roles: ['viewer'], setting: clientMenuSettings.showWishlist },
-    { href: '/my-orders', label: 'My Orders', title: 'My Order History', icon: Package, roles: ['viewer'] },
-    { href: '/cart', label: 'Cart', title: 'Shopping Cart', icon: ShoppingCart, roles: ['viewer'] },
-    { href: '/scan', label: 'Scan/Add Record', title: 'Scan or Add Record', icon: ScanLine, roles: ['viewer'], setting: clientMenuSettings.showScan },
-    { href: '/discogs', label: 'Discogs', title: 'Discogs Integration', icon: Disc3, roles: ['viewer'], setting: clientMenuSettings.showDiscogs },
-    
+
+    // Viewer Role (Client)
+    { href: '/inventory', label: 'Catalog', title: 'Catalog', icon: Boxes, roles: ['viewer'], category: 'Browse' },
+    { href: '/favorites', label: 'Favorites', title: 'My Favorites', icon: Heart, roles: ['viewer'], category: 'Browse' },
+    { href: '/collection', label: 'My Collection', title: 'My Collection', icon: Library, roles: ['viewer'], category: 'My Records', setting: clientMenuSettings.showCollection },
+    { href: '/wishlist', label: 'My Wishlist', title: 'My Wishlist', icon: ListChecks, roles: ['viewer'], category: 'My Records', setting: clientMenuSettings.showWishlist },
+    { href: '/scan', label: 'Scan/Add Record', title: 'Scan or Add Record', icon: ScanLine, roles: ['viewer'], category: 'My Records', setting: clientMenuSettings.showScan },
+    { href: '/discogs', label: 'Discogs', title: 'Discogs Integration', icon: Disc3, roles: ['viewer'], category: 'My Records', setting: clientMenuSettings.showDiscogs },
+    { href: '/my-orders', label: 'My Orders', title: 'My Order History', icon: Package, roles: ['viewer'], category: 'Orders' },
+    { href: '/cart', label: 'Cart', title: 'Shopping Cart', icon: ShoppingCart, roles: ['viewer'], category: 'Orders' },
+
     // Operator Roles (Master/Worker)
-    { href: '/inventory', label: 'Inventory', title: 'Inventory Management', icon: Boxes, roles: ['master', 'worker'] },
-    { href: '/clients', label: 'Clients', title: 'Client Management', icon: Users, roles: ['master']},
-    { href: '/operators', label: 'Operators', title: 'Operator Management', icon: HardHat, roles: ['master']},
-    { href: '/suppliers', label: 'Suppliers', title: 'Supplier Management', icon: Briefcase, roles: ['master']},
-    { href: '/orders', label: 'Orders', title: 'Incoming Orders', icon: ShoppingCart, roles: ['master', 'worker'] },
-    { href: '/fulfillment', label: 'Fulfillment', title: 'Order Fulfillment', icon: Truck, roles: ['master', 'worker'] },
-    { href: '/notifications', label: 'Notifications', title: 'Notifications', icon: Bell, roles: ['master', 'worker']},
-    { href: '/scan', label: 'Scan/Add Record', title: 'Scan or Add Record', icon: ScanLine, roles: ['master', 'worker'] },
-    { href: '/discogs', label: 'Discogs', title: 'Discogs Integration', icon: Disc3, roles: ['master'] },
-    { href: '/stats', label: 'Statistics', title: 'Distributor Statistics', icon: BarChart3, roles: ['master'] },
-    { href: '/import', label: 'Import/Export', title: 'Import / Export Data', icon: FileUp, roles: ['master'] },
-    { href: '/inventory/batch-edit', label: 'Batch Edit', title: 'Batch Edit Inventory', icon: FilePenLine, roles: ['master']},
-    
-    // Changelog for master/worker
-    { href: '/changelog', label: 'Changelog', title: 'Changelog', icon: Newspaper, roles: ['master', 'worker'] },
-    
-    // Settings & Subscription
-    { href: '/subscription', label: 'Subscription', title: 'Subscription', icon: CreditCard, roles: ['master']},
-    { href: '/settings', label: 'Settings', title: 'Settings', icon: Settings, roles: ['master', 'worker', 'viewer', 'superadmin'] },
+    { href: '/inventory', label: 'Inventory', title: 'Inventory Management', icon: Boxes, roles: ['master', 'worker'], category: 'Catalog' },
+    { href: '/scan', label: 'Add Record', title: 'Scan or Add Record', icon: ScanLine, roles: ['master', 'worker'], category: 'Catalog' },
+    { href: '/inventory/batch-edit', label: 'Batch Edit', title: 'Batch Edit Inventory', icon: FilePenLine, roles: ['master'], category: 'Catalog' },
+    { href: '/import', label: 'Import/Export', title: 'Import / Export Data', icon: FileUp, roles: ['master'], category: 'Catalog' },
+    { href: '/discogs', label: 'Discogs', title: 'Discogs Integration', icon: Disc3, roles: ['master'], category: 'Catalog' },
+
+    { href: '/orders', label: 'Orders', title: 'Incoming Orders', icon: ShoppingCart, roles: ['master', 'worker'], category: 'Sales' },
+    { href: '/fulfillment', label: 'Fulfillment', title: 'Order Fulfillment', icon: Truck, roles: ['master', 'worker'], category: 'Sales' },
+    { href: '/stats', label: 'Statistics', title: 'Distributor Statistics', icon: BarChart3, roles: ['master'], category: 'Sales' },
+
+    { href: '/clients', label: 'Clients', title: 'Client Management', icon: Users, roles: ['master'], category: 'People' },
+    { href: '/operators', label: 'Operators', title: 'Operator Management', icon: HardHat, roles: ['master'], category: 'People' },
+    { href: '/suppliers', label: 'Suppliers', title: 'Supplier Management', icon: Briefcase, roles: ['master'], category: 'People' },
+
+    { href: '/notifications', label: 'Notifications', title: 'Notifications', icon: Bell, roles: ['master', 'worker'], category: 'System' },
+    { href: '/changelog', label: 'Changelog', title: 'Changelog', icon: Newspaper, roles: ['master', 'worker'], category: 'System' },
+    { href: '/subscription', label: 'Subscription', title: 'Subscription', icon: CreditCard, roles: ['master'], category: 'System' },
+    { href: '/settings', label: 'Settings', title: 'Settings', icon: Settings, roles: ['master', 'worker', 'viewer', 'superadmin'], category: 'System' },
   ];
   
   const availableNavItems = navItems.filter(item => {
@@ -321,43 +330,60 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     </Select>
                 </div>
             )}
-          <SidebarMenu>
-            {availableNavItems.map((item) => {
+          {(() => {
+            // Group items by category
+            let lastCategory = '';
+            return availableNavItems.map((item, index) => {
               const label = (user?.role === 'viewer' && item.href === '/inventory') ? 'Catalog' : item.label;
               const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
               const showChangelogBadge = (item.href === '/changelog' || item.href === '/admin/changelog') && user?.unreadChangelogs;
+              const category = item.category || '';
+              const showCategoryHeader = category && category !== lastCategory;
+              if (category) lastCategory = category;
 
               return (
-              <SidebarMenuItem key={item.href} onClick={handleNavItemClick}>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive}
-                  tooltip={{ children: label, className: "bg-popover text-popover-foreground" }}
-                >
-                  <Link href={item.href}>
-                    <item.icon />
-                    <span>{label}</span>
-                  </Link>
-                </SidebarMenuButton>
-                 {item.href === '/cart' && cartCount > 0 && (
-                  <SidebarMenuBadge>{cartCount}</SidebarMenuBadge>
-                )}
-                {item.href === '/my-orders' && clientPendingOrdersCount > 0 && (
-                  <SidebarMenuBadge>{clientPendingOrdersCount}</SidebarMenuBadge>
-                )}
-                {item.href === '/orders' && operatorPendingOrdersCount > 0 && (
-                  <SidebarMenuBadge>{operatorPendingOrdersCount}</SidebarMenuBadge>
-                )}
-                 {item.href === '/notifications' && unreadNotificationsCount > 0 && (
-                  <SidebarMenuBadge>{unreadNotificationsCount}</SidebarMenuBadge>
-                 )}
-                 {showChangelogBadge && (
-                    <SidebarMenuBadge>New</SidebarMenuBadge>
-                 )}
-              </SidebarMenuItem>
-              )
-            })}
-          </SidebarMenu>
+                <React.Fragment key={item.href}>
+                  {showCategoryHeader && (
+                    <>
+                      {index > 0 && <SidebarSeparator className="my-1" />}
+                      <div className="px-3 pt-2 pb-1 group-data-[collapsible=icon]:hidden">
+                        <p className="text-[10px] font-semibold text-sidebar-foreground/50 uppercase tracking-widest">{category}</p>
+                      </div>
+                    </>
+                  )}
+                  <SidebarMenu>
+                    <SidebarMenuItem onClick={handleNavItemClick}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        tooltip={{ children: label, className: "bg-popover text-popover-foreground" }}
+                      >
+                        <Link href={item.href}>
+                          <item.icon />
+                          <span>{label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                      {item.href === '/cart' && cartCount > 0 && (
+                        <SidebarMenuBadge>{cartCount}</SidebarMenuBadge>
+                      )}
+                      {item.href === '/my-orders' && clientPendingOrdersCount > 0 && (
+                        <SidebarMenuBadge>{clientPendingOrdersCount}</SidebarMenuBadge>
+                      )}
+                      {item.href === '/orders' && operatorPendingOrdersCount > 0 && (
+                        <SidebarMenuBadge>{operatorPendingOrdersCount}</SidebarMenuBadge>
+                      )}
+                      {item.href === '/notifications' && unreadNotificationsCount > 0 && (
+                        <SidebarMenuBadge>{unreadNotificationsCount}</SidebarMenuBadge>
+                      )}
+                      {showChangelogBadge && (
+                        <SidebarMenuBadge>New</SidebarMenuBadge>
+                      )}
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </React.Fragment>
+              );
+            });
+          })()}
           {/* Client Access section for masters/workers who are also clients of other distributors */}
           {(user?.role === 'master' || user?.role === 'worker') && clientAccessDistributors.length > 0 && (
             <>
@@ -445,10 +471,24 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <SidebarTrigger className="text-foreground">
               <Menu />
             </SidebarTrigger>
-            <h1 className="text-xl font-semibold text-foreground hidden sm:block">
+            <h1 className="text-lg font-semibold text-foreground hidden sm:block">
               {currentPageTitle}
             </h1>
           </div>
+          {/* Distributor logo in header */}
+          {hasCustomLogo && (
+            <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center">
+              <Image
+                src={displayBranding!.logoUrl!}
+                alt={`${companyName} Logo`}
+                width={160}
+                height={40}
+                style={{ width: 'auto', height: 'auto', maxWidth: '160px', maxHeight: '36px' }}
+                className="object-contain"
+                unoptimized={true}
+              />
+            </div>
+          )}
           <div className="flex items-center gap-2 sm:gap-4">
             <GlobalSearch />
             {user && (user.role === 'master' || user.role === 'worker') && (
