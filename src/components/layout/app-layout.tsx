@@ -294,7 +294,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <div className="w-full h-auto group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:h-8 transition-all flex items-center justify-center">
               {hasCustomLogo ? (
                 <Image
-                  src={displayBranding!.logoUrl!}
+                  src={displayBranding?.logoUrl || ''}
                   alt={`${companyName} Logo`}
                   width={130}
                   height={26}
@@ -444,14 +444,17 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </div>
         )}
         {/* Business Profile Incomplete Banner */}
-        {user?.role === 'master' && activeDistributor && !checkBusinessProfileComplete(activeDistributor).isComplete && (
+        {(() => {
+          const profileCheck = user?.role === 'master' && activeDistributor ? checkBusinessProfileComplete(activeDistributor) : null;
+          if (!profileCheck || profileCheck.isComplete) return null;
+          return (
             <div className="sticky top-0 z-40 flex items-center justify-between bg-orange-500 px-4 py-2 text-white shadow-md">
                 <div className="flex items-center gap-2">
                     <Building className="h-5 w-5" />
                     <p className="font-medium text-sm">
                         Complete your business profile to accept orders and generate invoices.
                         <span className="hidden sm:inline text-orange-100 ml-2">
-                            Missing: {checkBusinessProfileComplete(activeDistributor).missingFields.join(', ')}
+                            Missing: {profileCheck.missingFields.join(', ')}
                         </span>
                     </p>
                 </div>
@@ -465,7 +468,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     Complete Profile
                 </Button>
             </div>
-        )}
+          );
+        })()}
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md sm:px-6">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="text-foreground">
@@ -477,9 +481,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </div>
           {/* Distributor logo in header */}
           {hasCustomLogo && (
-            <div className="absolute left-1/2 -translate-x-1/2 hidden md:flex items-center">
+            <div className="absolute left-1/2 -translate-x-1/2 hidden lg:flex items-center max-w-[200px]">
               <Image
-                src={displayBranding!.logoUrl!}
+                src={displayBranding?.logoUrl || ''}
                 alt={`${companyName} Logo`}
                 width={160}
                 height={40}

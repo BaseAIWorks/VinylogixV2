@@ -30,25 +30,23 @@ export default function InventoryPage() {
     globalSearchTerm, setGlobalSearchTerm, addToCart
   } = useAuth(); 
   
-  // Check for cached data before initial state (avoids flash of loader)
-  const getCachedData = (): { records: VinylRecord[]; hasMore: boolean; scrollY: number } | null => {
+  // Read cache without consuming it (no side effects during render)
+  const readCache = (): { records: VinylRecord[]; hasMore: boolean; scrollY: number } | null => {
     if (typeof window === 'undefined') return null;
     try {
       const key = `inventory_cache_${activeDistributorId}`;
       const raw = sessionStorage.getItem(key);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed.records?.length > 0) {
-          sessionStorage.removeItem(key);
-          return parsed;
-        }
+        if (parsed.records?.length > 0) return parsed;
       }
     } catch {}
     return null;
   };
 
-  const initialCache = useRef(getCachedData());
+  const initialCache = useRef(readCache());
   const hasCacheData = initialCache.current !== null;
+  const hasRestoredScroll = useRef(false);
 
   const [records, setRecords] = useState<VinylRecord[]>(initialCache.current?.records || []);
   const [lastVisible, setLastVisible] = useState<DocumentSnapshot | null>(null);
@@ -56,6 +54,13 @@ export default function InventoryPage() {
   const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [hasMore, setHasMore] = useState(initialCache.current?.hasMore ?? true);
   const restoredFromCache = useRef(hasCacheData);
+
+  // Consume cache in effect (safe for StrictMode double-render)
+  useEffect(() => {
+    if (hasCacheData) {
+      try { sessionStorage.removeItem(`inventory_cache_${activeDistributorId}`); } catch {}
+    }
+  }, []);
 
   const router = useRouter();
   const [filters, setFilters] = useState<{ location?: string; year?: string; genre?: string; condition?: string; format?: string }>({});
@@ -83,12 +88,12 @@ export default function InventoryPage() {
   const hasMoreRef = useRef(hasMore);
   hasMoreRef.current = hasMore;
 
-  // Scroll to cached position after records render
+  // Scroll to cached position once after records render
   useEffect(() => {
-    if (initialCache.current && records.length > 0) {
+    if (initialCache.current && records.length > 0 && !hasRestoredScroll.current) {
+      hasRestoredScroll.current = true;
       const scrollTarget = initialCache.current.scrollY;
       initialCache.current = null;
-      // Wait for DOM to render the records, then scroll
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           window.scrollTo(0, scrollTarget);
@@ -158,7 +163,7 @@ export default function InventoryPage() {
             lastVisible: loadMore ? lastVisible : null,
         });
         
-        setRecords(loadMore ? [...records, ...fetchedRecords] : fetchedRecords);
+        setRecords(prev => loadMore ? [...prev, ...fetchedRecords] : fetchedRecords);
         setLastVisible(newLastVisible);
         setHasMore(fetchedRecords.length === 25);
     } catch (error) {
@@ -169,7 +174,7 @@ export default function InventoryPage() {
         setIsFetching(false);
         setIsFetchingMore(false);
     }
-  }, [user, activeDistributorId, filters, sortOption, toast, isFetchingMore, hasMore, lastVisible, records]);
+  }, [user, activeDistributorId, filters, sortOption, toast, isFetchingMore, hasMore, lastVisible]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(

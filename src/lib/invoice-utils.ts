@@ -235,8 +235,10 @@ export async function generateInvoicePdf(
   });
 
   // BILL TO
-  const hasSeparateBilling = order.billingAddress && order.billingAddress !== order.shippingAddress;
-  const billToAddress = hasSeparateBilling ? order.billingAddress! : order.shippingAddress;
+  const shippingAddr = order.shippingAddress || '';
+  const billingAddr = order.billingAddress || '';
+  const hasSeparateBilling = billingAddr && billingAddr !== shippingAddr;
+  const billToAddress = hasSeparateBilling ? billingAddr : shippingAddr;
   const clientAddressLines = billToAddress.split('\n').map(l => l.trim()).filter(Boolean);
 
   const clientContact: string[] = [];
@@ -248,49 +250,26 @@ export async function generateInvoicePdf(
   if (customerVatNumber) clientReg.push(`VAT: ${customerVatNumber}`);
   if (customerEoriNumber) clientReg.push(`EORI: ${customerEoriNumber}`);
 
+  // Determine name display: company name as primary, or customer name if no company
   let rightEndY = renderContactBlock(rightColumnX, currentY, columnWidth, {
     header: 'BILL TO',
-    companyName: customerCompanyName,
+    companyName: customerCompanyName || order.customerName,
     personName: customerCompanyName ? order.customerName : undefined,
     addressLines: clientAddressLines,
     contactParts: clientContact,
     regParts: clientReg,
   });
 
-  // If no company name, show person name as the main name
-  if (!customerCompanyName) {
-    // The block already handled personName as undefined, but companyName slot was empty.
-    // Re-render with customerName as companyName
-    rightEndY = renderContactBlock(rightColumnX, currentY, columnWidth, {
-      header: 'BILL TO',
-      companyName: order.customerName,
-      addressLines: clientAddressLines,
-      contactParts: clientContact,
-      regParts: clientReg,
-    });
-  }
-
   // SHIP TO (if different from billing)
   if (hasSeparateBilling) {
     rightEndY += 3;
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...COLORS.secondary);
-    doc.text("SHIP TO", rightColumnX, rightEndY);
-    rightEndY += 2;
-    doc.setDrawColor(...COLORS.border);
-    doc.setLineWidth(0.5);
-    doc.line(rightColumnX, rightEndY, rightColumnX + columnWidth - 10, rightEndY);
-    rightEndY += 4;
-
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...COLORS.secondary);
-    const shipLines = order.shippingAddress.split('\n').map(l => l.trim()).filter(Boolean);
-    for (const line of shipLines) {
-      doc.text(line, rightColumnX, rightEndY);
-      rightEndY += 3.5;
-    }
+    const shipLines = shippingAddr.split('\n').map(l => l.trim()).filter(Boolean);
+    rightEndY = renderContactBlock(rightColumnX, rightEndY, columnWidth, {
+      header: 'SHIP TO',
+      addressLines: shipLines,
+      contactParts: [],
+      regParts: [],
+    });
   }
 
   currentY = Math.max(leftEndY, rightEndY) + 6;
@@ -299,9 +278,10 @@ export async function generateInvoicePdf(
   // INVOICE DETAILS (inline, no boxes)
   // ============================================
 
-  const invoiceNumber = order.orderNumber || order.id.slice(0, 8).toUpperCase();
-  const dateText = format(new Date(order.createdAt), 'dd MMM yyyy');
-  const statusText = statusConfig[order.status].label;
+  const invoiceNumber = order.orderNumber || (order.id || 'UNKNOWN').slice(0, 8).toUpperCase();
+  let dateText = '';
+  try { dateText = format(new Date(order.createdAt), 'dd MMM yyyy'); } catch { dateText = 'N/A'; }
+  const statusText = statusConfig[order.status]?.label || order.status || 'Unknown';
   const isPaid = order.status === 'paid' || order.paymentStatus === 'paid';
 
   // Thin accent line
@@ -388,6 +368,11 @@ export async function generateInvoicePdf(
       let dy = detailsStartY + 5;
 
       for (const account of accounts) {
+        // Page break check per account (~20mm per account)
+        if (dy + 20 > pageHeight - footerReserved) {
+          doc.addPage();
+          dy = margin;
+        }
         doc.setFont("helvetica", "normal");
         doc.setTextColor(...COLORS.secondary);
 
@@ -452,7 +437,7 @@ export async function generateInvoicePdf(
   // ============================================
 
   const tableColumn = ["Item", "Qty", "Unit Price", "Total"];
-  const tableRows = order.items.map((item) => [
+  const tableRows = (order.items || []).map((item) => [
     `${item.artist} \u2013 ${item.title}`,
     item.quantity.toString(),
     `\u20AC ${formatPriceForDisplay(item.priceAtTimeOfOrder)}`,
