@@ -1,6 +1,7 @@
 
 "use client";
 import { useAuth } from "@/hooks/use-auth";
+import { auth } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -168,17 +169,18 @@ export default function CheckoutPage() {
         const shippingAddress = formatAddress(user, 'shipping');
         const billingAddress = formatAddress(user, 'billing');
         const customerName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || '';
+        const token = await auth.currentUser?.getIdToken();
 
         const response = await fetch('/api/stripe/connect/checkout', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
             },
             body: JSON.stringify({
                 distributorId,
                 items: cart,
                 customerEmail: user.email,
-                userId: user.uid,
                 customerName,
                 shippingAddress,
                 billingAddress,
@@ -202,17 +204,18 @@ export default function CheckoutPage() {
         const shippingAddress = formatAddress(user, 'shipping');
         const billingAddress = formatAddress(user, 'billing');
         const customerName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || '';
+        const token = await auth.currentUser?.getIdToken();
 
         const response = await fetch('/api/paypal/connect/checkout', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
             },
             body: JSON.stringify({
                 distributorId,
                 items: cart,
                 customerEmail: user.email,
-                viewerId: user.uid,
                 shippingAddress,
                 billingAddress,
                 customerName,

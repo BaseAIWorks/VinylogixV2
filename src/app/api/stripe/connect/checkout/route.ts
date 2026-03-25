@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDistributorById } from '@/services/server-distributor-service';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { CartItem, VinylRecord } from '@/types';
+import { verifyAuth } from '@/lib/auth-helpers';
 
 // Server-side function to fetch a record by ID using Admin SDK
 async function getRecordFromDb(recordId: string): Promise<VinylRecord | null> {
@@ -31,7 +32,11 @@ interface ValidatedCartItem {
 
 export async function POST(req: NextRequest) {
   try {
-    const { distributorId, items, customerEmail, userId, customerName, shippingAddress, billingAddress } = await req.json();
+    // Verify authentication and extract userId from token
+    const caller = await verifyAuth(req);
+    const userId = caller?.uid || '';
+
+    const { distributorId, items, customerEmail, customerName, shippingAddress, billingAddress } = await req.json();
 
     if (!distributorId || !items || items.length === 0) {
       return NextResponse.json(

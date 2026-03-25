@@ -108,6 +108,17 @@ service cloud.firestore {
       return !('role' in after) || (after.role != 'master' && after.role != 'superadmin');
     }
 
+    // Prevent masters from moving users between distributors
+    function masterCannotReassignOrg() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let distUnchanged = (!('distributorId' in before) && !('distributorId' in after)) ||
+                          (('distributorId' in before) && ('distributorId' in after) && before.distributorId == after.distributorId);
+      let accessUnchanged = (!('accessibleDistributorIds' in before) && !('accessibleDistributorIds' in after)) ||
+                            (('accessibleDistributorIds' in before) && ('accessibleDistributorIds' in after) && before.accessibleDistributorIds == after.accessibleDistributorIds);
+      return distUnchanged && accessUnchanged;
+    }
+
     // ==================================================================
     // Collections
     // ==================================================================
@@ -130,7 +141,7 @@ service cloud.firestore {
       // - Superadmins can update anything
       allow update: if isSuperAdmin() ||
                       (isOwner(userId) && sensitiveFieldsUnchanged()) ||
-                      (isMaster() && resource.data.distributorId == request.auth.token.distributorId && noRoleEscalation());
+                      (isMaster() && resource.data.distributorId == request.auth.token.distributorId && noRoleEscalation() && masterCannotReassignOrg());
 
       // A master or superadmin can delete a user document.
       allow delete: if isSuperAdmin() || (isMaster() && resource.data.distributorId == request.auth.token.distributorId);
@@ -215,7 +226,7 @@ service cloud.firestore {
         // Superadmins can manage all orders
         allow read, write, delete: if isSuperAdmin();
 
-        allow create: if isSignedIn();
+        allow create: if isSignedIn() && request.resource.data.viewerId == request.auth.uid;
         // Allow operators (with fallback) or the viewer who placed the order
         allow read, update: if isOperatorOfWithFallback(resource.data.distributorId) || isOwner(resource.data.viewerId);
     }

@@ -157,7 +157,7 @@ export default function ClientsPage() {
   const handleRemoveClient = async () => {
     if (!clientToDelete || !user?.distributorId || !user.uid) return;
     try {
-      await removeClientAccess(clientToDelete.uid, user.distributorId, user.uid);
+      await removeClientAccess(clientToDelete.uid, user.distributorId);
       toast({ title: "Client Removed", description: `"${clientToDelete.email}" has been removed from your client list.` });
       fetchData();
     } catch (error) {
@@ -174,7 +174,7 @@ export default function ClientsPage() {
     }
     setIsInviting(true);
     try {
-      const result = await inviteClient(inviteEmail, user.distributorId, user.uid);
+      const result = await inviteClient(inviteEmail, user.distributorId);
       toast({
         title: "Success!",
         description: result.message,
@@ -224,7 +224,7 @@ export default function ClientsPage() {
     setIsProcessingBulk(true);
     try {
       const removePromises = Array.from(selectedClients).map(clientId =>
-        removeClientAccess(clientId, user.distributorId!, user.uid)
+        removeClientAccess(clientId, user.distributorId!)
       );
       await Promise.all(removePromises);
       toast({

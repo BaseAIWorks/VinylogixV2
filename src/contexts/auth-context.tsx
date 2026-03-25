@@ -1314,9 +1314,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     try {
+      const token = await auth.currentUser?.getIdToken();
       const response = await fetch('/api/auth/password-reset', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ email }),
       });
 

@@ -27,30 +27,30 @@ export async function POST(req: NextRequest) {
     const authAlgo = req.headers.get('paypal-auth-algo') || '';
     const transmissionSig = req.headers.get('paypal-transmission-sig') || '';
 
-    // Verify webhook signature (optional but recommended in production)
-    if (PAYPAL_WEBHOOK_ID && transmissionId) {
-      try {
-        const isValid = await verifyWebhookSignature({
-          webhookId: PAYPAL_WEBHOOK_ID,
-          transmissionId,
-          transmissionTime,
-          certUrl,
-          authAlgo,
-          transmissionSig,
-          webhookEvent: event,
-        });
+    // Verify webhook signature (mandatory in production)
+    if (!PAYPAL_WEBHOOK_ID) {
+      console.error('PAYPAL_WEBHOOK_ID is not configured. Set it in your environment variables.');
+      return NextResponse.json({ error: 'Webhook configuration error.' }, { status: 500 });
+    }
 
-        if (!isValid) {
-          console.error('PayPal webhook signature verification failed');
-          return NextResponse.json(
-            { error: 'Invalid webhook signature' },
-            { status: 400 }
-          );
-        }
-      } catch (verifyError) {
-        console.warn('Could not verify PayPal webhook signature:', verifyError);
-        // Continue processing - verification might fail in sandbox
-      }
+    if (!transmissionId) {
+      console.error('Missing PayPal webhook signature headers.');
+      return NextResponse.json({ error: 'Invalid webhook request.' }, { status: 400 });
+    }
+
+    const isValid = await verifyWebhookSignature({
+      webhookId: PAYPAL_WEBHOOK_ID,
+      transmissionId,
+      transmissionTime,
+      certUrl,
+      authAlgo,
+      transmissionSig,
+      webhookEvent: event,
+    });
+
+    if (!isValid) {
+      console.error('PayPal webhook signature verification failed');
+      return NextResponse.json({ error: 'Invalid webhook signature.' }, { status: 400 });
     }
 
     console.log('PayPal Webhook Received:', event.event_type);

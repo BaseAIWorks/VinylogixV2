@@ -4,39 +4,53 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { Timestamp } from 'firebase-admin/firestore';
 import { FirestoreUser } from '@/types';
 import { sendNewAccountInvitationEmail, sendExistingAccountInvitationEmail } from '@/services/email-service';
+import { requireAuth, authErrorResponse } from '@/lib/auth-helpers';
+import { rateLimit } from '@/lib/rate-limit';
+import { randomBytes } from 'crypto';
 
-// Generate a secure random password
 function generatePassword(length: number = 12): string {
   const lowercase = 'abcdefghijklmnopqrstuvwxyz';
   const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const numbers = '0123456789';
   const symbols = '!@#$%^&*';
   const allChars = lowercase + uppercase + numbers + symbols;
-  
-  let password = '';
-  
-  // Ensure at least one character from each category
-  password += lowercase[Math.floor(Math.random() * lowercase.length)];
-  password += uppercase[Math.floor(Math.random() * uppercase.length)];
-  password += numbers[Math.floor(Math.random() * numbers.length)];
-  password += symbols[Math.floor(Math.random() * symbols.length)];
-  
-  // Fill the rest with random characters
+
+  const bytes = randomBytes(length);
+  const chars = [
+    lowercase[bytes[0] % lowercase.length],
+    uppercase[bytes[1] % uppercase.length],
+    numbers[bytes[2] % numbers.length],
+    symbols[bytes[3] % symbols.length],
+  ];
+
   for (let i = 4; i < length; i++) {
-    password += allChars[Math.floor(Math.random() * allChars.length)];
+    chars.push(allChars[bytes[i] % allChars.length]);
   }
-  
-  // Shuffle the password
-  return password.split('').sort(() => Math.random() - 0.5).join('');
+
+  // Fisher-Yates shuffle with crypto
+  const shuffleBytes = randomBytes(chars.length);
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = shuffleBytes[i] % (i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+
+  return chars.join('');
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const { email, distributorId, invitedBy } = await req.json();
+  // Rate limit: 10 invites per minute per IP
+  const rateLimited = rateLimit(req, { limit: 10, windowMs: 60_000, prefix: 'invite' });
+  if (rateLimited) return rateLimited;
 
-    if (!email || !distributorId || !invitedBy) {
+  try {
+    // Verify authentication
+    const caller = await requireAuth(req);
+
+    const { email, distributorId } = await req.json();
+
+    if (!email || !distributorId) {
       return NextResponse.json(
-        { error: 'Missing required fields: email, distributorId, and invitedBy are required' },
+        { error: 'Missing required fields.' },
         { status: 400 }
       );
     }
@@ -44,37 +58,28 @@ export async function POST(req: NextRequest) {
     const adminDb = getAdminDb();
     if (!adminDb) {
       return NextResponse.json(
-        { error: 'Firebase Admin SDK is not initialized' },
+        { error: 'Service unavailable.' },
         { status: 500 }
       );
     }
 
-    // Verify that the invitedBy user is a master user of the specified distributor
-    const inviterDoc = await adminDb.collection('users').doc(invitedBy).get();
+    // Verify caller is master of the specified distributor
+    const inviterDoc = await adminDb.collection('users').doc(caller.uid).get();
     if (!inviterDoc.exists) {
-      return NextResponse.json(
-        { error: 'Invalid inviter' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'Insufficient permissions.' }, { status: 403 });
     }
 
     const inviterData = inviterDoc.data() as FirestoreUser;
     if (inviterData.role !== 'master' || inviterData.distributorId !== distributorId) {
-      return NextResponse.json(
-        { error: 'Only master users can invite clients to their distributorship' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'Insufficient permissions.' }, { status: 403 });
     }
 
     // Get distributor information for email
     const distributorDoc = await adminDb.collection('distributors').doc(distributorId).get();
     if (!distributorDoc.exists) {
-      return NextResponse.json(
-        { error: 'Distributor not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Operation failed.' }, { status: 400 });
     }
-    
+
     const distributorData = distributorDoc.data();
     const distributorInfo = {
       name: distributorData?.name || 'Unknown Distributor',
@@ -82,16 +87,12 @@ export async function POST(req: NextRequest) {
       contactEmail: distributorData?.contactEmail || inviterData.email || 'support@vinylogix.com'
     };
 
-    // Get the website URL from the request
     const websiteUrl = `${req.nextUrl.protocol}//${req.nextUrl.host}`;
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: 'Invalid email format' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Invalid email format.' }, { status: 400 });
     }
 
     // Check if user already exists in Firestore
@@ -103,79 +104,49 @@ export async function POST(req: NextRequest) {
     if (!existingUserQuery.empty) {
       const existingUser = existingUserQuery.docs[0].data() as FirestoreUser;
 
-      // Check if user already has access to this distributor
       if (existingUser.accessibleDistributorIds?.includes(distributorId)) {
-        return NextResponse.json(
-          { error: 'This user already has access to your distributorship' },
-          { status: 409 }
-        );
+        // Generic response to prevent user enumeration
+        return NextResponse.json({ success: true, message: 'Invitation processed successfully.', userCreated: false });
       }
 
-      // Prevent a master/worker from being invited as a client of their OWN distributor
       if ((existingUser.role === 'master' || existingUser.role === 'worker') &&
           existingUser.distributorId === distributorId) {
-        return NextResponse.json(
-          { error: 'This user is already part of your organization' },
-          { status: 409 }
-        );
+        return NextResponse.json({ success: true, message: 'Invitation processed successfully.', userCreated: false });
       }
 
-      // Superadmins cannot be invited as clients
       if (existingUser.role === 'superadmin') {
-        return NextResponse.json(
-          { error: 'This email is associated with an admin account and cannot be invited as a client' },
-          { status: 409 }
-        );
+        return NextResponse.json({ success: true, message: 'Invitation processed successfully.', userCreated: false });
       }
 
-      // Grant access to the distributor (works for viewers, masters, and workers)
+      // Grant access
       await existingUserQuery.docs[0].ref.update({
         accessibleDistributorIds: FieldValue.arrayUnion(distributorId)
       });
 
-      // Send email to existing user
       try {
-        await sendExistingAccountInvitationEmail({
-          clientEmail: email,
-          distributor: distributorInfo,
-          websiteUrl
-        });
+        await sendExistingAccountInvitationEmail({ clientEmail: email, distributor: distributorInfo, websiteUrl });
       } catch (emailError) {
-        console.error('Failed to send existing account invitation email:', emailError);
-        // Don't fail the entire operation if email fails
+        console.error('Failed to send invitation email:', emailError);
       }
 
-      const roleMessage = existingUser.role === 'viewer'
-        ? 'Access granted to existing client account'
-        : 'Access granted - this user can now view your collection as a client';
-
-      return NextResponse.json({
-        success: true,
-        message: roleMessage,
-        userCreated: false
-      });
+      return NextResponse.json({ success: true, message: 'Invitation sent successfully.', userCreated: false });
     }
 
-    // Generate a temporary password
+    // Create new user
     const temporaryPassword = generatePassword();
 
     const adminAuth = getAdminAuth();
     if (!adminAuth) {
-      return NextResponse.json(
-        { error: 'Firebase Admin Auth is not available' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Service unavailable.' }, { status: 500 });
     }
 
     try {
-      // Create user in Firebase Auth
       const userRecord = await adminAuth.createUser({
-        email: email,
+        email,
         password: temporaryPassword,
         emailVerified: false,
       });
 
-      // Create user document in Firestore
       const newTimestamp = Timestamp.now();
       const newUserFirestoreData: FirestoreUser = {
         email,
@@ -190,42 +161,25 @@ export async function POST(req: NextRequest) {
 
       await adminDb.collection('users').doc(userRecord.uid).set(newUserFirestoreData);
 
-      // Send welcome email with temporary password
       try {
-        await sendNewAccountInvitationEmail({
-          clientEmail: email,
-          temporaryPassword,
-          distributor: distributorInfo,
-          websiteUrl
-        });
+        await sendNewAccountInvitationEmail({ clientEmail: email, temporaryPassword, distributor: distributorInfo, websiteUrl });
       } catch (emailError) {
-        console.error('Failed to send new account invitation email:', emailError);
-        // Don't fail the entire operation if email fails
+        console.error('Failed to send invitation email:', emailError);
       }
 
-      return NextResponse.json({
-        success: true,
-        message: 'Client account created successfully',
-        userCreated: true,
-        userId: userRecord.uid
-      });
+      return NextResponse.json({ success: true, message: 'Client account created successfully.', userCreated: true });
 
     } catch (authError: any) {
-      // If Firebase Auth user creation fails but user might exist in Auth but not Firestore
       if (authError.code === 'auth/email-already-exists') {
-        return NextResponse.json(
-          { error: 'An account with this email already exists in the authentication system but not in our database. Please contact support.' },
-          { status: 409 }
-        );
+        // Generic response
+        return NextResponse.json({ success: true, message: 'Invitation processed successfully.', userCreated: false });
       }
       throw authError;
     }
 
   } catch (error: any) {
-    console.error('Error creating client account:', error);
-    return NextResponse.json(
-      { error: `Failed to create client account: ${error.message}` },
-      { status: 500 }
-    );
+    if (error.status) return authErrorResponse(error);
+    console.error('Error in client invite:', error);
+    return NextResponse.json({ error: 'An error occurred. Please try again.' }, { status: 500 });
   }
 }

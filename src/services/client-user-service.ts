@@ -1,14 +1,22 @@
 
 "use client";
 
-export async function inviteClient(email: string, distributorId: string, invitedBy: string): Promise<{ success: boolean, message: string }> {
+import { auth } from '@/lib/firebase';
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const token = await auth.currentUser?.getIdToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+}
+
+export async function inviteClient(email: string, distributorId: string): Promise<{ success: boolean, message: string }> {
   try {
     const response = await fetch('/api/clients/invite', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email, distributorId, invitedBy }),
+      headers: await getAuthHeaders(),
+      body: JSON.stringify({ email, distributorId }),
     });
 
     const result = await response.json();
@@ -24,14 +32,12 @@ export async function inviteClient(email: string, distributorId: string, invited
   }
 }
 
-export async function removeClientAccess(clientUid: string, distributorId: string, requestedBy: string): Promise<{ success: boolean, message: string }> {
+export async function removeClientAccess(clientUid: string, distributorId: string): Promise<{ success: boolean, message: string }> {
   try {
     const response = await fetch('/api/clients/remove', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ clientUid, distributorId, requestedBy }),
+      headers: await getAuthHeaders(),
+      body: JSON.stringify({ clientUid, distributorId }),
     });
 
     const result = await response.json();
