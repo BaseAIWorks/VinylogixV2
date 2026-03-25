@@ -265,13 +265,13 @@ export default function ChangelogPage() {
                                                                         return <p key={i} className="font-semibold text-sm text-foreground mt-3 mb-1 uppercase tracking-wide">{text}</p>;
                                                                     }
                                                                     // Section headers (ALL CAPS text without bullets)
-                                                                    if (trimmed === trimmed.toUpperCase() && trimmed.length > 2 && !trimmed.startsWith('\u2022') && !trimmed.startsWith('-') && !trimmed.startsWith('*')) {
+                                                                    if (trimmed === trimmed.toUpperCase() && trimmed.length > 2 && !trimmed.startsWith('•') && !trimmed.startsWith('-') && !trimmed.startsWith('*')) {
                                                                         return <p key={i} className="font-semibold text-sm text-foreground mt-3 mb-1 tracking-wide">{trimmed}</p>;
                                                                     }
                                                                     // Bullet items (• or - or * prefix)
-                                                                    if (trimmed.startsWith('\u2022') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-                                                                        const text = trimmed.replace(/^[\u2022\-\*]\s*/, '').replace(/\*\*(.*?)\*\*/g, '$1');
-                                                                        return <p key={i} className="text-sm text-muted-foreground pl-4 flex gap-2"><span className="text-primary/60 shrink-0">\u2022</span><span>{text}</span></p>;
+                                                                    if (trimmed.startsWith('•') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                                                                        const text = trimmed.replace(/^[•\-*]\s*/, '').replace(/\*\*(.*?)\*\*/g, '$1');
+                                                                        return <p key={i} className="text-sm text-muted-foreground pl-4 flex gap-2"><span className="text-primary/60 shrink-0">{"•"}</span><span>{text}</span></p>;
                                                                     }
                                                                     // Regular text — strip markdown bold
                                                                     const text = trimmed.replace(/\*\*(.*?)\*\*/g, '$1');
