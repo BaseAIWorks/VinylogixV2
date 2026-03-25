@@ -30,11 +30,32 @@ export default function InventoryPage() {
     globalSearchTerm, setGlobalSearchTerm, addToCart
   } = useAuth(); 
   
-  const [records, setRecords] = useState<VinylRecord[]>([]);
+  // Check for cached data before initial state (avoids flash of loader)
+  const getCachedData = (): { records: VinylRecord[]; hasMore: boolean; scrollY: number } | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const key = `inventory_cache_${activeDistributorId}`;
+      const raw = sessionStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.records?.length > 0) {
+          sessionStorage.removeItem(key);
+          return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  };
+
+  const initialCache = useRef(getCachedData());
+  const hasCacheData = initialCache.current !== null;
+
+  const [records, setRecords] = useState<VinylRecord[]>(initialCache.current?.records || []);
   const [lastVisible, setLastVisible] = useState<DocumentSnapshot | null>(null);
-  const [isFetching, setIsFetching] = useState(true);
+  const [isFetching, setIsFetching] = useState(!hasCacheData);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const [hasMore, setHasMore] = useState(initialCache.current?.hasMore ?? true);
+  const restoredFromCache = useRef(hasCacheData);
 
   const router = useRouter();
   const [filters, setFilters] = useState<{ location?: string; year?: string; genre?: string; condition?: string; format?: string }>({});
@@ -54,41 +75,31 @@ export default function InventoryPage() {
 
   const isOperator = user?.role === 'master' || user?.role === 'worker';
 
-  // Cache key for scroll restoration
   const cacheKey = `inventory_cache_${activeDistributorId}`;
 
-  // Refs for stable navigateToRecord callback (avoids re-rendering all cards)
+  // Refs for stable navigateToRecord callback
   const recordsRef = useRef(records);
   recordsRef.current = records;
   const hasMoreRef = useRef(hasMore);
   hasMoreRef.current = hasMore;
 
-  // Restore cached records and scroll position on mount
+  // Scroll to cached position after records render
   useEffect(() => {
-    try {
-      const cached = sessionStorage.getItem(cacheKey);
-      if (cached) {
-        const { records: cachedRecords, scrollY, hasMore: cachedHasMore } = JSON.parse(cached);
-        if (cachedRecords?.length > 0) {
-          setRecords(cachedRecords);
-          setHasMore(cachedHasMore ?? true);
-          setIsFetching(false);
-          requestAnimationFrame(() => {
-            window.scrollTo(0, scrollY || 0);
-          });
-          sessionStorage.removeItem(cacheKey);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn('Failed to restore inventory cache:', err);
+    if (initialCache.current && records.length > 0) {
+      const scrollTarget = initialCache.current.scrollY;
+      initialCache.current = null;
+      // Wait for DOM to render the records, then scroll
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.scrollTo(0, scrollTarget);
+        });
+      });
     }
-  }, [cacheKey]);
+  }, [records.length]);
 
   // Save state before navigating to a record (stable callback via refs)
   const navigateToRecord = useCallback((recordId: string) => {
     try {
-      // Only cache essential fields to stay within sessionStorage limits
       const slimRecords = recordsRef.current.map(r => ({
         id: r.id, title: r.title, artist: r.artist, cover_url: r.cover_url,
         year: r.year, stock_shelves: r.stock_shelves, stock_storage: r.stock_storage,
@@ -182,15 +193,12 @@ export default function InventoryPage() {
     };
   }, [hasMore, isFetchingMore, fetchPaginatedRecords]);
 
-  const hasRestoredCache = useRef(false);
-
   useEffect(() => {
     // Skip initial fetch if we restored from cache
-    if (records.length > 0 && !hasRestoredCache.current) {
-      hasRestoredCache.current = true;
+    if (restoredFromCache.current) {
+      restoredFromCache.current = false; // Allow future fetches (filter/sort changes)
       return;
     }
-    hasRestoredCache.current = true;
     fetchPaginatedRecords(false);
   }, [authLoading, user, activeDistributorId, filters, sortOption]);
   
@@ -362,7 +370,7 @@ export default function InventoryPage() {
   const pageTitle = user?.role === 'viewer' ? 'Catalog' : 'Inventory';
   const activeDistributorName = activeDistributor?.name;
 
-  if (authLoading || isFetching) {
+  if ((authLoading || isFetching) && records.length === 0) {
     return (
         <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
