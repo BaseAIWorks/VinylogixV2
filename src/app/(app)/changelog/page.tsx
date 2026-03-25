@@ -254,8 +254,29 @@ export default function ChangelogPage() {
 
                                                     {isExpanded && (
                                                         <div className="mt-4 pt-4 border-t">
-                                                            <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-                                                                {entry.notes}
+                                                            <div className="max-w-none space-y-1">
+                                                                {entry.notes.split('\n').map((line, i) => {
+                                                                    const trimmed = line.trim();
+                                                                    // Skip empty lines but add spacing
+                                                                    if (!trimmed) return <div key={i} className="h-1" />;
+                                                                    // Strip markdown ## headers
+                                                                    if (trimmed.startsWith('## ') || trimmed.startsWith('### ')) {
+                                                                        const text = trimmed.replace(/^#{2,3}\s+/, '');
+                                                                        return <p key={i} className="font-semibold text-sm text-foreground mt-3 mb-1 uppercase tracking-wide">{text}</p>;
+                                                                    }
+                                                                    // Section headers (ALL CAPS text without bullets)
+                                                                    if (trimmed === trimmed.toUpperCase() && trimmed.length > 2 && !trimmed.startsWith('\u2022') && !trimmed.startsWith('-') && !trimmed.startsWith('*')) {
+                                                                        return <p key={i} className="font-semibold text-sm text-foreground mt-3 mb-1 tracking-wide">{trimmed}</p>;
+                                                                    }
+                                                                    // Bullet items (• or - or * prefix)
+                                                                    if (trimmed.startsWith('\u2022') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                                                                        const text = trimmed.replace(/^[\u2022\-\*]\s*/, '').replace(/\*\*(.*?)\*\*/g, '$1');
+                                                                        return <p key={i} className="text-sm text-muted-foreground pl-4 flex gap-2"><span className="text-primary/60 shrink-0">\u2022</span><span>{text}</span></p>;
+                                                                    }
+                                                                    // Regular text — strip markdown bold
+                                                                    const text = trimmed.replace(/\*\*(.*?)\*\*/g, '$1');
+                                                                    return <p key={i} className="text-sm text-muted-foreground">{text}</p>;
+                                                                })}
                                                             </div>
                                                         </div>
                                                     )}
