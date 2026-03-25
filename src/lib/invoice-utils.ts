@@ -99,7 +99,7 @@ export async function generateInvoicePdf(
           img.onerror = () => resolve();
           img.src = logoBase64;
         });
-        const maxH = 14, maxW = 50;
+        const maxH = 20, maxW = 65;
         let w = img.naturalWidth, h = img.naturalHeight;
         if (w > 0 && h > 0) {
           const r = w / h;

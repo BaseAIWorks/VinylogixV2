@@ -296,9 +296,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 <Image
                   src={displayBranding?.logoUrl || ''}
                   alt={`${companyName} Logo`}
-                  width={130}
-                  height={26}
-                  style={{ width: 'auto', height: 'auto', maxWidth: '130px', maxHeight: '26px' }}
+                  width={180}
+                  height={44}
+                  style={{ width: 'auto', height: 'auto', maxWidth: '180px', maxHeight: '44px' }}
                   className="group-data-[collapsible=icon]:max-w-7 group-data-[collapsible=icon]:max-h-7 object-contain"
                   unoptimized={true}
                 />
@@ -479,20 +479,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
               {currentPageTitle}
             </h1>
           </div>
-          {/* Distributor logo in header */}
-          {hasCustomLogo && (
-            <div className="absolute left-1/2 -translate-x-1/2 hidden lg:flex items-center max-w-[200px]">
-              <Image
-                src={displayBranding?.logoUrl || ''}
-                alt={`${companyName} Logo`}
-                width={160}
-                height={40}
-                style={{ width: 'auto', height: 'auto', maxWidth: '160px', maxHeight: '36px' }}
-                className="object-contain"
-                unoptimized={true}
-              />
-            </div>
-          )}
           <div className="flex items-center gap-2 sm:gap-4">
             <GlobalSearch />
             {user && (user.role === 'master' || user.role === 'worker') && (
