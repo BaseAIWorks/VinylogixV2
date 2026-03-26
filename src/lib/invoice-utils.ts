@@ -225,6 +225,7 @@ export async function generateInvoicePdf(
   if (distributor.chamberOfCommerce) distReg.push(`CRN: ${distributor.chamberOfCommerce}`);
   if (distributor.taxId) distReg.push(`NIF: ${distributor.taxId}`);
   else if (distributor.vatNumber) distReg.push(`VAT: ${distributor.vatNumber}`);
+  if (distributor.eoriNumber) distReg.push(`EORI: ${distributor.eoriNumber}`);
 
   const leftEndY = renderContactBlock(leftColumnX, currentY, columnWidth, {
     header: 'FROM',

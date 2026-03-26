@@ -144,6 +144,7 @@ export interface Distributor {
   isVatRegistered?: boolean;
   vatNumber?: string;
   vatCountry?: string;
+  eoriNumber?: string; // EORI number for international trade
   subscription?: SubscriptionInfo;
   companyName?: string; // Custom branding name
   logoUrl?: string; // Custom branding logo URL

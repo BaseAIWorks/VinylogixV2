@@ -81,6 +81,7 @@ const legalBusinessFormSchema = z.object({
   isVatRegistered: z.boolean().default(false),
   vatNumber: z.string().optional(),
   vatCountry: z.string().optional(),
+  eoriNumber: z.string().optional(),
 }).refine(data => {
   // If VAT registered, VAT number is required
   if (data.isVatRegistered && !data.vatNumber) {
@@ -280,6 +281,7 @@ export default function SettingsPage() {
           isVatRegistered: false,
           vatNumber: "",
           vatCountry: "",
+          eoriNumber: "",
       }
   });
 
@@ -389,6 +391,7 @@ export default function SettingsPage() {
             isVatRegistered: activeDistributor.isVatRegistered || false,
             vatNumber: activeDistributor.vatNumber || "",
             vatCountry: activeDistributor.vatCountry || "",
+            eoriNumber: activeDistributor.eoriNumber || "",
         });
     }
   }, [activeDistributor, legalBusinessForm]);
@@ -1134,6 +1137,15 @@ export default function SettingsPage() {
                             )} />
                           </div>
                         )}
+
+                        <FormField control={legalBusinessForm.control} name="eoriNumber" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm">EORI Number</FormLabel>
+                            <FormControl><Input placeholder="NL123456789" {...field} /></FormControl>
+                            <FormDescription className="text-xs">Economic Operators Registration and Identification number for international trade.</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
 
                         <SaveButton formName="legalBusiness" isSubmitting={legalBusinessForm.formState.isSubmitting}>
                           Save Business Information
