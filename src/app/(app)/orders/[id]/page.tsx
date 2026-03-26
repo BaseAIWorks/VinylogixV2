@@ -35,6 +35,7 @@ type PackingSlipItem = {
     title: string;
     artist: string;
     quantity: number;
+    weight?: number;
     shelf_locations?: string[];
     storage_locations?: string[];
 };
@@ -114,12 +115,18 @@ export default function OrderDetailPage() {
         try {
             const itemsWithLocations: PackingSlipItem[] = await Promise.all(
                 order.items.map(async (item) => {
-                    const record = await getRecordById(item.recordId);
+                    let record: VinylRecord | undefined;
+                    try {
+                        record = await getRecordById(item.recordId);
+                    } catch (err) {
+                        console.warn(`Could not fetch record ${item.recordId}:`, err);
+                    }
                     return {
                         recordId: item.recordId,
                         title: item.title,
                         artist: item.artist,
                         quantity: item.quantity,
+                        weight: record?.weight,
                         shelf_locations: record?.shelf_locations,
                         storage_locations: record?.storage_locations,
                     };
@@ -127,10 +134,40 @@ export default function OrderDetailPage() {
             );
             setPackingSlipItems(itemsWithLocations);
         } catch (error) {
+            console.error('Packing slip generation failed:', error);
             toast({ title: "Error", description: "Could not generate packing slip.", variant: "destructive" });
         } finally {
             setIsLoadingPackingSlip(false);
         }
+    };
+
+    const handlePrintPackingSlip = () => {
+        const printContent = document.getElementById('packing-slip-content');
+        if (!printContent) return;
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+        printWindow.document.write(`
+            <html><head><title>Packing Slip - ${order?.orderNumber || ''}</title>
+            <style>
+                body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; color: #111; }
+                h1 { font-size: 18px; margin-bottom: 4px; }
+                h2 { font-size: 14px; color: #666; margin-bottom: 16px; font-weight: normal; }
+                table { width: 100%; border-collapse: collapse; font-size: 13px; }
+                th { text-align: left; padding: 8px 6px; border-bottom: 2px solid #ddd; font-weight: 600; }
+                td { padding: 6px; border-bottom: 1px solid #eee; }
+                .weight { font-size: 12px; color: #666; margin-top: 12px; }
+                .footer { margin-top: 20px; font-size: 11px; color: #999; }
+                @media print { body { padding: 0; } }
+            </style></head><body>
+            <h1>Packing Slip — ${order?.orderNumber || ''}</h1>
+            <h2>${order?.customerName || ''} · ${format(new Date(order?.createdAt || ''), 'dd MMM yyyy')}</h2>
+            ${printContent.innerHTML}
+            ${order?.totalWeight ? `<p class="weight">Total weight: ${order.totalWeight}g</p>` : ''}
+            <p class="footer">Printed ${format(new Date(), 'dd MMM yyyy HH:mm')}</p>
+            </body></html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
     };
     
     const handleDownloadInvoice = async () => {
@@ -187,26 +224,56 @@ export default function OrderDetailPage() {
                             </DialogTrigger>
                             <DialogContent className="max-w-3xl">
                                 <DialogHeader>
-                                    <DialogTitle>Packing Slip for Order #{order.orderNumber}</DialogTitle>
-                                    <DialogDescription>Items and their locations for picking.</DialogDescription>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <DialogTitle>Packing Slip — #{order.orderNumber}</DialogTitle>
+                                            <DialogDescription>{order.customerName} · {format(new Date(order.createdAt), 'dd MMM yyyy')}</DialogDescription>
+                                        </div>
+                                        {!isLoadingPackingSlip && packingSlipItems.length > 0 && (
+                                            <Button size="sm" onClick={handlePrintPackingSlip}>
+                                                <Printer className="mr-2 h-4 w-4" /> Print
+                                            </Button>
+                                        )}
+                                    </div>
                                 </DialogHeader>
                                 {isLoadingPackingSlip ? (
                                     <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin"/></div>
                                 ) : (
-                                    <div className="max-h-[70vh] overflow-y-auto">
+                                    <div id="packing-slip-content" className="max-h-[70vh] overflow-y-auto">
                                         <Table>
-                                            <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qty</TableHead><TableHead>Shelf Locations</TableHead><TableHead>Storage Locations</TableHead></TableRow></TableHeader>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Item</TableHead>
+                                                    <TableHead className="text-center">Qty</TableHead>
+                                                    <TableHead>Shelf</TableHead>
+                                                    <TableHead>Storage</TableHead>
+                                                    <TableHead className="text-right">Weight</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
                                             <TableBody>
                                                 {packingSlipItems.map(item => (
                                                     <TableRow key={item.recordId}>
-                                                        <TableCell><p className="font-medium">{item.title}</p><p className="text-sm text-muted-foreground">{item.artist}</p></TableCell>
-                                                        <TableCell>{item.quantity}</TableCell>
+                                                        <TableCell>
+                                                            <p className="font-medium">{item.artist}</p>
+                                                            <p className="text-sm text-muted-foreground">{item.title}</p>
+                                                        </TableCell>
+                                                        <TableCell className="text-center">{item.quantity}</TableCell>
                                                         <TableCell>{item.shelf_locations?.join(', ') || '-'}</TableCell>
                                                         <TableCell>{item.storage_locations?.join(', ') || '-'}</TableCell>
+                                                        <TableCell className="text-right text-sm">
+                                                            {item.weight ? `${item.weight * item.quantity}g` : '-'}
+                                                        </TableCell>
                                                     </TableRow>
                                                 ))}
                                             </TableBody>
                                         </Table>
+                                        {order.totalWeight > 0 && (
+                                            <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t text-sm">
+                                                <Weight className="h-4 w-4 text-muted-foreground" />
+                                                <span className="text-muted-foreground">Total weight:</span>
+                                                <span className="font-semibold">{order.totalWeight}g</span>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </DialogContent>
