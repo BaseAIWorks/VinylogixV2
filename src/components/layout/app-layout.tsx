@@ -296,9 +296,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 <Image
                   src={displayBranding?.logoUrl || ''}
                   alt={`${companyName} Logo`}
-                  width={180}
-                  height={44}
-                  style={{ width: 'auto', height: 'auto', maxWidth: '180px', maxHeight: '44px' }}
+                  width={400}
+                  height={250}
+                  style={{ width: '100%', height: 'auto', maxHeight: '250px' }}
                   className="group-data-[collapsible=icon]:max-w-7 group-data-[collapsible=icon]:max-h-7 object-contain"
                   unoptimized={true}
                 />
