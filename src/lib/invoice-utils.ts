@@ -513,7 +513,7 @@ export async function generateInvoicePdf(
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(...COLORS.secondary);
-    doc.text(`Total weight: ${order.totalWeight}g`, pageWidth - margin, currentY, { align: 'right' });
+    doc.text(`Total weight: ${(order.totalWeight / 1000).toFixed(2)} kg`, pageWidth - margin, currentY, { align: 'right' });
   }
 
   currentY += 8;

@@ -164,7 +164,7 @@ export default function OrderDetailPage() {
             <h1>Packing Slip — ${order?.orderNumber || ''}</h1>
             <h2>${order?.customerName || ''} · ${format(new Date(order?.createdAt || ''), 'dd MMM yyyy')}</h2>
             ${printContent.innerHTML}
-            ${order?.totalWeight ? `<p class="weight">Total weight: ${order.totalWeight}g</p>` : ''}
+            ${order?.totalWeight ? `<p class="weight">Total weight: ${(order.totalWeight / 1000).toFixed(2)} kg</p>` : ''}
             <p class="footer">Printed ${format(new Date(), 'dd MMM yyyy HH:mm')}</p>
             </body></html>
         `);
@@ -315,7 +315,7 @@ export default function OrderDetailPage() {
                                                         <TableCell>{item.shelf_locations?.join(', ') || '-'}</TableCell>
                                                         <TableCell>{item.storage_locations?.join(', ') || '-'}</TableCell>
                                                         <TableCell className="text-right text-sm">
-                                                            {item.weight ? `${item.weight * item.quantity}g` : '-'}
+                                                            {item.weight ? `${((item.weight * item.quantity) / 1000).toFixed(2)} kg` : '-'}
                                                         </TableCell>
                                                     </TableRow>
                                                 ))}
@@ -325,7 +325,7 @@ export default function OrderDetailPage() {
                                             <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t text-sm">
                                                 <Weight className="h-4 w-4 text-muted-foreground" />
                                                 <span className="text-muted-foreground">Total weight:</span>
-                                                <span className="font-semibold">{order.totalWeight}g</span>
+                                                <span className="font-semibold">{(order.totalWeight / 1000).toFixed(2)} kg</span>
                                             </div>
                                         )}
                                     </div>
