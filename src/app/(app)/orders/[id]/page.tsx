@@ -11,7 +11,8 @@ import { getRecordById } from "@/services/record-service";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, ArrowLeft, Package, User, Receipt, Music, CheckCircle, XCircle, Clock, Weight, Printer, Truck, PackageCheck, Hourglass, DollarSign, FileDown } from "lucide-react";
+import { Loader2, ArrowLeft, Package, User, Receipt, Music, CheckCircle, XCircle, Clock, Weight, Printer, Truck, PackageCheck, Hourglass, DollarSign, FileDown, ThumbsUp, ThumbsDown, Send } from "lucide-react";
+import { auth } from "@/lib/firebase";
 import { format } from "date-fns";
 import Image from "next/image";
 import { formatPriceForDisplay, checkBusinessProfileComplete } from "@/lib/utils";
@@ -21,6 +22,7 @@ import { generateInvoicePdf } from "@/lib/invoice-utils";
 
 
 const statusConfig: Record<OrderStatus, { icon: React.ElementType, color: string, label: string }> = {
+    awaiting_approval: { icon: Clock, color: 'bg-amber-500/20 text-amber-500 border-amber-500/30', label: 'Awaiting Approval' },
     pending: { icon: Clock, color: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30', label: 'Pending' },
     awaiting_payment: { icon: Receipt, color: 'bg-blue-500/20 text-blue-500 border-blue-500/30', label: 'Awaiting Payment' },
     paid: { icon: CheckCircle, color: 'bg-green-500/20 text-green-500 border-green-500/30', label: 'Paid' },
@@ -170,6 +172,53 @@ export default function OrderDetailPage() {
         printWindow.print();
     };
     
+    const [isApproving, setIsApproving] = useState(false);
+
+    const handleApproveOrder = async () => {
+        if (!order || !user) return;
+        setIsApproving(true);
+        try {
+            // Update status to awaiting_payment
+            const updatedOrder = await updateOrderStatus(order.id, 'awaiting_payment', user);
+            if (updatedOrder) setOrder(updatedOrder);
+
+            // Generate payment link
+            const token = await auth.currentUser?.getIdToken();
+            const res = await fetch('/api/stripe/payment-link', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ orderId: order.id }),
+            });
+            const data = await res.json();
+
+            if (res.ok && data.paymentLink) {
+                toast({ title: "Order Approved", description: "Payment link generated and email sent to the client." });
+                fetchOrder(); // Refresh to show updated data
+            } else {
+                toast({ title: "Approved", description: "Order approved. Payment link could not be generated — client can pay manually." });
+            }
+        } catch (error) {
+            console.error('Failed to approve order:', error);
+            toast({ title: "Error", description: "Could not approve order.", variant: "destructive" });
+        } finally {
+            setIsApproving(false);
+        }
+    };
+
+    const handleRejectOrder = async () => {
+        if (!order || !user) return;
+        try {
+            const updatedOrder = await updateOrderStatus(order.id, 'cancelled', user);
+            if (updatedOrder) setOrder(updatedOrder);
+            toast({ title: "Order Rejected", description: "The order has been cancelled." });
+        } catch (error) {
+            toast({ title: "Error", description: "Could not reject order.", variant: "destructive" });
+        }
+    };
+
     const handleDownloadInvoice = async () => {
         if (!order || !activeDistributor) {
             toast({ title: "Error", description: "Unable to generate invoice. Distributor information not available.", variant: "destructive" });
@@ -278,6 +327,17 @@ export default function OrderDetailPage() {
                                 )}
                             </DialogContent>
                         </Dialog>
+                        {order.status === 'awaiting_approval' && (
+                            <>
+                                <Button onClick={handleApproveOrder} disabled={isApproving || isUpdating} className="bg-green-600 hover:bg-green-700">
+                                    {isApproving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsUp className="mr-2 h-4 w-4" />}
+                                    Approve & Send Payment Link
+                                </Button>
+                                <Button variant="destructive" onClick={handleRejectOrder} disabled={isApproving || isUpdating}>
+                                    <ThumbsDown className="mr-2 h-4 w-4" /> Reject Order
+                                </Button>
+                            </>
+                        )}
                         {(order.status === 'pending' || order.status === 'awaiting_payment') && <Button onClick={() => handleStatusUpdate('paid')} disabled={isUpdating}><DollarSign className="mr-2 h-4 w-4"/> Mark as Paid</Button>}
                         {order.status === 'paid' && <Button onClick={() => handleStatusUpdate('processing')} disabled={isUpdating}><PackageCheck className="mr-2 h-4 w-4"/> Start Processing</Button>}
                         {order.status === 'processing' && <Button onClick={() => handleStatusUpdate('shipped')} disabled={isUpdating}><Truck className="mr-2 h-4 w-4"/> Mark as Shipped</Button>}

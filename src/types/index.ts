@@ -159,6 +159,7 @@ export interface Distributor {
   isSubscriptionExempt?: boolean;
   orderCounter?: number;
   orderIdPrefix?: string;
+  allowOrderRequests?: boolean;
   stripeAccountId?: string; // For Stripe Connect
   stripeAccountStatus?: 'pending' | 'verified' | 'in_review' | 'restricted' | 'details_needed';
   stripeCustomerId?: string; // For Stripe Billing
@@ -460,9 +461,9 @@ export interface FirestoreUser {
 // Sales/Orders
 // ===================================
 
-export type OrderStatus = 'pending' | 'awaiting_payment' | 'paid' | 'processing' | 'shipped' | 'cancelled' | 'on_hold';
+export type OrderStatus = 'awaiting_approval' | 'pending' | 'awaiting_payment' | 'paid' | 'processing' | 'shipped' | 'cancelled' | 'on_hold';
 
-export const OrderStatuses: OrderStatus[] = ['pending', 'awaiting_payment', 'paid', 'processing', 'shipped', 'cancelled', 'on_hold'];
+export const OrderStatuses: OrderStatus[] = ['awaiting_approval', 'pending', 'awaiting_payment', 'paid', 'processing', 'shipped', 'cancelled', 'on_hold'];
 
 
 export interface OrderItem {
@@ -496,7 +497,7 @@ export interface Order {
   orderNumber?: string;
 
   // Payment Fields
-  paymentMethod?: 'stripe' | 'paypal';
+  paymentMethod?: 'stripe' | 'paypal' | 'pending';
   paymentStatus?: 'unpaid' | 'paid' | 'refunded' | 'failed';
   paidAt?: string; // ISO String
   platformFeeAmount?: number; // 4% platform fee in cents
@@ -508,6 +509,13 @@ export interface Order {
   // PayPal Payment Fields
   paypalOrderId?: string;
   paypalCaptureId?: string;
+
+  // Order Request Fields
+  paymentLink?: string;
+  paymentLinkExpiresAt?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  rejectionReason?: string;
 
   // Shipping Tracking Fields
   carrier?: 'postnl' | 'dhl' | 'ups' | 'fedex' | 'dpd' | 'gls' | 'other';

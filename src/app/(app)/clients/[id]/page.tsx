@@ -51,6 +51,7 @@ const DetailItem = ({ label, value, icon: Icon }: { label: string, value?: strin
 };
 
 const statusColors: Record<OrderStatus, string> = {
+    awaiting_approval: 'bg-amber-500/20 text-amber-500 border-amber-500/30',
     pending: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
     awaiting_payment: 'bg-blue-500/20 text-blue-500 border-blue-500/30',
     paid: 'bg-green-500/20 text-green-500 border-green-500/30',

@@ -56,7 +56,7 @@ const AddressCard = ({ title, icon: Icon, user, type }: { title: string, icon: R
     </Card>
 );
 
-type PaymentMethod = 'stripe' | 'paypal';
+type PaymentMethod = 'stripe' | 'paypal' | 'request';
 
 export default function CheckoutPage() {
     const { user, cart, cartTotal, clearCart } = useAuth();
@@ -116,7 +116,8 @@ export default function CheckoutPage() {
     // Check available payment methods
     const stripeAvailable = distributor?.stripeAccountId && distributor.stripeAccountStatus === 'verified';
     const paypalAvailable = distributor?.paypalMerchantId && distributor.paypalAccountStatus === 'verified';
-    const anyPaymentMethodAvailable = stripeAvailable || paypalAvailable;
+    const requestOrderAvailable = distributor?.allowOrderRequests === true;
+    const anyPaymentMethodAvailable = stripeAvailable || paypalAvailable || requestOrderAvailable;
 
     const handlePlaceOrder = async () => {
         if (!isAddressSet) {
@@ -149,7 +150,9 @@ export default function CheckoutPage() {
 
         setIsPlacingOrder(true);
         try {
-            if (paymentMethod === 'stripe') {
+            if (paymentMethod === 'request') {
+                await handleRequestOrder();
+            } else if (paymentMethod === 'stripe') {
                 await handleStripeCheckout();
             } else {
                 await handlePayPalCheckout();
@@ -236,6 +239,14 @@ export default function CheckoutPage() {
         }
     };
 
+    const handleRequestOrder = async () => {
+        if (!user || !distributorId) throw new Error('Missing user or distributor');
+        const { createOrderRequest } = await import('@/services/order-service');
+        const order = await createOrderRequest(user, cart, distributorId);
+        clearCart();
+        router.push(`/my-orders/${order.id}?requested=true`);
+    };
+
     return (
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="flex items-center gap-4">
@@ -294,6 +305,22 @@ export default function CheckoutPage() {
                                                 </div>
                                             </div>
                                             {paymentMethod === 'paypal' && <Check className="h-5 w-5 text-primary" />}
+                                        </div>
+                                    )}
+                                    {requestOrderAvailable && (
+                                        <div className={`flex items-center space-x-3 p-4 border rounded-lg cursor-pointer transition-colors ${paymentMethod === 'request' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
+                                             onClick={() => setPaymentMethod('request')}>
+                                            <RadioGroupItem value="request" id="request" />
+                                            <div className="flex items-center gap-3 flex-1">
+                                                <div className="h-10 w-10 bg-amber-500 rounded flex items-center justify-center flex-shrink-0">
+                                                    <span className="text-white font-bold">R</span>
+                                                </div>
+                                                <div>
+                                                    <Label htmlFor="request" className="font-medium cursor-pointer">Request Order</Label>
+                                                    <p className="text-sm text-muted-foreground">Place order for approval, pay later</p>
+                                                </div>
+                                            </div>
+                                            {paymentMethod === 'request' && <Check className="h-5 w-5 text-primary" />}
                                         </div>
                                     )}
                                 </RadioGroup>

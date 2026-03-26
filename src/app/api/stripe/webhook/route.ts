@@ -194,18 +194,30 @@ export async function POST(req: NextRequest) {
           );
 
           try {
-            const order = await createOrderFromCheckout(session);
-
-            console.log(
-              `Created order ${order.id} for distributor ${session.metadata.distributorId}, ` +
-                `total: ${session.amount_total}, platform fee: ${session.metadata.platformFeeAmount}`
-            );
+            // Check if this is a payment for an existing order (Request Order flow)
+            if (session.metadata?.isOrderPayment === 'true' && session.metadata?.orderId) {
+              const { updateOrderPaymentStatus } = await import('@/services/server-order-service');
+              await updateOrderPaymentStatus(
+                session.metadata.orderId,
+                'paid',
+                session.payment_intent as string
+              );
+              console.log(
+                `Updated existing order ${session.metadata.orderId} to paid`
+              );
+            } else {
+              // New order from direct checkout
+              const order = await createOrderFromCheckout(session);
+              console.log(
+                `Created order ${order.id} for distributor ${session.metadata.distributorId}, ` +
+                  `total: ${session.amount_total}, platform fee: ${session.metadata.platformFeeAmount}`
+              );
+            }
           } catch (error) {
             console.error(
-              `Error creating order from checkout session ${session.id}:`,
+              `Error processing checkout session ${session.id}:`,
               error
             );
-            // Don't return error - log and continue to avoid blocking webhook
           }
         }
         break;

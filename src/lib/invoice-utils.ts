@@ -5,6 +5,7 @@ import { formatPriceForDisplay } from "./utils";
 import type { Order, OrderStatus, Distributor } from "@/types";
 
 const statusConfig: Record<OrderStatus, { label: string }> = {
+  awaiting_approval: { label: 'Awaiting Approval' },
   pending: { label: 'Pending' },
   awaiting_payment: { label: 'Awaiting Payment' },
   paid: { label: 'Paid' },

@@ -1577,6 +1577,34 @@ export default function SettingsPage() {
                 </Card>
               )}
 
+              {/* Order Settings - Master only */}
+              {isMaster && (
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                      <Receipt className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Order Settings</CardTitle>
+                    </div>
+                    <CardDescription className="text-sm">Configure how clients can place orders.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-row items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <Label className="text-sm">Allow Order Requests</Label>
+                        <p className="text-xs text-muted-foreground">Clients can request orders without immediate payment. You approve or reject before they pay.</p>
+                      </div>
+                      <Switch
+                        checked={activeDistributor?.allowOrderRequests || false}
+                        onCheckedChange={async (checked) => {
+                          await updateMyDistributorSettings({ allowOrderRequests: checked });
+                          showSaveSuccess('orderSettings');
+                        }}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Shipping Settings - Master only */}
               {isMaster && (
                 <Card>

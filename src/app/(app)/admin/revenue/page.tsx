@@ -18,7 +18,8 @@ import { format } from "date-fns";
 import { formatPriceForDisplay } from "@/lib/utils";
 
 const statusColors: Record<OrderStatus, string> = {
-  pending: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
+  awaiting_approval: 'bg-amber-500/20 text-amber-500 border-amber-500/30',
+    pending: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
   awaiting_payment: 'bg-blue-500/20 text-blue-500 border-blue-500/30',
   paid: 'bg-green-500/20 text-green-500 border-green-500/30',
   processing: 'bg-purple-500/20 text-purple-500 border-purple-500/30',

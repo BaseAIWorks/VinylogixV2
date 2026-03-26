@@ -20,6 +20,7 @@ import type { Order, OrderStatus, Distributor } from "@/types";
 import ProtectedRoute from "@/components/layout/protected-route";
 
 const statusConfig: Record<OrderStatus, { icon: React.ElementType, color: string, label: string }> = {
+  awaiting_approval: { icon: Clock, color: 'bg-amber-500/20 text-amber-500 border-amber-500/30', label: 'Awaiting Approval' },
   pending: { icon: Clock, color: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30', label: 'Pending' },
   awaiting_payment: { icon: Clock, color: 'bg-blue-500/20 text-blue-500 border-blue-500/30', label: 'Awaiting Payment' },
   paid: { icon: CheckCircle, color: 'bg-green-500/20 text-green-500 border-green-500/30', label: 'Paid' },
@@ -240,6 +241,18 @@ export default function ClientOrderDetailPage() {
                 <p className="text-xs text-muted-foreground mt-2">
                   Last updated: {format(new Date(order.updatedAt), 'Pp')}
                 </p>
+                {order.status === 'awaiting_approval' && (
+                  <p className="text-sm text-amber-600 mt-3">Your order is being reviewed by the seller. You will receive an email once it is approved.</p>
+                )}
+                {order.status === 'awaiting_payment' && order.paymentLink && (
+                  <div className="mt-3">
+                    <Button asChild className="w-full">
+                      <a href={order.paymentLink} target="_blank" rel="noopener noreferrer">
+                        Pay Now
+                      </a>
+                    </Button>
+                  </div>
+                )}
                 {order.shippedAt && (
                   <p className="text-xs text-muted-foreground mt-1">
                     Shipped: {format(new Date(order.shippedAt), 'Pp')}

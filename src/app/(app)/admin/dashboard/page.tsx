@@ -213,7 +213,8 @@ export default function AdminDashboardPage() {
     const statusColors: Record<Distributor['status'], string> = {
         active: 'bg-green-500/20 text-green-500 border-green-500/30',
         inactive: 'bg-gray-500/20 text-gray-500 border-gray-500/30',
-        pending: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
+        awaiting_approval: 'bg-amber-500/20 text-amber-500 border-amber-500/30',
+    pending: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
     };
     
 
