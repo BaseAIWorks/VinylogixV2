@@ -1,5 +1,6 @@
 
 "use client";
+import React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,7 @@ type EditableRecordField = 'stock_shelves' | 'shelf_locations' | 'stock_storage'
 const RECORDS_PER_PAGE = 50;
 
 // LocationSelector Component specifically for this page
-const LocationSelector = ({
+const LocationSelector = React.memo(({
     recordId,
     locationType,
     selectedLocations,
@@ -113,7 +114,8 @@ const LocationSelector = ({
             </Popover>
         </div>
     );
-};
+});
+LocationSelector.displayName = 'LocationSelector';
 
 
 export default function BatchEditPage() {
@@ -240,58 +242,51 @@ export default function BatchEditPage() {
     }, [initialRecords, toast]);
 
 
-    const handleInputChange = (recordId: string, field: 'stock_shelves' | 'stock_storage', value: string | number) => {
+    const handleInputChange = useCallback((recordId: string, field: 'stock_shelves' | 'stock_storage', value: string | number) => {
         setEditedRecords(prevRecords =>
-            prevRecords.map(record => {
-                if (record.id === recordId) {
-                    return { ...record, [field]: value };
-                }
-                return record;
-            })
+            prevRecords.map(record =>
+                record.id === recordId ? { ...record, [field]: value } : record
+            )
         );
-    };
+    }, []);
 
-    const handleLocationChange = (recordId: string, field: 'shelf_locations' | 'storage_locations', newLocations: string[]) => {
+    const handleLocationChange = useCallback((recordId: string, field: 'shelf_locations' | 'storage_locations', newLocations: string[]) => {
         setEditedRecords(prevRecords =>
-            prevRecords.map(record => {
-                if (record.id === recordId) {
-                    return { ...record, [field]: newLocations };
-                }
-                return record;
-            })
+            prevRecords.map(record =>
+                record.id === recordId ? { ...record, [field]: newLocations } : record
+            )
         );
-    };
+    }, []);
 
-    const getModifiedRecords = () => {
+    const modifiedRecordsList = useMemo(() => {
         return editedRecords.filter(record => {
             const initialRecord = initialRecords.find(r => r.id === record.id);
             if (!initialRecord) return false;
-            
+
             const editableFields: EditableRecordField[] = ['stock_shelves', 'shelf_locations', 'stock_storage', 'storage_locations'];
             return editableFields.some(field => {
                 const currentValue = record[field as keyof VinylRecord];
                 const initialValue = initialRecord[field as keyof VinylRecord];
 
-                // Handle array comparison for locations
                 if (Array.isArray(currentValue) || Array.isArray(initialValue)) {
-                    const currentArr = Array.isArray(currentValue) ? currentValue.sort() : [];
-                    const initialArr = Array.isArray(initialValue) ? initialValue.sort() : [];
+                    const currentArr = Array.isArray(currentValue) ? [...currentValue].sort() : [];
+                    const initialArr = Array.isArray(initialValue) ? [...initialValue].sort() : [];
                     return JSON.stringify(currentArr) !== JSON.stringify(initialArr);
                 }
-                
-                // Handle numeric/string comparison for stock
+
                 return String(currentValue || 0) !== String(initialValue || 0);
             });
         }).map(record => {
             const { id, stock_shelves, shelf_locations, stock_storage, storage_locations } = record;
             return { id, stock_shelves, shelf_locations, stock_storage, storage_locations };
         });
-    };
+    }, [editedRecords, initialRecords]);
 
+    const modifiedCount = modifiedRecordsList.length;
 
     const handleSaveChanges = async () => {
         if (!user) return;
-        const modifiedRecords = getModifiedRecords();
+        const modifiedRecords = modifiedRecordsList;
 
         if (modifiedRecords.length === 0) {
             toast({ title: "No Changes", description: "There are no changes to save." });
@@ -313,7 +308,16 @@ export default function BatchEditPage() {
             setIsSaving(false);
         }
     };
-    
+
+    // Calculate stock summary (must be before early returns — hooks rule)
+    const stockSummary = useMemo(() => {
+        return editedRecords.reduce((acc, r) => {
+            acc.totalShelf += r.stock_shelves || 0;
+            acc.totalStorage += r.stock_storage || 0;
+            return acc;
+        }, { totalShelf: 0, totalStorage: 0 });
+    }, [editedRecords]);
+
     if (authLoading || isLoading) {
         return <div className="flex items-center justify-center min-h-[calc(100vh-200px)]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
     }
@@ -327,17 +331,6 @@ export default function BatchEditPage() {
             </div>
         );
     }
-    
-    const modifiedCount = getModifiedRecords().length;
-
-    // Calculate stock summary
-    const stockSummary = useMemo(() => {
-        return editedRecords.reduce((acc, r) => {
-            acc.totalShelf += r.stock_shelves || 0;
-            acc.totalStorage += r.stock_storage || 0;
-            return acc;
-        }, { totalShelf: 0, totalStorage: 0 });
-    }, [editedRecords]);
 
     return (
             <div className="space-y-6">
