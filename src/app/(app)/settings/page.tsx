@@ -1644,7 +1644,14 @@ export default function SettingsPage() {
                       <Select
                         value={activeDistributor?.taxMode || 'none'}
                         onValueChange={async (value) => {
-                          await updateMyDistributorSettings({ taxMode: value as any });
+                          const updates: any = { taxMode: value };
+                          // Set defaults when switching to manual
+                          if (value === 'manual' && !activeDistributor?.manualTaxRate) {
+                            updates.manualTaxRate = 21;
+                            updates.manualTaxLabel = 'VAT';
+                            updates.taxBehavior = 'inclusive';
+                          }
+                          await updateMyDistributorSettings(updates);
                           showSaveSuccess('taxSettings');
                         }}
                       >

@@ -50,14 +50,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Stripe account not configured.' }, { status: 400 });
     }
 
-    // Calculate platform fee (4%)
-    const totalAmountCents = Math.round((order.totalAmount || 0) * 100);
-    const platformFeeAmount = Math.round(totalAmountCents * 0.04);
+    // Tax configuration from distributor
+    const taxMode = distributor.taxMode || 'none';
+    const taxBehavior = distributor.taxBehavior || 'inclusive';
+
+    // Calculate platform fee on item subtotal (consistent with checkout route)
+    const itemSubtotal = (order.items || []).reduce((sum: number, item: any) =>
+      sum + (item.priceAtTimeOfOrder || 0) * (item.quantity || 1), 0);
+    const platformFeeAmount = Math.round(itemSubtotal * 100 * 0.04);
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
-
-    // Create Stripe Checkout Session for this order
-    // Session expires in 24 hours
     const expiresAt = Math.floor(Date.now() / 1000) + 86400;
 
     const session = await stripe.checkout.sessions.create({
@@ -68,11 +70,22 @@ export async function POST(req: NextRequest) {
           currency: 'eur',
           product_data: {
             name: `${item.artist} – ${item.title}`,
+            ...(taxMode === 'stripe_tax' && {
+              tax_code: distributor.defaultTaxCode || 'txcd_99999999',
+            }),
           },
           unit_amount: Math.round((item.priceAtTimeOfOrder || 0) * 100),
+          ...(taxMode !== 'none' && { tax_behavior: taxBehavior }),
         },
         quantity: item.quantity || 1,
       })),
+      ...(taxMode === 'stripe_tax' && distributor.stripeAccountId && {
+        automatic_tax: {
+          enabled: true,
+          liability: { type: 'account' as const, account: distributor.stripeAccountId },
+        },
+        tax_id_collection: { enabled: true },
+      }),
       payment_intent_data: {
         application_fee_amount: platformFeeAmount,
         transfer_data: {

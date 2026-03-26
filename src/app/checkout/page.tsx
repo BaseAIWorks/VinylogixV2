@@ -267,6 +267,7 @@ export default function CheckoutPage() {
             customerVatNumber: user.vatNumber,
             customerEoriNumber: user.eoriNumber,
             customerChamberOfCommerce: user.chamberOfCommerce,
+            customerCountry: user.country,
         });
         clearCart();
         router.push(`/my-orders/${order.id}?requested=true`);

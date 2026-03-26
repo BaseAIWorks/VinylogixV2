@@ -9,7 +9,7 @@ export interface TaxResult {
 export const TAX_LABELS = [
   { value: 'BTW', description: 'Nederland, België' },
   { value: 'IVA', description: 'Spanje, Italië, Portugal' },
-  { value: 'MwSt', description: 'Duitsland, Oostenrijk, Zwitserland' },
+  { value: 'MwSt', description: 'Duitsland, Oostenrijk' },
   { value: 'TVA', description: 'Frankrijk, België (FR), Luxemburg' },
   { value: 'VAT', description: 'Ierland, VK, internationaal' },
 ] as const;

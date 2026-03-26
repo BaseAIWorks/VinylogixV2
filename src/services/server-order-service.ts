@@ -168,7 +168,26 @@ export async function createOrderFromCheckout(session: Stripe.Checkout.Session):
     if (session.total_details?.amount_tax && session.total_details.amount_tax > 0) {
       newOrderData.taxAmount = session.total_details.amount_tax / 100;
       newOrderData.subtotalAmount = (session.amount_subtotal || 0) / 100;
-      newOrderData.taxInclusive = true;
+      newOrderData.taxInclusive = (distributor.taxBehavior || 'inclusive') === 'inclusive';
+      newOrderData.taxLabel = distributor.manualTaxLabel || 'VAT';
+
+      // Retrieve tax breakdown from Stripe for rate details
+      try {
+        const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
+          expand: ['total_details.breakdown'],
+        });
+        if (fullSession.total_details?.breakdown?.taxes?.length) {
+          newOrderData.taxBreakdown = fullSession.total_details.breakdown.taxes.map((t: any) => ({
+            rate: t.rate?.percentage || 0,
+            amount: (t.amount || 0) / 100,
+            jurisdiction: t.rate?.jurisdiction || t.rate?.country || '',
+          }));
+          // Set taxRate from first (or only) tax rate
+          newOrderData.taxRate = newOrderData.taxBreakdown[0].rate;
+        }
+      } catch (breakdownErr) {
+        console.warn('Could not retrieve Stripe tax breakdown:', breakdownErr);
+      }
     } else if (distributor.taxMode === 'manual' && distributor.manualTaxRate) {
       // Manual tax: calculate from total
       const { calculateTax, isReverseChargeApplicable } = await import('@/lib/tax-utils');
@@ -182,10 +201,8 @@ export async function createOrderFromCheckout(session: Stripe.Checkout.Session):
       newOrderData.taxInclusive = (distributor.taxBehavior || 'inclusive') === 'inclusive';
       newOrderData.taxLabel = distributor.manualTaxLabel || 'VAT';
       newOrderData.isReverseCharge = taxResult.isReverseCharge;
-      if (reverseCharge) {
-        // Adjust total for reverse charge with inclusive pricing
-        newOrderData.totalAmount = taxResult.total;
-      }
+      // Note: for Stripe checkout flow, do NOT adjust totalAmount here.
+      // Stripe has already charged the customer. Tax data is for invoice display only.
     }
   } catch (taxError) {
     console.warn('Could not calculate tax for order:', taxError);
@@ -462,6 +479,7 @@ export async function createOrderRequestServer(params: {
   customerVatNumber?: string;
   customerEoriNumber?: string;
   customerChamberOfCommerce?: string;
+  customerCountry?: string;
 }): Promise<Order> {
   const adminDb = getAdminDb();
   if (!adminDb) throw new Error("Admin DB not initialized.");
@@ -523,9 +541,8 @@ export async function createOrderRequestServer(params: {
   if (distData?.taxMode === 'manual' && distData.manualTaxRate) {
     try {
       const { calculateTax, isReverseChargeApplicable } = await import('@/lib/tax-utils');
-      const customerCountry = params.shippingAddress.split('\n').pop()?.trim();
       const reverseCharge = isReverseChargeApplicable(
-        params.customerVatNumber, customerCountry, distData.country
+        params.customerVatNumber, params.customerCountry, distData.country
       );
       const taxResult = calculateTax(totalAmount, distData.manualTaxRate, distData.taxBehavior || 'inclusive', reverseCharge);
       newOrderData.subtotalAmount = taxResult.subtotal;
