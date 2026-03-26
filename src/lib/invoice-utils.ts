@@ -505,6 +505,15 @@ export async function generateInvoicePdf(
   doc.setTextColor(...COLORS.accent);
   doc.text(`\u20AC ${formatPriceForDisplay(order.totalAmount)}`, pageWidth - margin, currentY, { align: 'right' });
 
+  // Total weight (if available)
+  if (order.totalWeight && order.totalWeight > 0) {
+    currentY += 5;
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...COLORS.secondary);
+    doc.text(`Total weight: ${order.totalWeight}g`, pageWidth - margin, currentY, { align: 'right' });
+  }
+
   currentY += 8;
 
   // ============================================
