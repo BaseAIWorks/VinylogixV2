@@ -877,7 +877,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const fetchOperatorOrders = async () => {
         try {
           const orders = await getOrders(user);
-          const pendingCount = orders.filter((o) => o.status === 'pending').length;
+          const pendingCount = orders.filter((o) => o.status === 'pending' || o.status === 'awaiting_approval' || o.status === 'awaiting_payment').length;
           setOperatorPendingOrdersCount(pendingCount);
         } catch (error) {
           setOperatorPendingOrdersCount(0);

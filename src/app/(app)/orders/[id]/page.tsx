@@ -6,12 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import type { Order, OrderStatus, VinylRecord } from "@/types";
-import { getOrderById, updateOrderStatus } from "@/services/order-service";
+import { getOrderById, updateOrderStatus, getOrdersByViewerId } from "@/services/order-service";
 import { getRecordById } from "@/services/record-service";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, ArrowLeft, Package, User, Receipt, Music, CheckCircle, XCircle, Clock, Weight, Printer, Truck, PackageCheck, Hourglass, DollarSign, FileDown, ThumbsUp, ThumbsDown, Send } from "lucide-react";
+import { Loader2, ArrowLeft, Package, User, Receipt, Music, CheckCircle, XCircle, Clock, Weight, Printer, Truck, PackageCheck, Hourglass, DollarSign, FileDown, ThumbsUp, ThumbsDown, Send, Building2, Mail, Phone, MapPin, ShoppingCart, AlertCircle } from "lucide-react";
+import Link from "next/link";
 import { auth } from "@/lib/firebase";
 import { format } from "date-fns";
 import Image from "next/image";
@@ -54,6 +55,7 @@ export default function OrderDetailPage() {
     const [isUpdating, setIsUpdating] = useState(false);
     const [packingSlipItems, setPackingSlipItems] = useState<PackingSlipItem[]>([]);
     const [isLoadingPackingSlip, setIsLoadingPackingSlip] = useState(false);
+    const [customerStats, setCustomerStats] = useState<{ totalOrders: number; totalSpent: number; openPayments: number } | null>(null);
 
     const fetchOrder = useCallback(async () => {
         if (!orderId || !user) {
@@ -80,6 +82,18 @@ export default function OrderDetailPage() {
     useEffect(() => {
         fetchOrder();
     }, [fetchOrder]);
+
+    // Fetch customer order stats
+    useEffect(() => {
+        if (!order?.viewerId) return;
+        getOrdersByViewerId(order.viewerId).then(orders => {
+            const paidStatuses = ['paid', 'processing', 'shipped'];
+            const paidOrders = orders.filter(o => paidStatuses.includes(o.status));
+            const totalSpent = paidOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+            const openPayments = orders.filter(o => o.status === 'awaiting_payment' || o.status === 'awaiting_approval').length;
+            setCustomerStats({ totalOrders: orders.length, totalSpent, openPayments });
+        }).catch(() => setCustomerStats(null));
+    }, [order?.viewerId]);
 
     const businessProfileStatus = checkBusinessProfileComplete(activeDistributor);
 
@@ -424,16 +438,95 @@ export default function OrderDetailPage() {
                          </CardContent>
                     </Card>
                      <Card>
-                         <CardHeader>
-                            <CardTitle className="flex items-center gap-3"><User className="h-6 w-6 text-primary" />Customer Details</CardTitle>
+                         <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center justify-between">
+                                <span className="flex items-center gap-3"><User className="h-6 w-6 text-primary" />Customer</span>
+                                <Link href={`/clients/${order.viewerId}`}>
+                                    <Badge variant="outline" className="cursor-pointer hover:bg-primary/10 text-xs">View Profile</Badge>
+                                </Link>
+                            </CardTitle>
                          </CardHeader>
-                         <CardContent className="space-y-2 text-sm">
-                            <p className="font-medium">{order.customerName}</p>
-                            <p className="text-muted-foreground">{order.viewerEmail}</p>
-                            <p className="text-muted-foreground">{order.phoneNumber}</p>
-                            <Separator className="my-3"/>
-                            <p className="font-medium">Shipping Address</p>
-                            <p className="text-muted-foreground whitespace-pre-wrap">{order.shippingAddress}</p>
+                         <CardContent className="space-y-3 text-sm">
+                            {/* Name & Company */}
+                            {order.customerCompanyName && (
+                                <div className="flex items-start gap-2">
+                                    <Building2 className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                                    <div>
+                                        <p className="font-medium">{order.customerCompanyName}</p>
+                                        <p className="text-muted-foreground">{order.customerName}</p>
+                                    </div>
+                                </div>
+                            )}
+                            {!order.customerCompanyName && (
+                                <div className="flex items-start gap-2">
+                                    <User className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                                    <p className="font-medium">{order.customerName}</p>
+                                </div>
+                            )}
+
+                            {/* Contact */}
+                            <div className="flex items-center gap-2">
+                                <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <p className="text-muted-foreground">{order.viewerEmail}</p>
+                            </div>
+                            {order.phoneNumber && (
+                                <div className="flex items-center gap-2">
+                                    <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    <p className="text-muted-foreground">{order.phoneNumber}</p>
+                                </div>
+                            )}
+
+                            {/* Business details */}
+                            {(order.customerVatNumber || order.customerChamberOfCommerce || order.customerEoriNumber) && (
+                                <>
+                                    <Separator />
+                                    <div className="space-y-1 text-xs text-muted-foreground">
+                                        {order.customerChamberOfCommerce && <p>CRN: {order.customerChamberOfCommerce}</p>}
+                                        {order.customerVatNumber && <p>VAT: {order.customerVatNumber}</p>}
+                                        {order.customerEoriNumber && <p>EORI: {order.customerEoriNumber}</p>}
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Addresses */}
+                            <Separator />
+                            <div className="flex items-start gap-2">
+                                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                                <div>
+                                    <p className="font-medium text-xs text-muted-foreground mb-1">Shipping Address</p>
+                                    <p className="text-muted-foreground whitespace-pre-wrap">{order.shippingAddress}</p>
+                                </div>
+                            </div>
+                            {order.billingAddress && order.billingAddress !== order.shippingAddress && (
+                                <div className="flex items-start gap-2">
+                                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                                    <div>
+                                        <p className="font-medium text-xs text-muted-foreground mb-1">Billing Address</p>
+                                        <p className="text-muted-foreground whitespace-pre-wrap">{order.billingAddress}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Customer Stats */}
+                            {customerStats && (
+                                <>
+                                    <Separator />
+                                    <div className="grid grid-cols-3 gap-2 text-center">
+                                        <div className="p-2 rounded-lg bg-muted/50">
+                                            <p className="text-lg font-bold text-foreground">{customerStats.totalOrders}</p>
+                                            <p className="text-[10px] text-muted-foreground">Orders</p>
+                                        </div>
+                                        <div className="p-2 rounded-lg bg-muted/50">
+                                            <p className="text-lg font-bold text-foreground">€{formatPriceForDisplay(customerStats.totalSpent)}</p>
+                                            <p className="text-[10px] text-muted-foreground">Spent</p>
+                                        </div>
+                                        <div className="p-2 rounded-lg bg-muted/50">
+                                            <p className={`text-lg font-bold ${customerStats.openPayments > 0 ? 'text-amber-500' : 'text-green-500'}`}>{customerStats.openPayments}</p>
+                                            <p className="text-[10px] text-muted-foreground">Open</p>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                          </CardContent>
                     </Card>
 
