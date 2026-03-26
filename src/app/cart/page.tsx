@@ -178,6 +178,17 @@ export default function CartPage() {
                             <div className="flex flex-col sm:flex-row items-center gap-4">
                                 <div className="text-xl font-semibold">
                                     Total: <span className="text-primary">€ {formatPriceForDisplay(cartTotal)}</span>
+                                    {activeDistributor?.taxMode === 'manual' && activeDistributor.manualTaxRate && (
+                                        <span className="text-sm font-normal text-muted-foreground ml-2">
+                                            {activeDistributor.taxBehavior === 'exclusive'
+                                                ? `+ ${activeDistributor.manualTaxLabel || 'VAT'} ${activeDistributor.manualTaxRate}%`
+                                                : `(incl. ${activeDistributor.manualTaxLabel || 'VAT'} ${activeDistributor.manualTaxRate}%)`
+                                            }
+                                        </span>
+                                    )}
+                                    {activeDistributor?.taxMode === 'stripe_tax' && (
+                                        <span className="text-sm font-normal text-muted-foreground ml-2">(VAT calculated at checkout)</span>
+                                    )}
                                 </div>
                                 <Button size="lg" onClick={() => router.push('/checkout')}>
                                     Proceed to Checkout <ArrowRight className="ml-2 h-5 w-5"/>

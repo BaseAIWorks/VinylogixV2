@@ -517,6 +517,29 @@ export async function createOrderRequestServer(params: {
   if (params.customerEoriNumber) newOrderData.customerEoriNumber = params.customerEoriNumber;
   if (params.customerChamberOfCommerce) newOrderData.customerChamberOfCommerce = params.customerChamberOfCommerce;
 
+  // Calculate tax for request orders (manual mode)
+  const distSnap = await adminDb.collection('distributors').doc(distributorId).get();
+  const distData = distSnap.exists ? distSnap.data() : null;
+  if (distData?.taxMode === 'manual' && distData.manualTaxRate) {
+    try {
+      const { calculateTax, isReverseChargeApplicable } = await import('@/lib/tax-utils');
+      const customerCountry = params.shippingAddress.split('\n').pop()?.trim();
+      const reverseCharge = isReverseChargeApplicable(
+        params.customerVatNumber, customerCountry, distData.country
+      );
+      const taxResult = calculateTax(totalAmount, distData.manualTaxRate, distData.taxBehavior || 'inclusive', reverseCharge);
+      newOrderData.subtotalAmount = taxResult.subtotal;
+      newOrderData.taxAmount = taxResult.taxAmount;
+      newOrderData.taxRate = taxResult.taxRate;
+      newOrderData.taxInclusive = (distData.taxBehavior || 'inclusive') === 'inclusive';
+      newOrderData.taxLabel = distData.manualTaxLabel || 'VAT';
+      newOrderData.isReverseCharge = taxResult.isReverseCharge;
+      if (reverseCharge) newOrderData.totalAmount = taxResult.total;
+    } catch (taxErr) {
+      console.warn('Could not calculate tax for order request:', taxErr);
+    }
+  }
+
   const orderDocRef = await adminDb.collection(ORDERS_COLLECTION).add(newOrderData);
 
   // Notification

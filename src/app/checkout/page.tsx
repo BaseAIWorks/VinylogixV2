@@ -376,6 +376,17 @@ export default function CheckoutPage() {
                                 <span>Total</span>
                                 <span>€ {formatPriceForDisplay(cartTotal)}</span>
                            </div>
+                           {distributor?.taxMode === 'manual' && distributor.manualTaxRate && (
+                               <p className="text-xs text-muted-foreground text-right">
+                                   {distributor.taxBehavior === 'exclusive'
+                                       ? `+ ${distributor.manualTaxLabel || 'VAT'} ${distributor.manualTaxRate}% will be added`
+                                       : `Incl. ${distributor.manualTaxLabel || 'VAT'} ${distributor.manualTaxRate}%`
+                                   }
+                               </p>
+                           )}
+                           {distributor?.taxMode === 'stripe_tax' && (
+                               <p className="text-xs text-muted-foreground text-right">VAT will be calculated at checkout</p>
+                           )}
                             {/* Warning for missing address fields */}
                             {missingFields.length > 0 && (
                                 <div className="flex items-start gap-2 p-3 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg">

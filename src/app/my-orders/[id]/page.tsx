@@ -175,8 +175,17 @@ export default function ClientOrderDetailPage() {
                   </TableBody>
                 </Table>
                 <Separator className="my-4" />
-                <div className="space-y-2 text-right">
+                <div className="space-y-1 text-right">
+                  {order.subtotalAmount !== undefined && order.taxAmount !== undefined && (
+                    <>
+                      <p className="text-sm text-muted-foreground">Subtotal excl. {order.taxLabel || 'VAT'}: € {formatPriceForDisplay(order.subtotalAmount)}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {order.taxLabel || 'VAT'} {order.isReverseCharge ? '0% (Reverse charge)' : `${order.taxRate || 0}%`}: € {formatPriceForDisplay(order.taxAmount)}
+                      </p>
+                    </>
+                  )}
                   <p className="font-semibold text-lg">Total: € {formatPriceForDisplay(order.totalAmount)}</p>
+                  {order.isReverseCharge && <p className="text-xs text-muted-foreground italic">Reverse charge — VAT to be accounted for by the recipient.</p>}
                   {order.totalWeight && (
                     <p className="text-sm text-muted-foreground">
                       Total Weight: {(order.totalWeight / 1000).toFixed(2)} kg
