@@ -352,6 +352,44 @@ export async function getRecordsBySupplierId(supplierId: string, distributorId: 
   }
 }
 
+export async function getRecordsByArtist(artist: string, distributorId: string): Promise<VinylRecord[]> {
+  if (!artist || !distributorId) return [];
+  try {
+    const q = query(
+      collection(db, RECORDS_COLLECTION),
+      where('artist', '==', artist),
+      where('distributorId', '==', distributorId),
+      where('isInventoryItem', '==', true)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => processRecordTimestamps({ ...d.data(), id: d.id }));
+  } catch (error) {
+    console.error(`RecordService: Error fetching records for artist "${artist}":`, error);
+    return [];
+  }
+}
+
+export async function getDistinctArtists(distributorId: string): Promise<string[]> {
+  if (!distributorId) return [];
+  try {
+    const q = query(
+      collection(db, RECORDS_COLLECTION),
+      where('distributorId', '==', distributorId),
+      where('isInventoryItem', '==', true)
+    );
+    const snapshot = await getDocs(q);
+    const artists = new Set<string>();
+    snapshot.docs.forEach(d => {
+      const artist = d.data().artist;
+      if (artist) artists.add(artist);
+    });
+    return Array.from(artists).sort();
+  } catch (error) {
+    console.error('RecordService: Error fetching distinct artists:', error);
+    return [];
+  }
+}
+
 export async function getRecordById(id: string): Promise<VinylRecord | undefined> {
   if (!id) return undefined;
   const recordDocRef = doc(db, RECORDS_COLLECTION, id);

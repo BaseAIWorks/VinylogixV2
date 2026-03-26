@@ -350,6 +350,16 @@ export interface VinylRecord {
   catno?: string;
 }
 
+export interface ArtistProfile {
+  name: string;
+  bio: string;
+  genres: string[];
+  activeYears?: string;
+  origin?: string;
+  funFact?: string;
+  relatedArtists?: string[];
+}
+
 export interface SearchResult {
     id: string;
     title: string;

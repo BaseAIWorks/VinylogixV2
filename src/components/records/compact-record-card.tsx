@@ -65,7 +65,11 @@ export default function CompactRecordCard({ record, isOperator, isFavorite, onTo
               )}
            </div>
           <CardContent className="p-2 flex-grow flex flex-col text-xs">
-            <p className="font-semibold leading-tight line-clamp-2" title={record.artist}>{record.artist}</p>
+            <Link href={`/artists/${encodeURIComponent(record.artist)}`}
+               onClick={(e) => e.stopPropagation()}
+               className="font-semibold leading-tight line-clamp-2 hover:underline" title={record.artist}>
+              {record.artist}
+            </Link>
             <p className="text-muted-foreground line-clamp-1" title={record.title}>{record.title}</p>
             
             <div className="mt-auto pt-2 flex justify-between items-center">

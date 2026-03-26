@@ -4,6 +4,8 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import type { VinylRecord, DiscogsMarketplaceStats, Track, WorkerPermissions } from "@/types";
+import { getRecordsByArtist } from "@/services/record-service";
+import RecordCard from "@/components/records/record-card";
 import { ArrowLeft, Edit, Trash2, CalendarDays, Tag, Music, Layers3, Info, Euro, Package, MapPin, AlignLeft, Barcode, Disc3, Loader2, User, Heart, Scale, ListMusic, ExternalLink, Library, PlusCircle, ListChecks, Sparkles, UserCircle, RefreshCw, ShoppingCart, Minus, Plus, Warehouse, Store, Check, BarChart3, AlertTriangle, Users, Star, TrendingDown, Briefcase, Globe, Paintbrush, X, Weight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -106,6 +108,7 @@ export default function RecordDetailPage() {
   const [isSubmittingCollection, setIsSubmittingCollection] = useState(false);
   const [isSubmittingWishlist, setIsSubmittingWishlist] = useState(false);
   const [isGeneratingAiInfo, setIsGeneratingAiInfo] = useState(false);
+  const [moreByArtist, setMoreByArtist] = useState<VinylRecord[]>([]);
   const [isReGenerating, setIsReGenerating] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [isAdjustStockOpen, setIsAdjustStockOpen] = useState(false);
@@ -261,6 +264,13 @@ export default function RecordDetailPage() {
     }, [record, user]);
 
   useEffect(() => {
+    // Fetch more records by the same artist
+    if (record?.artist && record.distributorId) {
+      getRecordsByArtist(record.artist, record.distributorId)
+        .then(data => setMoreByArtist(data.filter(r => r.id !== record.id).slice(0, 4)))
+        .catch(() => {});
+    }
+
     if (record && !record.artistBio && !isGeneratingAiInfo) {
       generateAndStoreInfo();
     }
@@ -631,7 +641,9 @@ export default function RecordDetailPage() {
               <CardHeader className="p-0 pb-4">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h2 className="text-3xl font-bold tracking-tight text-primary">{record.artist}</h2>
+                    <Link href={`/artists/${encodeURIComponent(record.artist)}`}>
+                      <h2 className="text-3xl font-bold tracking-tight text-primary hover:underline cursor-pointer">{record.artist}</h2>
+                    </Link>
                     <h3 className="text-xl text-muted-foreground">{record.title}</h3>
                   </div>
                    <div className="flex items-center flex-shrink-0 gap-2 md:hidden">
@@ -704,7 +716,17 @@ export default function RecordDetailPage() {
                 <div className="grid grid-cols-2 gap-y-4 gap-x-6">
                   <DetailItem icon={Layers3} label="Label" value={record.label} />
                   <DetailItem icon={CalendarDays} label="Released" value={record.releasedDate || record.year?.toString()} isDate={!!record.releasedDate} />
-                  <DetailItem icon={Music} label="Genre(s)" value={record.genre} />
+                  <DetailItem icon={Music} label="Genre(s)" value={
+                    record.genre && record.genre.length > 0 ? (
+                      <span className="flex flex-wrap gap-1">
+                        {record.genre.map(g => (
+                          <Link key={g} href={`/inventory?genre=${encodeURIComponent(g)}`}>
+                            <Badge variant="secondary" className="cursor-pointer hover:bg-primary/10 text-xs">{g}</Badge>
+                          </Link>
+                        ))}
+                      </span>
+                    ) : undefined
+                  } />
                   <DetailItem icon={Paintbrush} label="Style(s)" value={record.style} />
                   <DetailItem icon={Disc3} label="Discogs ID" value={record.discogs_id} />
                   {record.barcode && <DetailItem icon={Barcode} label="Barcode" value={record.barcode} />}
@@ -936,6 +958,32 @@ export default function RecordDetailPage() {
                  <CardFooter className="text-xs text-muted-foreground pt-4 border-t">
                     AI-generated content.
                 </CardFooter>
+            </Card>
+        )}
+
+        {/* More by this artist */}
+        {moreByArtist.length > 0 && (
+            <Card className="shadow-xl">
+                <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                        <span className="flex items-center gap-3">
+                            <Music className="h-6 w-6 text-primary" />
+                            More by {record.artist}
+                        </span>
+                        <Link href={`/artists/${encodeURIComponent(record.artist)}`}>
+                            <Button variant="ghost" size="sm" className="text-primary">
+                                View all <ArrowLeft className="h-4 w-4 ml-1 rotate-180" />
+                            </Button>
+                        </Link>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {moreByArtist.map(r => (
+                            <RecordCard key={r.id} record={r} isOperator={isOperator} />
+                        ))}
+                    </div>
+                </CardContent>
             </Card>
         )}
 

@@ -592,7 +592,7 @@ export default function InventoryPage() {
                                   unoptimized={record.cover_url?.includes('discogs.com')}
                                 />
                             </TableCell>
-                            {cardSettings.showArtist && <TableCell className="font-bold py-2 px-2 sm:px-4 align-top">{record.artist}</TableCell>}
+                            {cardSettings.showArtist && <TableCell className="font-bold py-2 px-2 sm:px-4 align-top"><Link href={`/artists/${encodeURIComponent(record.artist)}`} onClick={(e) => e.stopPropagation()} className="hover:underline">{record.artist}</Link></TableCell>}
                             {cardSettings.showTitle && <TableCell className="text-sm text-muted-foreground py-2 px-2 sm:px-4 align-top">{record.title}</TableCell>}
                             {cardSettings.showYear && <TableCell className="hidden md:table-cell align-middle text-sm">{record.year || 'N/A'}</TableCell>}
                             
