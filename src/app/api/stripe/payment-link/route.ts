@@ -110,6 +110,15 @@ export async function POST(req: NextRequest) {
       platformFeeAmount,
     });
 
+    // Send approval email with payment link to client (non-blocking)
+    try {
+      const { sendOrderApprovedEmail } = await import('@/services/email-service');
+      const orderData = { ...order, id: orderId, orderNumber: order.orderNumber || orderId.slice(0, 8) };
+      sendOrderApprovedEmail(orderData as any, session.url!).catch(err =>
+        console.error('Failed to send order approved email:', err)
+      );
+    } catch {}
+
     return NextResponse.json({ paymentLink: session.url });
   } catch (error: any) {
     if (error.status) return authErrorResponse(error);

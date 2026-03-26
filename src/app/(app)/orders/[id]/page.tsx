@@ -200,7 +200,7 @@ export default function OrderDetailPage() {
             const data = await res.json();
 
             if (res.ok && data.paymentLink) {
-                toast({ title: "Order Approved", description: "Payment link generated. The client can now pay via their orders page." });
+                toast({ title: "Order Approved", description: "Payment link generated and emailed to the client." });
             } else {
                 toast({ title: "Approved", description: "Order approved but payment link could not be generated. The client can pay manually." });
             }
@@ -218,7 +218,12 @@ export default function OrderDetailPage() {
         try {
             const updatedOrder = await updateOrderStatus(order.id, 'cancelled', user);
             if (updatedOrder) setOrder(updatedOrder);
-            toast({ title: "Order Rejected", description: "The order has been cancelled." });
+            // Send rejection email (non-blocking, server action)
+            try {
+                const { sendOrderRejectedEmail } = await import('@/services/email-service');
+                sendOrderRejectedEmail(order).catch(() => {});
+            } catch {}
+            toast({ title: "Order Rejected", description: "The order has been cancelled and the client has been notified." });
         } catch (error) {
             toast({ title: "Error", description: "Could not reject order.", variant: "destructive" });
         }

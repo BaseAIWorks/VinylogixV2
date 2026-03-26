@@ -572,5 +572,21 @@ export async function createOrderRequestServer(params: {
   });
 
   const newDocSnap = await orderDocRef.get();
-  return processOrderTimestampsServer({ ...newDocSnap.data(), id: orderDocRef.id });
+  const order = processOrderTimestampsServer({ ...newDocSnap.data(), id: orderDocRef.id });
+
+  // Send emails (non-blocking)
+  try {
+    const { sendOrderRequestConfirmation, sendOrderRequestNotification } = await import('./email-service');
+    sendOrderRequestConfirmation(order).catch(err => console.error('Failed to send order request confirmation:', err));
+
+    const distSnap2 = await adminDb.collection('distributors').doc(distributorId).get();
+    const distEmail = distSnap2.data()?.contactEmail;
+    if (distEmail) {
+      sendOrderRequestNotification(order, distEmail).catch(err => console.error('Failed to send order request notification:', err));
+    }
+  } catch (err) {
+    console.error('Failed to import email service:', err);
+  }
+
+  return order;
 }

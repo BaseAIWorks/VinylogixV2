@@ -464,3 +464,240 @@ export async function sendNewOrderNotification(order: Order, distributorEmail: s
     console.error('Failed to send new order notification:', error);
   }
 }
+
+/**
+ * Send order request confirmation to client (awaiting approval)
+ */
+export async function sendOrderRequestConfirmation(order: Order): Promise<void> {
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      to: order.viewerEmail,
+      subject: `Order Request Received #${order.orderNumber || order.id.slice(0, 8)}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #fef3c7; border-radius: 8px; padding: 30px; margin-bottom: 20px; }
+              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+              .item { padding: 12px 0; border-bottom: 1px solid #e9ecef; }
+              .total { padding: 16px 0; font-size: 18px; font-weight: 700; }
+              .button { display: inline-block; background-color: #26222B; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>Order Request Received</h1>
+              <p>Your order has been submitted and is awaiting approval from the seller. You will receive an email once it has been reviewed.</p>
+            </div>
+
+            <div class="card">
+              <h2>Order Details</h2>
+              <p><strong>Order Number:</strong> ${order.orderNumber || order.id.slice(0, 8)}</p>
+              <p><strong>Date:</strong> ${format(new Date(order.createdAt), 'PPP')}</p>
+              <p><strong>Status:</strong> Awaiting Approval</p>
+            </div>
+
+            <div class="card">
+              <h2>Items</h2>
+              ${order.items.map(item => `
+                <div class="item">
+                  <p style="margin: 0; font-weight: 600;">${item.artist} – ${item.title}</p>
+                  <p style="margin: 0; color: #6c757d;">Qty: ${item.quantity} · €${formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</p>
+                </div>
+              `).join('')}
+              <div class="total">Total: €${formatPriceForDisplay(order.totalAmount)}</div>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${siteUrl}/my-orders/${order.id}" class="button">View Order Status</a>
+            </div>
+
+            <p style="text-align: center; color: #6c757d; font-size: 14px;">
+              No payment is required at this time. You will be notified when the seller has reviewed your order.
+            </p>
+          </body>
+        </html>
+      `,
+    });
+    console.log(`Order request confirmation sent to ${order.viewerEmail}`);
+  } catch (error) {
+    console.error('Failed to send order request confirmation:', error);
+  }
+}
+
+/**
+ * Send order request notification to distributor (new request to review)
+ */
+export async function sendOrderRequestNotification(order: Order, distributorEmail: string): Promise<void> {
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      to: distributorEmail,
+      subject: `New Order Request #${order.orderNumber || order.id.slice(0, 8)} — Action Required`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #fef3c7; border-radius: 8px; padding: 30px; margin-bottom: 20px; }
+              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+              .item { padding: 12px 0; border-bottom: 1px solid #e9ecef; }
+              .total { padding: 16px 0; font-size: 18px; font-weight: 700; }
+              .button { display: inline-block; background-color: #d69a2e; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>New Order Request</h1>
+              <p>A client has submitted an order request that requires your approval.</p>
+            </div>
+
+            <div class="card">
+              <h2>Customer</h2>
+              <p><strong>${order.customerName}</strong></p>
+              <p>${order.viewerEmail}</p>
+              ${order.customerCompanyName ? `<p>${order.customerCompanyName}</p>` : ''}
+            </div>
+
+            <div class="card">
+              <h2>Order #${order.orderNumber || order.id.slice(0, 8)}</h2>
+              ${order.items.map(item => `
+                <div class="item">
+                  <p style="margin: 0; font-weight: 600;">${item.artist} – ${item.title}</p>
+                  <p style="margin: 0; color: #6c757d;">Qty: ${item.quantity} · €${formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</p>
+                </div>
+              `).join('')}
+              <div class="total">Total: €${formatPriceForDisplay(order.totalAmount)}</div>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${siteUrl}/orders/${order.id}" class="button">Review & Approve Order</a>
+            </div>
+
+            <p style="text-align: center; color: #6c757d; font-size: 14px;">
+              You can approve or reject this order from the order detail page.
+            </p>
+          </body>
+        </html>
+      `,
+    });
+    console.log(`Order request notification sent to ${distributorEmail}`);
+  } catch (error) {
+    console.error('Failed to send order request notification:', error);
+  }
+}
+
+/**
+ * Send order approved email to client with payment link
+ */
+export async function sendOrderApprovedEmail(order: Order, paymentLink?: string): Promise<void> {
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      to: order.viewerEmail,
+      subject: `Order Approved #${order.orderNumber || order.id.slice(0, 8)} — Payment Required`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #d1fae5; border-radius: 8px; padding: 30px; margin-bottom: 20px; }
+              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+              .item { padding: 12px 0; border-bottom: 1px solid #e9ecef; }
+              .total { padding: 16px 0; font-size: 18px; font-weight: 700; }
+              .button { display: inline-block; background-color: #16a34a; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; }
+              .button-secondary { display: inline-block; background-color: #26222B; color: white; padding: 10px 24px; text-decoration: none; border-radius: 6px; font-size: 14px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>Your Order Has Been Approved!</h1>
+              <p>Great news — the seller has approved your order. Please complete your payment to proceed.</p>
+            </div>
+
+            <div class="card">
+              <h2>Order #${order.orderNumber || order.id.slice(0, 8)}</h2>
+              ${order.items.map(item => `
+                <div class="item">
+                  <p style="margin: 0; font-weight: 600;">${item.artist} – ${item.title}</p>
+                  <p style="margin: 0; color: #6c757d;">Qty: ${item.quantity} · €${formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</p>
+                </div>
+              `).join('')}
+              <div class="total">Total: €${formatPriceForDisplay(order.totalAmount)}</div>
+            </div>
+
+            ${paymentLink ? `
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${paymentLink}" class="button">Pay Now</a>
+              </div>
+              <p style="text-align: center; color: #6c757d; font-size: 13px;">
+                This payment link expires in 24 hours.
+              </p>
+            ` : ''}
+
+            <div style="text-align: center; margin: 20px 0;">
+              <a href="${siteUrl}/my-orders/${order.id}" class="button-secondary">View Order Details</a>
+            </div>
+          </body>
+        </html>
+      `,
+    });
+    console.log(`Order approved email sent to ${order.viewerEmail}`);
+  } catch (error) {
+    console.error('Failed to send order approved email:', error);
+  }
+}
+
+/**
+ * Send order rejected email to client
+ */
+export async function sendOrderRejectedEmail(order: Order, reason?: string): Promise<void> {
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      to: order.viewerEmail,
+      subject: `Order Update #${order.orderNumber || order.id.slice(0, 8)}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #fee2e2; border-radius: 8px; padding: 30px; margin-bottom: 20px; }
+              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+              .button { display: inline-block; background-color: #26222B; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>Order Could Not Be Processed</h1>
+              <p>Unfortunately, the seller was unable to process your order at this time.</p>
+            </div>
+
+            <div class="card">
+              <p><strong>Order:</strong> #${order.orderNumber || order.id.slice(0, 8)}</p>
+              ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+              <p>No payment has been charged.</p>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${siteUrl}/inventory" class="button">Continue Browsing</a>
+            </div>
+          </body>
+        </html>
+      `,
+    });
+    console.log(`Order rejected email sent to ${order.viewerEmail}`);
+  } catch (error) {
+    console.error('Failed to send order rejected email:', error);
+  }
+}
