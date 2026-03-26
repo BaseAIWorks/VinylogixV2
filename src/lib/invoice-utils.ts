@@ -491,15 +491,54 @@ export async function generateInvoicePdf(
   // TOTAL
   // ============================================
 
-  checkPageBreak(16);
+  checkPageBreak(order.taxAmount ? 28 : 16);
 
-  const totalsX = pageWidth - margin - 50;
+  const totalsX = pageWidth - margin - 55;
 
-  doc.setDrawColor(...COLORS.border);
-  doc.setLineWidth(0.3);
-  doc.line(totalsX - 5, currentY, pageWidth - margin, currentY);
-  currentY += 5;
+  // Tax breakdown (if tax data present)
+  if (order.taxAmount !== undefined && order.subtotalAmount !== undefined) {
+    const taxLabel = order.taxLabel || 'VAT';
 
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...COLORS.secondary);
+    doc.text(`Subtotal excl. ${taxLabel}:`, totalsX, currentY);
+    doc.setTextColor(...COLORS.text);
+    doc.text(`\u20AC ${formatPriceForDisplay(order.subtotalAmount)}`, pageWidth - margin, currentY, { align: 'right' });
+    currentY += 4;
+
+    // Tax line(s)
+    if (order.taxBreakdown && order.taxBreakdown.length > 0) {
+      for (const tax of order.taxBreakdown) {
+        doc.setTextColor(...COLORS.secondary);
+        doc.text(`${taxLabel} ${tax.rate}%${tax.jurisdiction ? ` (${tax.jurisdiction})` : ''}:`, totalsX, currentY);
+        doc.setTextColor(...COLORS.text);
+        doc.text(`\u20AC ${formatPriceForDisplay(tax.amount)}`, pageWidth - margin, currentY, { align: 'right' });
+        currentY += 4;
+      }
+    } else {
+      const rateText = order.isReverseCharge ? '0% (Reverse charge)' : `${order.taxRate || 0}%`;
+      doc.setTextColor(...COLORS.secondary);
+      doc.text(`${taxLabel} ${rateText}:`, totalsX, currentY);
+      doc.setTextColor(...COLORS.text);
+      doc.text(`\u20AC ${formatPriceForDisplay(order.taxAmount)}`, pageWidth - margin, currentY, { align: 'right' });
+      currentY += 4;
+    }
+
+    // Divider
+    doc.setDrawColor(...COLORS.border);
+    doc.setLineWidth(0.3);
+    doc.line(totalsX - 5, currentY, pageWidth - margin, currentY);
+    currentY += 5;
+  } else {
+    // No tax data — simple divider
+    doc.setDrawColor(...COLORS.border);
+    doc.setLineWidth(0.3);
+    doc.line(totalsX - 5, currentY, pageWidth - margin, currentY);
+    currentY += 5;
+  }
+
+  // Total
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLORS.secondary);
@@ -507,7 +546,16 @@ export async function generateInvoicePdf(
   doc.setTextColor(...COLORS.accent);
   doc.text(`\u20AC ${formatPriceForDisplay(order.totalAmount)}`, pageWidth - margin, currentY, { align: 'right' });
 
-  // Total weight (if available)
+  // Reverse charge notice
+  if (order.isReverseCharge) {
+    currentY += 5;
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(...COLORS.secondary);
+    doc.text('* Reverse charge — VAT to be accounted for by the recipient.', margin, currentY);
+  }
+
+  // Total weight
   if (order.totalWeight && order.totalWeight > 0) {
     currentY += 5;
     doc.setFontSize(8);

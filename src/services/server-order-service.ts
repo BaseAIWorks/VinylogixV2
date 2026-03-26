@@ -163,6 +163,34 @@ export async function createOrderFromCheckout(session: Stripe.Checkout.Session):
   if (clientUser?.eoriNumber) newOrderData.customerEoriNumber = clientUser.eoriNumber;
   if (clientUser?.chamberOfCommerce) newOrderData.customerChamberOfCommerce = clientUser.chamberOfCommerce;
 
+  // Extract tax data from Stripe session (if Stripe Tax or manual tax was applied)
+  try {
+    if (session.total_details?.amount_tax && session.total_details.amount_tax > 0) {
+      newOrderData.taxAmount = session.total_details.amount_tax / 100;
+      newOrderData.subtotalAmount = (session.amount_subtotal || 0) / 100;
+      newOrderData.taxInclusive = true;
+    } else if (distributor.taxMode === 'manual' && distributor.manualTaxRate) {
+      // Manual tax: calculate from total
+      const { calculateTax, isReverseChargeApplicable } = await import('@/lib/tax-utils');
+      const reverseCharge = isReverseChargeApplicable(
+        clientUser?.vatNumber, clientUser?.country, distributor.country
+      );
+      const taxResult = calculateTax(totalAmount, distributor.manualTaxRate, distributor.taxBehavior || 'inclusive', reverseCharge);
+      newOrderData.subtotalAmount = taxResult.subtotal;
+      newOrderData.taxAmount = taxResult.taxAmount;
+      newOrderData.taxRate = taxResult.taxRate;
+      newOrderData.taxInclusive = (distributor.taxBehavior || 'inclusive') === 'inclusive';
+      newOrderData.taxLabel = distributor.manualTaxLabel || 'VAT';
+      newOrderData.isReverseCharge = taxResult.isReverseCharge;
+      if (reverseCharge) {
+        // Adjust total for reverse charge with inclusive pricing
+        newOrderData.totalAmount = taxResult.total;
+      }
+    }
+  } catch (taxError) {
+    console.warn('Could not calculate tax for order:', taxError);
+  }
+
   // Create the order
   const orderDocRef = await adminDb.collection(ORDERS_COLLECTION).add(newOrderData);
 

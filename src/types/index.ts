@@ -160,6 +160,14 @@ export interface Distributor {
   orderCounter?: number;
   orderIdPrefix?: string;
   allowOrderRequests?: boolean;
+
+  // Tax configuration
+  taxMode?: 'none' | 'manual' | 'stripe_tax';
+  taxBehavior?: 'inclusive' | 'exclusive';
+  manualTaxRate?: number;
+  manualTaxLabel?: string;
+  defaultTaxCode?: string;
+
   stripeAccountId?: string; // For Stripe Connect
   stripeAccountStatus?: 'pending' | 'verified' | 'in_review' | 'restricted' | 'details_needed';
   stripeCustomerId?: string; // For Stripe Billing
@@ -501,6 +509,15 @@ export interface Order {
   paymentStatus?: 'unpaid' | 'paid' | 'refunded' | 'failed';
   paidAt?: string; // ISO String
   platformFeeAmount?: number; // 4% platform fee in cents
+
+  // Tax Fields
+  subtotalAmount?: number;
+  taxAmount?: number;
+  taxRate?: number;
+  taxInclusive?: boolean;
+  taxLabel?: string;
+  isReverseCharge?: boolean;
+  taxBreakdown?: Array<{ rate: number; amount: number; jurisdiction: string }>;
 
   // Stripe Connect Payment Fields
   stripePaymentIntentId?: string;

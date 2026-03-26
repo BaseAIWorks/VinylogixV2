@@ -1635,16 +1635,131 @@ export default function SettingsPage() {
                       <Receipt className="h-5 w-5 text-primary" />
                       <CardTitle className="text-lg">Tax / VAT</CardTitle>
                     </div>
-                    <CardDescription className="text-sm">Configure tax rates for your products and invoices.</CardDescription>
+                    <CardDescription className="text-sm">Configure how VAT is calculated on orders and invoices.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="rounded-lg border border-dashed p-6 text-center">
-                      <Receipt className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                      <p className="text-sm font-medium">Tax Settings Coming Soon</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Set up VAT rates, tax rules, and automatic tax calculation.
+                    {/* Tax Mode Selection */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Tax Calculation Method</Label>
+                      <Select
+                        value={activeDistributor?.taxMode || 'none'}
+                        onValueChange={async (value) => {
+                          await updateMyDistributorSettings({ taxMode: value as any });
+                          showSaveSuccess('taxSettings');
+                        }}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No tax calculation</SelectItem>
+                          <SelectItem value="manual">Manual tax rate</SelectItem>
+                          <SelectItem value="stripe_tax">Stripe Tax (automatic)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        {activeDistributor?.taxMode === 'manual' && 'You set a fixed VAT rate that applies to all orders.'}
+                        {activeDistributor?.taxMode === 'stripe_tax' && 'Stripe calculates the correct VAT rate automatically based on buyer and seller location.'}
+                        {(!activeDistributor?.taxMode || activeDistributor?.taxMode === 'none') && 'No VAT will be calculated or shown on invoices. Prices are treated as final amounts.'}
                       </p>
                     </div>
+
+                    {/* Manual Tax Settings */}
+                    {activeDistributor?.taxMode === 'manual' && (
+                      <div className="p-4 rounded-lg bg-muted/50 space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-sm">VAT Rate (%)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="50"
+                              step="0.1"
+                              placeholder="21"
+                              defaultValue={activeDistributor.manualTaxRate || ''}
+                              onBlur={async (e) => {
+                                const rate = parseFloat(e.target.value);
+                                if (!isNaN(rate) && rate >= 0) {
+                                  await updateMyDistributorSettings({ manualTaxRate: rate });
+                                }
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-sm">Tax Label</Label>
+                            <Select
+                              value={activeDistributor.manualTaxLabel || 'VAT'}
+                              onValueChange={async (value) => {
+                                await updateMyDistributorSettings({ manualTaxLabel: value });
+                              }}
+                            >
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="BTW">BTW (Nederland, België)</SelectItem>
+                                <SelectItem value="IVA">IVA (Spanje, Italië, Portugal)</SelectItem>
+                                <SelectItem value="MwSt">MwSt (Duitsland, Oostenrijk)</SelectItem>
+                                <SelectItem value="TVA">TVA (Frankrijk, Luxemburg)</SelectItem>
+                                <SelectItem value="VAT">VAT (International)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-sm">Price Behavior</Label>
+                          <Select
+                            value={activeDistributor.taxBehavior || 'inclusive'}
+                            onValueChange={async (value) => {
+                              await updateMyDistributorSettings({ taxBehavior: value as any });
+                            }}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="inclusive">Prices include VAT (recommended for B2C)</SelectItem>
+                              <SelectItem value="exclusive">Prices exclude VAT (added at checkout)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {activeDistributor.taxBehavior === 'exclusive'
+                              ? 'VAT will be added on top of your listed prices at checkout.'
+                              : 'Your listed prices already include VAT. The invoice will show the VAT breakdown.'}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">B2B customers with a valid EU VAT number in a different country will automatically receive 0% VAT (reverse charge).</p>
+                      </div>
+                    )}
+
+                    {/* Stripe Tax Settings */}
+                    {activeDistributor?.taxMode === 'stripe_tax' && (
+                      <div className="p-4 rounded-lg bg-muted/50 space-y-4">
+                        <div>
+                          <Label className="text-sm">Price Behavior</Label>
+                          <Select
+                            value={activeDistributor.taxBehavior || 'inclusive'}
+                            onValueChange={async (value) => {
+                              await updateMyDistributorSettings({ taxBehavior: value as any });
+                            }}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="inclusive">Prices include VAT</SelectItem>
+                              <SelectItem value="exclusive">Prices exclude VAT</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-start gap-3 p-3 rounded-lg border bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
+                          <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+                          <div className="text-sm">
+                            <p className="font-medium text-blue-800 dark:text-blue-300">Configure your tax registrations in Stripe</p>
+                            <p className="text-blue-700 dark:text-blue-400 mt-1">
+                              Add your VAT registrations (per country) in the Stripe Dashboard to enable automatic tax calculation. Stripe charges 0.5% per transaction for this service.
+                            </p>
+                            {activeDistributor.stripeAccountId && (
+                              <a href="https://dashboard.stripe.com/tax/registrations" target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-blue-700 dark:text-blue-300 underline hover:no-underline font-medium">
+                                Open Stripe Tax Settings
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}

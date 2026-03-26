@@ -135,6 +135,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Tax configuration
+    const taxMode = distributor.taxMode || 'none';
+    const taxBehavior = distributor.taxBehavior || 'inclusive';
+
     // Build line items using ONLY database values
     const lineItems = validatedItems.map((item) => ({
       price_data: {
@@ -143,10 +147,12 @@ export async function POST(req: NextRequest) {
           name: `${item.dbRecord.artist} - ${item.dbRecord.title}`,
           description: item.dbRecord.formatDetails || 'Vinyl Record',
           images: item.dbRecord.cover_url ? [item.dbRecord.cover_url] : [],
+          ...(taxMode === 'stripe_tax' && {
+            tax_code: distributor.defaultTaxCode || 'txcd_99999999',
+          }),
         },
-        // SECURITY: Use the price from the database, never from client
-        // We've already validated sellingPrice exists and is > 0 above
-        unit_amount: Math.round((item.dbRecord.sellingPrice as number) * 100), // Convert to cents
+        unit_amount: Math.round((item.dbRecord.sellingPrice as number) * 100),
+        ...(taxMode !== 'none' && { tax_behavior: taxBehavior }),
       },
       quantity: item.quantity,
     }));
@@ -178,6 +184,14 @@ export async function POST(req: NextRequest) {
       customer_email: customerEmail,
       success_url: `${siteUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}/checkout?cancelled=true`,
+      // Stripe Tax automatic calculation
+      ...(taxMode === 'stripe_tax' && distributor.stripeAccountId && {
+        automatic_tax: {
+          enabled: true,
+          liability: { type: 'account' as const, account: distributor.stripeAccountId },
+        },
+        tax_id_collection: { enabled: true },
+      }),
       payment_intent_data: {
         application_fee_amount: platformFeeAmount,
         transfer_data: {
