@@ -241,8 +241,33 @@ export default function CheckoutPage() {
 
     const handleRequestOrder = async () => {
         if (!user || !distributorId) throw new Error('Missing user or distributor');
-        const { createOrderRequest } = await import('@/services/order-service');
-        const order = await createOrderRequest(user, cart, distributorId);
+        const shippingAddress = formatAddress(user, 'shipping');
+        const billingAddress = formatAddress(user, 'billing');
+        const customerName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || '';
+
+        const { createOrderRequestServer } = await import('@/services/server-order-service');
+        const order = await createOrderRequestServer({
+            viewerId: user.uid,
+            distributorId,
+            items: cart.map(item => ({
+                recordId: item.record.id,
+                title: item.record.title,
+                artist: item.record.artist,
+                cover_url: item.record.cover_url,
+                sellingPrice: item.record.sellingPrice || 0,
+                quantity: item.quantity,
+                weight: item.record.weight,
+            })),
+            customerName,
+            customerEmail: user.email || '',
+            shippingAddress,
+            billingAddress: user.useDifferentBillingAddress ? billingAddress : undefined,
+            phoneNumber: user.phoneNumber,
+            customerCompanyName: user.companyName,
+            customerVatNumber: user.vatNumber,
+            customerEoriNumber: user.eoriNumber,
+            customerChamberOfCommerce: user.chamberOfCommerce,
+        });
         clearCart();
         router.push(`/my-orders/${order.id}?requested=true`);
     };

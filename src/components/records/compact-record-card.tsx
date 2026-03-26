@@ -65,11 +65,11 @@ export default function CompactRecordCard({ record, isOperator, isFavorite, onTo
               )}
            </div>
           <CardContent className="p-2 flex-grow flex flex-col text-xs">
-            <Link href={`/artists/${encodeURIComponent(record.artist)}`}
-               onClick={(e) => e.stopPropagation()}
-               className="font-semibold leading-tight line-clamp-2 hover:underline" title={record.artist}>
+            <span
+               onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (record.artist) window.location.href = `/artists/${encodeURIComponent(record.artist)}`; }}
+               className="font-semibold leading-tight line-clamp-2 hover:underline cursor-pointer" title={record.artist}>
               {record.artist}
-            </Link>
+            </span>
             <p className="text-muted-foreground line-clamp-1" title={record.title}>{record.title}</p>
             
             <div className="mt-auto pt-2 flex justify-between items-center">

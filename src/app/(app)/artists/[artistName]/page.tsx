@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/hooks/use-auth";
 import { useParams, useRouter } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { getRecordsByArtist, getDistinctArtists } from "@/services/record-service";
 import { generateArtistProfile, type GenerateArtistProfileOutput } from "@/ai/flows/generate-artist-profile-flow";
 import type { VinylRecord, ArtistProfile } from "@/types";
@@ -61,29 +61,46 @@ export default function ArtistProfilePage() {
   }, [artistName, activeDistributorId]);
 
   // Generate AI profile metadata (active years, origin, fun fact, related artists)
-  const generateProfileMetadata = useCallback(async () => {
-    if (!profile || loadingProfile || profile.activeYears) return;
+  const profileMetadataLoaded = useRef(false);
 
-    // Check sessionStorage cache first
+  const generateProfileMetadata = useCallback(async () => {
+    if (!profile || loadingProfile || profileMetadataLoaded.current) return;
+
     const cacheKey = `artist_profile_${activeDistributorId}_${artistName}`;
     try {
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
         setProfile(prev => ({ ...prev, ...parsed }));
+        profileMetadataLoaded.current = true;
         return;
       }
     } catch {}
 
     setLoadingProfile(true);
+    profileMetadataLoaded.current = true;
     try {
-      const allArtists = await getDistinctArtists(activeDistributorId!);
+      // Cache distinct artists list per session to avoid repeated full-collection reads
+      const artistsCacheKey = `distinct_artists_${activeDistributorId}`;
+      let allArtists: string[];
+      try {
+        const cachedArtists = sessionStorage.getItem(artistsCacheKey);
+        allArtists = cachedArtists ? JSON.parse(cachedArtists) : [];
+      } catch { allArtists = []; }
+
+      if (allArtists.length === 0) {
+        allArtists = await getDistinctArtists(activeDistributorId!);
+        try { sessionStorage.setItem(artistsCacheKey, JSON.stringify(allArtists)); } catch {}
+      }
+
       const otherArtists = allArtists.filter(a => a !== artistName);
+      // Cap to 150 artists for AI prompt to reduce token cost
+      const cappedArtists = otherArtists.slice(0, 150);
 
       const result = await generateArtistProfile({
         artist: artistName,
         genres: profile.genres || [],
-        inventoryArtists: otherArtists,
+        inventoryArtists: cappedArtists,
       });
 
       const metadata = {
@@ -94,8 +111,6 @@ export default function ArtistProfilePage() {
       };
 
       setProfile(prev => ({ ...prev, ...metadata }));
-
-      // Cache in sessionStorage
       try { sessionStorage.setItem(cacheKey, JSON.stringify(metadata)); } catch {}
     } catch (err) {
       console.error('Failed to generate artist profile:', err);
@@ -106,10 +121,13 @@ export default function ArtistProfilePage() {
 
   // Auto-generate profile metadata when profile loads with bio
   useEffect(() => {
-    if (profile?.bio && !profile.activeYears && !loadingProfile) {
+    if (profile?.bio && !profileMetadataLoaded.current && !loadingProfile) {
       generateProfileMetadata();
     }
-  }, [profile?.bio, profile?.activeYears, loadingProfile, generateProfileMetadata]);
+  }, [profile?.bio, loadingProfile, generateProfileMetadata]);
+
+  // Sorted discography (memoized to avoid mutating on every render)
+  const sortedRecords = useMemo(() => [...records].sort((a, b) => (Number(b.year) || 0) - (Number(a.year) || 0)), [records]);
 
   // Stats
   const totalInStock = records.reduce((sum, r) => sum + (r.stock_shelves || 0) + (r.stock_storage || 0), 0);
@@ -246,9 +264,7 @@ export default function ArtistProfilePage() {
           Discography ({records.length})
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {records
-            .sort((a, b) => (b.year || 0) - (a.year || 0))
-            .map(record => (
+          {sortedRecords.map(record => (
               <RecordCard
                 key={record.id}
                 record={record}

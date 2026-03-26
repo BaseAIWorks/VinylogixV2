@@ -176,12 +176,12 @@ export default function RecordCard({ record, isOperator, isFavorite, onToggleFav
             </div>
           </CardHeader>
           <CardContent className="p-4 flex-grow flex flex-col">
-            {settings.showArtist && (
-              <Link href={`/artists/${encodeURIComponent(record.artist)}`}
-                 onClick={(e) => e.stopPropagation()}
-                 className="text-lg font-semibold leading-tight mb-1 truncate block hover:underline" title={record.artist}>
+            {settings.showArtist && record.artist && (
+              <span
+                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/artists/${encodeURIComponent(record.artist)}`; }}
+                 className="text-lg font-semibold leading-tight mb-1 truncate block hover:underline cursor-pointer" title={record.artist}>
                 {record.artist}
-              </Link>
+              </span>
             )}
             {settings.showTitle && <p className="text-sm text-muted-foreground truncate mb-2" title={record.title}>{record.title}</p>}
             

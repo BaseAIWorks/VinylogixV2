@@ -180,7 +180,12 @@ export default function OrderDetailPage() {
         try {
             // Update status to awaiting_payment
             const updatedOrder = await updateOrderStatus(order.id, 'awaiting_payment', user);
-            if (updatedOrder) setOrder(updatedOrder);
+            if (!updatedOrder) {
+                toast({ title: "Error", description: "Could not update order status.", variant: "destructive" });
+                setIsApproving(false);
+                return;
+            }
+            setOrder(updatedOrder);
 
             // Generate payment link
             const token = await auth.currentUser?.getIdToken();
@@ -195,11 +200,11 @@ export default function OrderDetailPage() {
             const data = await res.json();
 
             if (res.ok && data.paymentLink) {
-                toast({ title: "Order Approved", description: "Payment link generated and email sent to the client." });
-                fetchOrder(); // Refresh to show updated data
+                toast({ title: "Order Approved", description: "Payment link generated. The client can now pay via their orders page." });
             } else {
-                toast({ title: "Approved", description: "Order approved. Payment link could not be generated — client can pay manually." });
+                toast({ title: "Approved", description: "Order approved but payment link could not be generated. The client can pay manually." });
             }
+            fetchOrder();
         } catch (error) {
             console.error('Failed to approve order:', error);
             toast({ title: "Error", description: "Could not approve order.", variant: "destructive" });

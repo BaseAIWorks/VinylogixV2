@@ -24,6 +24,14 @@ export async function POST(req: NextRequest) {
     }
     const order = orderSnap.data()!;
 
+    // Only generate payment links for orders awaiting payment
+    if (order.status !== 'awaiting_payment' && order.status !== 'awaiting_approval') {
+      return NextResponse.json({ error: 'Order is not eligible for a payment link.' }, { status: 400 });
+    }
+    if (order.paymentStatus === 'paid') {
+      return NextResponse.json({ error: 'Order is already paid.' }, { status: 400 });
+    }
+
     // Verify caller is operator of this distributor
     const userSnap = await adminDb.collection('users').doc(caller.uid).get();
     const userData = userSnap.data();
@@ -49,8 +57,12 @@ export async function POST(req: NextRequest) {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
 
     // Create Stripe Checkout Session for this order
+    // Session expires in 24 hours
+    const expiresAt = Math.floor(Date.now() / 1000) + 86400;
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
+      expires_at: expiresAt,
       line_items: (order.items || []).map((item: any) => ({
         price_data: {
           currency: 'eur',
@@ -80,6 +92,7 @@ export async function POST(req: NextRequest) {
     // Store payment link on the order
     await orderSnap.ref.update({
       paymentLink: session.url,
+      paymentLinkExpiresAt: new Date(expiresAt * 1000).toISOString(),
       stripeCheckoutSessionId: session.id,
       platformFeeAmount,
     });

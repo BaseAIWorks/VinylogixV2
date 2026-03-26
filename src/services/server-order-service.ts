@@ -358,6 +358,17 @@ export async function updateOrderPaymentStatus(
   const orderDocRef = adminDb.collection(ORDERS_COLLECTION).doc(orderId);
 
   try {
+    // Idempotency: check current status before updating
+    const currentSnap = await orderDocRef.get();
+    if (!currentSnap.exists) return null;
+    const currentData = currentSnap.data()!;
+
+    // If already paid, don't update again (prevents double stock deduction)
+    if (currentData.paymentStatus === 'paid' && paymentStatus === 'paid') {
+      console.log(`Order ${orderId} already paid, skipping update.`);
+      return processOrderTimestampsServer({ ...currentData, id: orderId });
+    }
+
     const updateData: any = {
       paymentStatus,
       updatedAt: Timestamp.fromDate(new Date()),
@@ -370,11 +381,30 @@ export async function updateOrderPaymentStatus(
     if (paymentStatus === 'paid') {
       updateData.paidAt = Timestamp.fromDate(new Date());
       updateData.status = 'paid';
+      updateData.paymentMethod = 'stripe';
     } else if (paymentStatus === 'failed') {
       updateData.status = 'cancelled';
     }
 
     await orderDocRef.update(updateData);
+
+    // Deduct stock for paid orders (items are in the order document)
+    if (paymentStatus === 'paid' && currentData.items?.length > 0) {
+      try {
+        for (const item of currentData.items) {
+          if (!item.recordId) continue;
+          const recordRef = adminDb.collection('vinylRecords').doc(item.recordId);
+          const recordSnap = await recordRef.get();
+          if (recordSnap.exists) {
+            const currentStock = recordSnap.data()?.stock_shelves || 0;
+            const newStock = Math.max(0, currentStock - (item.quantity || 1));
+            await recordRef.update({ stock_shelves: newStock });
+          }
+        }
+      } catch (stockError) {
+        console.error(`Failed to deduct stock for order ${orderId}:`, stockError);
+      }
+    }
 
     const updatedDocSnap = await orderDocRef.get();
     if (updatedDocSnap.exists) {
@@ -385,4 +415,94 @@ export async function updateOrderPaymentStatus(
     console.error(`ServerOrderService: Error updating order ${orderId} payment status:`, error);
     throw error;
   }
+}
+
+/**
+ * Create an order request (awaiting_approval) with atomic counter.
+ * Called as a server action from the checkout page.
+ */
+export async function createOrderRequestServer(params: {
+  viewerId: string;
+  distributorId: string;
+  items: Array<{ recordId: string; title: string; artist: string; cover_url?: string; sellingPrice: number; quantity: number; weight?: number }>;
+  customerName: string;
+  customerEmail: string;
+  shippingAddress: string;
+  billingAddress?: string;
+  phoneNumber?: string;
+  customerCompanyName?: string;
+  customerVatNumber?: string;
+  customerEoriNumber?: string;
+  customerChamberOfCommerce?: string;
+}): Promise<Order> {
+  const adminDb = getAdminDb();
+  if (!adminDb) throw new Error("Admin DB not initialized.");
+
+  const { distributorId, viewerId } = params;
+  const distributorDocRef = adminDb.collection('distributors').doc(distributorId);
+
+  // Atomic order counter via transaction
+  const { orderNumber } = await adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(distributorDocRef);
+    if (!snap.exists) throw new Error('Distributor not found.');
+    const dist = snap.data()!;
+    const prefix = dist.orderIdPrefix || 'ORD';
+    const cnt = (dist.orderCounter || 0) + 1;
+    tx.update(distributorDocRef, { orderCounter: cnt });
+    return { orderNumber: `${prefix}-${cnt.toString().padStart(5, '0')}` };
+  });
+
+  const now = new Date();
+  const orderItems = params.items.map(item => ({
+    recordId: item.recordId,
+    title: item.title,
+    artist: item.artist,
+    cover_url: item.cover_url,
+    priceAtTimeOfOrder: item.sellingPrice,
+    quantity: item.quantity,
+  }));
+
+  const totalAmount = params.items.reduce((sum, i) => sum + i.sellingPrice * i.quantity, 0);
+  const totalWeight = params.items.reduce((sum, i) => sum + (i.weight || 0) * i.quantity, 0);
+
+  const newOrderData: any = {
+    distributorId,
+    viewerId,
+    viewerEmail: params.customerEmail,
+    customerName: params.customerName,
+    shippingAddress: params.shippingAddress,
+    items: orderItems,
+    status: 'awaiting_approval',
+    paymentMethod: 'pending',
+    paymentStatus: 'unpaid',
+    totalAmount,
+    totalWeight,
+    createdAt: Timestamp.fromDate(now),
+    updatedAt: Timestamp.fromDate(now),
+    orderNumber,
+  };
+
+  if (params.billingAddress) newOrderData.billingAddress = params.billingAddress;
+  if (params.phoneNumber) newOrderData.phoneNumber = params.phoneNumber;
+  if (params.customerCompanyName) newOrderData.customerCompanyName = params.customerCompanyName;
+  if (params.customerVatNumber) newOrderData.customerVatNumber = params.customerVatNumber;
+  if (params.customerEoriNumber) newOrderData.customerEoriNumber = params.customerEoriNumber;
+  if (params.customerChamberOfCommerce) newOrderData.customerChamberOfCommerce = params.customerChamberOfCommerce;
+
+  const orderDocRef = await adminDb.collection(ORDERS_COLLECTION).add(newOrderData);
+
+  // Notification
+  await adminDb.collection('notifications').add({
+    distributorId,
+    type: 'new_order',
+    message: `New order request from ${params.customerEmail} awaiting your approval.`,
+    orderId: orderDocRef.id,
+    orderTotal: totalAmount,
+    customerEmail: params.customerEmail,
+    createdAt: Timestamp.fromDate(now),
+    isRead: false,
+  });
+
+  const newDocSnap = await orderDocRef.get();
+  return processOrderTimestampsServer({ ...newDocSnap.data(), id: orderDocRef.id });
 }
