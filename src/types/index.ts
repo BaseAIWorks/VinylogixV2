@@ -80,9 +80,15 @@ export interface WorkerPermissions {
 export type UserRole = 'master' | 'worker' | 'viewer' | 'superadmin';
 export type UserStatus = 'active' | 'on_hold';
 
-export type SubscriptionTier = 'essential' | 'growth' | 'scale';
+export type SubscriptionTier = 'essential' | 'growth' | 'scale' | 'collector' | 'payg';
 
-export const SubscriptionTiers: SubscriptionTier[] = ['essential', 'growth', 'scale'];
+export const SubscriptionTiers: SubscriptionTier[] = ['essential', 'growth', 'scale', 'collector', 'payg'];
+
+// Distributor-only tiers (used on pricing page and distributor registration)
+export const DistributorTiers: SubscriptionTier[] = ['payg', 'essential', 'growth', 'scale'];
+
+// Client-only tiers
+export const ClientTiers: SubscriptionTier[] = ['collector'];
 
 export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'canceled' | 'incomplete';
 
@@ -521,7 +527,8 @@ export interface Order {
   paymentMethod?: 'stripe' | 'paypal' | 'pending';
   paymentStatus?: 'unpaid' | 'paid' | 'refunded' | 'failed';
   paidAt?: string; // ISO String
-  platformFeeAmount?: number; // 4% platform fee in cents
+  platformFeeAmount?: number; // Platform fee in cents (varies by tier)
+  appliedFeePercentage?: number; // Fee rate applied at order creation (e.g., 0.04 for 4%)
 
   // Tax Fields
   subtotalAmount?: number;

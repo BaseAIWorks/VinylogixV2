@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { getSubscriptionTiers } from "@/services/client-subscription-service";
 import type { SubscriptionInfo, SubscriptionTier } from "@/types";
+import { DistributorTiers } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,36 +30,41 @@ const PricingTierComponent = ({
   isPopular?: boolean;
   onChoosePlan: (tier: SubscriptionTier) => void;
 }) => {
-    const isFree = tier.tier === 'essential';
+    const isPayg = tier.tier === 'payg';
 
     let price: number | undefined;
     let priceDetails: string = '';
     let savingsText: string | null = null;
-    
-    switch (billingCycle) {
-        case 'quarterly':
-            price = tier.quarterlyPrice;
-            priceDetails = '/3 months';
-            if (tier.price && tier.quarterlyPrice) {
-                const monthlyTotal = tier.price * 3;
-                const savings = monthlyTotal - tier.quarterlyPrice;
-                if (savings > 0) savingsText = `Save €${savings.toFixed(0)} every 3 months!`;
-            }
-            break;
-        case 'yearly':
-            price = tier.yearlyPrice;
-            priceDetails = '/year';
-            if (tier.price && tier.yearlyPrice) {
-                const monthlyTotal = tier.price * 12;
-                const savings = monthlyTotal - tier.yearlyPrice;
-                if (savings > 0) savingsText = `Save €${savings.toFixed(0)} a year!`;
-            }
-            break;
-        case 'monthly':
-        default:
-            price = tier.price;
-            priceDetails = '/month';
-            break;
+
+    if (isPayg) {
+      price = 0;
+      priceDetails = '';
+    } else {
+      switch (billingCycle) {
+          case 'quarterly':
+              price = tier.quarterlyPrice;
+              priceDetails = '/3 months';
+              if (tier.price && tier.quarterlyPrice) {
+                  const monthlyTotal = tier.price * 3;
+                  const savings = monthlyTotal - tier.quarterlyPrice;
+                  if (savings > 0) savingsText = `Save €${savings.toFixed(0)} every 3 months!`;
+              }
+              break;
+          case 'yearly':
+              price = tier.yearlyPrice;
+              priceDetails = '/year';
+              if (tier.price && tier.yearlyPrice) {
+                  const monthlyTotal = tier.price * 12;
+                  const savings = monthlyTotal - tier.yearlyPrice;
+                  if (savings > 0) savingsText = `Save €${savings.toFixed(0)} a year!`;
+              }
+              break;
+          case 'monthly':
+          default:
+              price = tier.price;
+              priceDetails = '/month';
+              break;
+      }
     }
     
     return (
@@ -81,8 +87,14 @@ const PricingTierComponent = ({
                 <div className="mt-6">
                   {price !== undefined ? (
                     <>
-                      <span className="text-5xl font-bold tracking-tight">€{price}</span>
-                      {priceDetails && <span className="text-sm font-medium text-muted-foreground">{priceDetails}</span>}
+                      {isPayg ? (
+                        <span className="text-4xl font-bold tracking-tight">Free</span>
+                      ) : (
+                        <>
+                          <span className="text-5xl font-bold tracking-tight">€{price}</span>
+                          {priceDetails && <span className="text-sm font-medium text-muted-foreground">{priceDetails}</span>}
+                        </>
+                      )}
                     </>
                   ) : <Skeleton className="h-12 w-32" />}
                 </div>
@@ -166,10 +178,10 @@ export default function PricingPage() {
     const shippingCost = 15.00;
     const orderTotal = salePrice + shippingCost;
 
-    // Vinylogix: 4% platform fee on item + Stripe fees on total
+    // Vinylogix: 2-8% platform fee on item (varies by tier) + Stripe fees on total
     // Stripe EU rates: 1.5% + €0.25 (standard EEA cards)
     const stripeFee = orderTotal * 0.015 + 0.25;
-    const vinylogixFee = salePrice * 0.04;
+    const vinylogixFee = salePrice * 0.03; // Using Growth tier (3%) as example
     const vinylogixTotalFee = stripeFee + vinylogixFee;
 
     // Other platforms: ~9% on item + shipping + PayPal fees (3.40% + €0.35 per PayPal EU)
@@ -259,9 +271,9 @@ export default function PricingPage() {
             {/* Pricing Cards */}
             <div className="py-8 sm:py-12">
               <div className="container mx-auto px-4 max-w-5xl">
-                  <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
                       {isLoading || !tiers ? (
-                          [...Array(3)].map((_, i) => (
+                          [...Array(4)].map((_, i) => (
                              <div key={i} className="flex flex-col rounded-2xl border p-8 space-y-4">
                                   <Skeleton className="h-6 w-2/5" />
                                   <Skeleton className="h-12 w-3/5" />
@@ -275,8 +287,8 @@ export default function PricingPage() {
                              </div>
                           ))
                       ) : (
-                          (['essential', 'growth', 'scale'] as SubscriptionTier[]).map(tierKey => (
-                               <PricingTierComponent 
+                          DistributorTiers.map(tierKey => (
+                               tiers[tierKey] && <PricingTierComponent
                                   key={tierKey}
                                   tierName={tierKey}
                                   tier={tiers[tierKey]}

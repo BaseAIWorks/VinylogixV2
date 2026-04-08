@@ -54,10 +54,17 @@ export async function POST(req: NextRequest) {
     const taxMode = distributor.taxMode || 'none';
     const taxBehavior = distributor.taxBehavior || 'inclusive';
 
-    // Calculate platform fee on item subtotal (consistent with checkout route)
-    const itemSubtotal = (order.items || []).reduce((sum: number, item: any) =>
-      sum + (item.priceAtTimeOfOrder || 0) * (item.quantity || 1), 0);
-    const platformFeeAmount = Math.round(itemSubtotal * 100 * 0.04);
+    // Use stored fee from order creation, or calculate based on distributor's tier
+    let platformFeeAmount: number;
+    if (order.platformFeeAmount) {
+      platformFeeAmount = order.platformFeeAmount;
+    } else {
+      const { getPlatformFeeRate } = await import('@/lib/stripe-helpers');
+      const feeRate = await getPlatformFeeRate(order.distributorId);
+      const itemSubtotal = (order.items || []).reduce((sum: number, item: any) =>
+        sum + (item.priceAtTimeOfOrder || 0) * (item.quantity || 1), 0);
+      platformFeeAmount = Math.round(itemSubtotal * 100 * feeRate);
+    }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
     const expiresAt = Math.floor(Date.now() / 1000) + 86400;

@@ -314,6 +314,10 @@ export default function RegisterPage() {
             <CardHeader>
                 <CardTitle>Start Your Free Trial</CardTitle>
                 <CardDescription>Join Vinylogix today and revolutionize your record store.</CardDescription>
+                <p className="text-sm text-muted-foreground pt-1">
+                  Looking to browse and collect?{' '}
+                  <a href="/register/client" className="font-medium text-primary hover:underline">Register as a client instead</a>
+                </p>
             </CardHeader>
             <CardContent>
                 <Stepper activeStep={activeStep}>

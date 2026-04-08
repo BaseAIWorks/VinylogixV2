@@ -163,8 +163,10 @@ export async function POST(req: NextRequest) {
       return sum + (item.dbRecord.sellingPrice as number) * item.quantity;
     }, 0);
 
-    // Calculate 4% platform fee (in cents)
-    const platformFeeAmount = Math.round(totalAmount * 100 * 0.04);
+    // Calculate platform fee based on distributor's subscription tier
+    const { getPlatformFeeRate } = await import('@/lib/stripe-helpers');
+    const feeRate = await getPlatformFeeRate(distributorId);
+    const platformFeeAmount = Math.round(totalAmount * 100 * feeRate);
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
 

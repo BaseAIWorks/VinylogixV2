@@ -76,7 +76,7 @@ export default function AdminStatisticsPage() {
     }, [user, authLoading, fetchData]);
 
     const stats = useMemo(() => {
-        const tierCounts: Record<SubscriptionTier, number> = { essential: 0, growth: 0, scale: 0 };
+        const tierCounts: Record<string, number> = { payg: 0, essential: 0, growth: 0, scale: 0, collector: 0 };
         let monthlyRevenue = 0;
         const overdueAccounts: Distributor[] = [];
 

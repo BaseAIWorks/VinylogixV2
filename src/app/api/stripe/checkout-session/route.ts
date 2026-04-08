@@ -29,31 +29,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3) Map tier + billing -> Stripe Price ID
-    const priceIdMap = {
-      essential: {
-        monthly: process.env.STRIPE_ESSENTIAL_MONTHLY_PRICE_ID,
-        quarterly: process.env.STRIPE_ESSENTIAL_3MONTHS_PRICE_ID,
-        yearly: process.env.STRIPE_ESSENTIAL_YEARLY_PRICE_ID,
-      },
-      growth: {
-        monthly: process.env.STRIPE_GROWTH_MONTHLY_PRICE_ID,
-        quarterly: process.env.STRIPE_GROWTH_3MONTHS_PRICE_ID,
-        yearly: process.env.STRIPE_GROWTH_YEARLY_PRICE_ID,
-      },
-      scale: {
-        monthly: process.env.STRIPE_SCALE_MONTHLY_PRICE_ID,
-        quarterly: process.env.STRIPE_SCALE_3MONTHS_PRICE_ID,
-        yearly: process.env.STRIPE_SCALE_YEARLY_PRICE_ID,
-      },
-    } as const;
-
-    const priceId = (priceIdMap as any)[tier]?.[billing];
+    // 3) Map tier + billing -> Stripe Price ID (Firestore with env var fallback)
+    const { getStripePriceId } = await import('@/lib/stripe-helpers');
+    const priceId = await getStripePriceId(tier, billing as 'monthly' | 'quarterly' | 'yearly');
 
     if (!priceId) {
       return NextResponse.json(
         {
-          error: `Price ID for tier '${tier}' (${billing}) is not configured in the environment variables.`,
+          error: `Price ID for tier '${tier}' (${billing}) is not configured.`,
         },
         { status: 500 }
       );
