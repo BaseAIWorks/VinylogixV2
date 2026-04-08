@@ -292,6 +292,9 @@ export type User = {
   subscriptionTier?: SubscriptionTier;
   profileComplete?: boolean; // New flag for client onboarding
   unreadChangelogs?: boolean; // New flag for changelog notifications
+  invitedAt?: string; // ISO string — when the invite was sent
+  invitedByDistributorId?: string; // Which distributor sent the invite
+  invitedByUid?: string; // UID of the master who invited
 };
 
 export type MediaCondition = "Mint (M)" | "Near Mint (NM)" | "Very Good Plus (VG+)" | "Very Good (VG)" | "Good Plus (G+)" | "Good (G)" | "Fair (F)" | "Poor (P)";
@@ -481,6 +484,9 @@ export interface FirestoreUser {
   subscriptionTier?: SubscriptionTier;
   profileComplete?: boolean; // New flag for client onboarding
   unreadChangelogs?: boolean; // Flag for changelog notifications
+  invitedAt?: import('firebase/firestore').Timestamp | any; // Firestore Timestamp (admin or client SDK)
+  invitedByDistributorId?: string;
+  invitedByUid?: string;
 }
 
 

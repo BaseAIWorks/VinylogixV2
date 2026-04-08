@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Users, AlertTriangle, PlusCircle, ArrowLeft, MoreVertical, Edit, Trash2, Eye, Mail, Building2, ShoppingCart, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, Users, AlertTriangle, PlusCircle, ArrowLeft, MoreVertical, Edit, Trash2, Eye, Mail, Building2, ShoppingCart, CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/use-auth";
@@ -42,11 +42,14 @@ import { BulkActionsBar, type BulkAction } from "@/components/ui/bulk-actions-ba
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatPriceForDisplay } from "@/lib/utils";
 
+type ClientStatus = 'pending' | 'active' | 'inactive';
+
 interface ClientWithStats extends User {
   totalOrders: number;
   totalSpent: number;
   lastOrderDate: string | null;
   isActive: boolean;
+  clientStatus: ClientStatus;
   recentOrders: Order[];
 }
 
@@ -66,7 +69,7 @@ export default function ClientsPage() {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "pending">("all");
 
   // State for Invite Dialog
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
@@ -119,12 +122,23 @@ export default function ClientsPage() {
       const lastOrderDate = sortedOrders[0]?.createdAt || null;
       const isActive = lastOrderDate ? isAfter(parseISO(lastOrderDate), ninetyDaysAgo) : false;
 
+      // Determine 3-state client status
+      const hasLoggedIn = client.lastLoginAt && client.createdAt &&
+        Math.abs(new Date(client.lastLoginAt).getTime() - new Date(client.createdAt).getTime()) > 60000;
+      let clientStatus: ClientStatus = 'inactive';
+      if (!hasLoggedIn && client.profileComplete === false) {
+        clientStatus = 'pending';
+      } else if (isActive) {
+        clientStatus = 'active';
+      }
+
       return {
         ...client,
         totalOrders: clientOrders.length,
         totalSpent,
         lastOrderDate,
         isActive,
+        clientStatus,
         recentOrders: sortedOrders.slice(0, 3),
       };
     });
@@ -145,10 +159,12 @@ export default function ClientsPage() {
     }
 
     // Status filter
-    if (statusFilter === "active") {
-      result = result.filter(client => client.isActive);
+    if (statusFilter === "pending") {
+      result = result.filter(client => client.clientStatus === 'pending');
+    } else if (statusFilter === "active") {
+      result = result.filter(client => client.clientStatus === 'active');
     } else if (statusFilter === "inactive") {
-      result = result.filter(client => !client.isActive);
+      result = result.filter(client => client.clientStatus === 'inactive');
     }
 
     return result;
@@ -296,8 +312,9 @@ export default function ClientsPage() {
   ];
 
   // Count active/inactive for display
-  const activeCount = clientsWithStats.filter(c => c.isActive).length;
-  const inactiveCount = clientsWithStats.filter(c => !c.isActive).length;
+  const pendingCount = clientsWithStats.filter(c => c.clientStatus === 'pending').length;
+  const activeCount = clientsWithStats.filter(c => c.clientStatus === 'active').length;
+  const inactiveCount = clientsWithStats.filter(c => c.clientStatus === 'inactive').length;
 
   if (authLoading || isLoadingData) {
     return (
@@ -400,7 +417,7 @@ export default function ClientsPage() {
             <div>
               <CardTitle>Your Clients</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                {clientsWithStats.length} total · {activeCount} active · {inactiveCount} inactive
+                {clientsWithStats.length} total · {activeCount} active · {inactiveCount} inactive{pendingCount > 0 ? ` · ${pendingCount} pending` : ''}
               </p>
             </div>
           </div>
@@ -482,6 +499,16 @@ export default function ClientsPage() {
                 <XCircle className="mr-1 h-4 w-4" />
                 Inactive
               </Button>
+              {pendingCount > 0 && (
+                <Button
+                  variant={statusFilter === "pending" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatusFilter("pending")}
+                >
+                  <Clock className="mr-1 h-4 w-4" />
+                  Pending ({pendingCount})
+                </Button>
+              )}
             </div>
           </div>
 
@@ -503,6 +530,7 @@ export default function ClientsPage() {
                     <TableHead className="hidden lg:table-cell text-center">Orders</TableHead>
                     <TableHead className="hidden lg:table-cell text-right">Total Spent</TableHead>
                     <TableHead className="hidden xl:table-cell">Last Order</TableHead>
+                    <TableHead className="hidden xl:table-cell">Invited</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -537,7 +565,11 @@ export default function ClientsPage() {
                         {client.email}
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-center" onClick={() => router.push(`/clients/${client.uid}`)}>
-                        {client.isActive ? (
+                        {client.clientStatus === 'pending' ? (
+                          <Badge variant="outline" className="bg-amber-500/20 text-amber-600 border-amber-500/30">
+                            Pending Invite
+                          </Badge>
+                        ) : client.clientStatus === 'active' ? (
                           <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-500/30">
                             Active
                           </Badge>
@@ -595,6 +627,9 @@ export default function ClientsPage() {
                       <TableCell className="hidden xl:table-cell" onClick={() => router.push(`/clients/${client.uid}`)}>
                         {formatDateSafe(client.lastOrderDate)}
                       </TableCell>
+                      <TableCell className="hidden xl:table-cell text-sm text-muted-foreground" onClick={() => router.push(`/clients/${client.uid}`)}>
+                        {formatDateSafe(client.invitedAt)}
+                      </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -609,6 +644,18 @@ export default function ClientsPage() {
                             <DropdownMenuItem onClick={() => router.push(`/clients/${client.uid}`)}>
                               <Edit className="mr-2 h-4 w-4" />Edit Client
                             </DropdownMenuItem>
+                            {client.clientStatus === 'pending' && client.email && (
+                              <DropdownMenuItem onClick={async () => {
+                                try {
+                                  await inviteClient(client.email!, user!.distributorId!);
+                                  toast({ title: "Invitation Resent", description: `Invitation resent to ${client.email}.` });
+                                } catch {
+                                  toast({ title: "Error", description: "Could not resend invitation.", variant: "destructive" });
+                                }
+                              }}>
+                                <RefreshCw className="mr-2 h-4 w-4" />Resend Invite
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem className="text-destructive" onClick={() => setClientToDelete(client)}>
                               <Trash2 className="mr-2 h-4 w-4" />Remove Client
                             </DropdownMenuItem>

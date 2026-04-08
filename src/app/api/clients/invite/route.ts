@@ -118,9 +118,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, message: 'Invitation processed successfully.', userCreated: false });
       }
 
-      // Grant access
+      // Grant access and track invite
       await existingUserQuery.docs[0].ref.update({
-        accessibleDistributorIds: FieldValue.arrayUnion(distributorId)
+        accessibleDistributorIds: FieldValue.arrayUnion(distributorId),
+        invitedAt: Timestamp.now(),
+        invitedByDistributorId: distributorId,
+        invitedByUid: caller.uid,
       });
 
       try {
@@ -148,7 +151,7 @@ export async function POST(req: NextRequest) {
       });
 
       const newTimestamp = Timestamp.now();
-      const newUserFirestoreData: FirestoreUser = {
+      const newUserFirestoreData = {
         email,
         role: 'viewer',
         accessibleDistributorIds: [distributorId],
@@ -157,6 +160,9 @@ export async function POST(req: NextRequest) {
         lastLoginAt: newTimestamp,
         loginHistory: [newTimestamp],
         profileComplete: false,
+        invitedAt: newTimestamp,
+        invitedByDistributorId: distributorId,
+        invitedByUid: caller.uid,
       };
 
       await adminDb.collection('users').doc(userRecord.uid).set(newUserFirestoreData);
