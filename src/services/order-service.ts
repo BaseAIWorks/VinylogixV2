@@ -219,6 +219,63 @@ export async function updateOrderItemStatuses(
   return processOrderTimestamps({ ...updatedSnap.data(), id: updatedSnap.id });
 }
 
+export async function recalculateOrderTax(
+  orderId: string,
+  actingUser: User
+): Promise<Order> {
+  if (!actingUser.distributorId) throw new Error("User has no distributorId.");
+
+  const orderDocRef = doc(db, ORDERS_COLLECTION, orderId);
+  const orderSnap = await getDoc(orderDocRef);
+
+  if (!orderSnap.exists() || orderSnap.data().distributorId !== actingUser.distributorId) {
+    throw new Error("Permission Denied or Order not found.");
+  }
+
+  const orderData = orderSnap.data() as Order;
+
+  // Fetch distributor tax settings
+  const distributor = await getDistributorById(actingUser.distributorId);
+  if (!distributor) throw new Error("Distributor not found.");
+
+  const taxMode = distributor.taxMode || 'none';
+  if (taxMode !== 'manual' || !distributor.manualTaxRate) {
+    throw new Error("Tax recalculation is only supported for manual tax mode.");
+  }
+
+  const taxBehavior = distributor.taxBehavior || 'inclusive';
+
+  // Calculate item total from active items
+  const activeItems = orderData.items.filter(item => {
+    const status = item.itemStatus || 'available';
+    return status === 'available' || status === 'back_order';
+  });
+  const itemTotal = activeItems.reduce((sum, item) => sum + (item.priceAtTimeOfOrder * item.quantity), 0);
+
+  // Determine reverse charge from stored order data
+  const reverseCharge = orderData.isReverseCharge || false;
+
+  // Recalculate tax with current distributor settings
+  const { calculateTax } = await import('@/lib/tax-utils');
+  const taxResult = calculateTax(itemTotal, distributor.manualTaxRate, taxBehavior, reverseCharge);
+
+  const updatePayload: any = {
+    subtotalAmount: taxResult.subtotal,
+    taxAmount: taxResult.taxAmount,
+    totalAmount: taxResult.total,
+    taxRate: taxResult.taxRate,
+    taxInclusive: taxBehavior === 'inclusive',
+    taxLabel: distributor.manualTaxLabel || 'VAT',
+    isReverseCharge: taxResult.isReverseCharge,
+    updatedAt: Timestamp.now(),
+  };
+
+  await updateDoc(orderDocRef, updatePayload);
+
+  const updatedSnap = await getDoc(orderDocRef);
+  return processOrderTimestamps({ ...updatedSnap.data(), id: updatedSnap.id });
+}
+
 export async function createOrder(user: User, cartItems: CartItem[]): Promise<Order> {
     if (cartItems.length === 0) {
         throw new Error("Cannot create an order with an empty cart.");

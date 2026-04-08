@@ -6,13 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import type { Order, OrderStatus, OrderItemStatus, VinylRecord } from "@/types";
-import { getOrderById, updateOrderStatus, updateOrderItemStatuses, getOrdersByViewerId } from "@/services/order-service";
+import { getOrderById, updateOrderStatus, updateOrderItemStatuses, recalculateOrderTax, getOrdersByViewerId } from "@/services/order-service";
 import { sendOrderItemChangesEmail } from "@/services/email-service";
 import { getRecordById } from "@/services/record-service";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, ArrowLeft, Package, User, Receipt, Music, CheckCircle, XCircle, Clock, Weight, Printer, Truck, PackageCheck, Hourglass, DollarSign, FileDown, ThumbsUp, ThumbsDown, Send, Building2, Mail, Phone, MapPin, ShoppingCart, AlertCircle, ExternalLink, Save, Bell } from "lucide-react";
+import { Loader2, ArrowLeft, Package, User, Receipt, Music, CheckCircle, XCircle, Clock, Weight, Printer, Truck, PackageCheck, Hourglass, DollarSign, FileDown, ThumbsUp, ThumbsDown, Send, Building2, Mail, Phone, MapPin, ShoppingCart, AlertCircle, ExternalLink, Save, Bell, RefreshCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from "next/link";
 import { auth } from "@/lib/firebase";
@@ -71,6 +71,7 @@ export default function OrderDetailPage() {
     const [isSavingItemStatuses, setIsSavingItemStatuses] = useState(false);
     const [isSendingNotification, setIsSendingNotification] = useState(false);
     const [notificationSent, setNotificationSent] = useState(false);
+    const [isRecalculating, setIsRecalculating] = useState(false);
     const hasUnsavedItemChanges = Object.keys(itemStatusChanges).length > 0;
     const hasItemStatusChanges = order?.items.some(item => item.itemStatus && item.itemStatus !== 'available') ?? false;
 
@@ -318,6 +319,20 @@ export default function OrderDetailPage() {
         }
     };
 
+    const handleRecalculateTax = async () => {
+        if (!order || !user) return;
+        setIsRecalculating(true);
+        try {
+            const updatedOrder = await recalculateOrderTax(orderId, user);
+            setOrder(updatedOrder);
+            toast({ title: "Tax recalculated", description: "Order totals have been updated with current tax settings." });
+        } catch (error: any) {
+            toast({ title: "Error", description: error.message || "Failed to recalculate tax.", variant: "destructive" });
+        } finally {
+            setIsRecalculating(false);
+        }
+    };
+
     const getEffectiveItemStatus = (recordId: string): OrderItemStatus => {
         return itemStatusChanges[recordId] ?? order?.items.find(i => i.recordId === recordId)?.itemStatus ?? 'available';
     };
@@ -554,6 +569,22 @@ export default function OrderDetailPage() {
                                 {order.isReverseCharge && <p className="text-xs text-muted-foreground italic">Reverse charge — VAT to be accounted for by the recipient.</p>}
                                 <p className="text-sm text-muted-foreground">Total Items: {order.items.reduce((sum, item) => sum + item.quantity, 0)}</p>
                                 {order.totalWeight && <p className="text-sm text-muted-foreground">Total Weight: {(order.totalWeight / 1000).toFixed(2)} kg</p>}
+                                {order.status !== 'shipped' && order.status !== 'cancelled' && (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="mt-2"
+                                        onClick={handleRecalculateTax}
+                                        disabled={isRecalculating}
+                                    >
+                                        {isRecalculating ? (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                                        ) : (
+                                            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                                        )}
+                                        Recalculate Tax
+                                    </Button>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
