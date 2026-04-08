@@ -26,6 +26,11 @@ const processUserTimestamps = (userData: any): User => {
         (ts && ts._seconds) ? new Date(ts._seconds * 1000).toISOString() : ts
     );
   }
+  if (processed.invitedAt && typeof processed.invitedAt.toDate === 'function') {
+    processed.invitedAt = processed.invitedAt.toDate().toISOString();
+  } else if (processed.invitedAt && processed.invitedAt._seconds) {
+    processed.invitedAt = new Date(processed.invitedAt._seconds * 1000).toISOString();
+  }
   return processed as User;
 };
 
