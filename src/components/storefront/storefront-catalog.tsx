@@ -198,7 +198,7 @@ export default function StorefrontCatalog({
           <p className="text-sm text-muted-foreground">
             {user
               ? "You're browsing as a visitor. Request access to see prices and place orders."
-              : "Sign in and become an approved client to see prices and place orders."}
+              : "Register or sign in to request access, see prices, and place orders."}
           </p>
           {user && (
             <div className="mt-3">

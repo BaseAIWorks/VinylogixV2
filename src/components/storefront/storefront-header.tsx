@@ -86,12 +86,19 @@ export default function StorefrontHeader({
                 </Button>
               </>
             ) : (
-              <Button asChild size="sm">
-                <Link href={"/login"}>
-                  <LogIn className="mr-1.5 h-4 w-4" />
-                  Sign in
-                </Link>
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/login">
+                    <LogIn className="mr-1.5 h-4 w-4" />
+                    Sign in
+                  </Link>
+                </Button>
+                <Button asChild size="sm">
+                  <Link href="/register/client">
+                    Register
+                  </Link>
+                </Button>
+              </div>
             )}
           </div>
         </div>

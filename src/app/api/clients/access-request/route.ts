@@ -1,0 +1,82 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { requireAuth, authErrorResponse } from '@/lib/auth-helpers';
+import { FieldValue } from 'firebase-admin/firestore';
+import { sendAccessApprovedEmail, sendAccessDeniedEmail } from '@/services/email-service';
+
+export async function POST(req: NextRequest) {
+  let auth;
+  try {
+    auth = await requireAuth(req);
+  } catch (error) {
+    return authErrorResponse(error);
+  }
+
+  const body = await req.json();
+  const { notificationId, action } = body as {
+    notificationId: string;
+    action: 'approve' | 'deny';
+  };
+
+  if (!notificationId || !['approve', 'deny'].includes(action)) {
+    return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
+  }
+
+  const adminDb = getAdminDb();
+  if (!adminDb) {
+    return NextResponse.json({ error: 'Service unavailable.' }, { status: 503 });
+  }
+
+  // Fetch the notification
+  const notifDoc = await adminDb.collection('notifications').doc(notificationId).get();
+  if (!notifDoc.exists) {
+    return NextResponse.json({ error: 'Request not found.' }, { status: 404 });
+  }
+
+  const notifData = notifDoc.data()!;
+  if (notifData.type !== 'access_request' || notifData.requestStatus !== 'pending') {
+    return NextResponse.json({ error: 'Request already processed.' }, { status: 400 });
+  }
+
+  // Verify the caller is a master of this distributor
+  const userDoc = await adminDb.collection('users').doc(auth.uid).get();
+  const userData = userDoc.data();
+  if (!userData || (userData.role !== 'superadmin' && userData.distributorId !== notifData.distributorId)) {
+    return NextResponse.json({ error: 'Insufficient permissions.' }, { status: 403 });
+  }
+
+  const distributorId = notifData.distributorId;
+  const requesterEmail = notifData.requesterEmail;
+  const requesterUid = notifData.requesterUid;
+
+  // Get distributor info for email
+  const distDoc = await adminDb.collection('distributors').doc(distributorId).get();
+  const distData = distDoc.data();
+  const distributorName = distData?.companyName || distData?.name || 'Distributor';
+  const storefrontSlug = distData?.slug;
+
+  if (action === 'approve') {
+    // Grant access to the requester
+    await adminDb.collection('users').doc(requesterUid).update({
+      accessibleDistributorIds: FieldValue.arrayUnion(distributorId),
+    });
+
+    // Send approved email
+    if (requesterEmail) {
+      await sendAccessApprovedEmail(requesterEmail, distributorName, storefrontSlug);
+    }
+  } else {
+    // Send denied email
+    if (requesterEmail) {
+      await sendAccessDeniedEmail(requesterEmail, distributorName);
+    }
+  }
+
+  // Update notification status
+  await adminDb.collection('notifications').doc(notificationId).update({
+    requestStatus: action === 'approve' ? 'approved' : 'denied',
+    isRead: true,
+  });
+
+  return NextResponse.json({ success: true });
+}

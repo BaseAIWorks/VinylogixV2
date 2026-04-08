@@ -206,26 +206,29 @@ export default function ClientsPage() {
     if (!user?.distributorId) return;
     setProcessingRequestId(notificationId);
     try {
-      if (action === 'approve' && email) {
-        // Use existing invite flow to grant access
-        await inviteClient(email, user.distributorId);
-      }
-      // Update the notification status
-      const { doc, updateDoc } = await import('firebase/firestore');
-      const { db } = await import('@/lib/firebase');
-      await updateDoc(doc(db, 'notifications', notificationId), {
-        requestStatus: action === 'approve' ? 'approved' : 'denied',
-        isRead: true,
+      const { auth: firebaseAuth } = await import('@/lib/firebase');
+      const token = await firebaseAuth.currentUser?.getIdToken();
+      const res = await fetch('/api/clients/access-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ notificationId, action }),
       });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to process request.');
+      }
       setAccessRequests((prev) => prev.filter((r) => r.id !== notificationId));
       toast({
         title: action === 'approve' ? "Access Approved" : "Request Denied",
         description: action === 'approve'
-          ? `${email} now has access to your catalog.`
-          : "The access request has been denied.",
+          ? `${email} now has access to your catalog. They've been notified by email.`
+          : "The request has been denied. The requester has been notified.",
       });
       if (action === 'approve') {
-        fetchData(); // Refresh client list
+        fetchData();
       }
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Could not process request.", variant: "destructive" });
@@ -340,16 +343,21 @@ export default function ClientsPage() {
                   key={request.id}
                   className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border p-3"
                 >
-                  <div className="min-w-0">
+                  <div className="min-w-0 space-y-0.5">
                     <p className="text-sm font-medium truncate">
-                      {request.requesterEmail}
+                      {request.requesterCompanyName || request.requesterName || request.requesterEmail}
                     </p>
-                    {request.requesterName && (
+                    {request.requesterCompanyName && request.requesterName && (
                       <p className="text-xs text-muted-foreground">{request.requesterName}</p>
                     )}
-                    <p className="text-xs text-muted-foreground">
-                      Requested {formatDateSafe(request.createdAt)}
-                    </p>
+                    <p className="text-xs text-muted-foreground truncate">{request.requesterEmail}</p>
+                    <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                      {request.requesterPhone && <span>{request.requesterPhone}</span>}
+                      {(request.requesterCity || request.requesterCountry) && (
+                        <span>{[request.requesterCity, request.requesterCountry].filter(Boolean).join(', ')}</span>
+                      )}
+                      <span>Requested {formatDateSafe(request.createdAt)}</span>
+                    </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <Button

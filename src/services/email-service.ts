@@ -701,3 +701,221 @@ export async function sendOrderRejectedEmail(order: Order, reason?: string): Pro
     console.error('Failed to send order rejected email:', error);
   }
 }
+
+/**
+ * Send access request notification to distributor
+ */
+interface AccessRequestEmailData {
+  distributorEmail: string;
+  distributorName: string;
+  requesterEmail: string;
+  requesterName?: string;
+  requesterCompanyName?: string;
+  requesterPhone?: string;
+  requesterCity?: string;
+  requesterCountry?: string;
+}
+
+export async function sendAccessRequestNotification(data: AccessRequestEmailData): Promise<void> {
+  try {
+    const profileRows = [
+      { label: 'Email', value: data.requesterEmail },
+      data.requesterName ? { label: 'Name', value: data.requesterName } : null,
+      data.requesterCompanyName ? { label: 'Company', value: data.requesterCompanyName } : null,
+      data.requesterPhone ? { label: 'Phone', value: data.requesterPhone } : null,
+      data.requesterCity || data.requesterCountry
+        ? { label: 'Location', value: [data.requesterCity, data.requesterCountry].filter(Boolean).join(', ') }
+        : null,
+    ].filter(Boolean) as { label: string; value: string }[];
+
+    const profileHtml = profileRows
+      .map(row => `<p><strong>${row.label}:</strong> ${row.value}</p>`)
+      .join('\n              ');
+
+    await resend.emails.send({
+      from: 'Vinylogix <noreply@vinylogix.com>',
+      to: data.distributorEmail,
+      subject: `New Catalog Access Request from ${data.requesterCompanyName || data.requesterName || data.requesterEmail}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #dbeafe; border-radius: 8px; padding: 30px; margin-bottom: 20px; text-align: center; }
+              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+              .button { display: inline-block; background-color: #26222B; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>New Access Request</h1>
+              <p>Someone wants to browse your catalog on Vinylogix</p>
+            </div>
+
+            <div class="card">
+              <h2>Requester Details</h2>
+              ${profileHtml}
+            </div>
+
+            <p>You can approve or deny this request from your Clients page.</p>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${siteUrl}/clients" class="button">Review Request</a>
+            </div>
+
+            <p style="text-align: center; color: #6c757d; font-size: 14px;">
+              This email was sent because someone requested access to ${data.distributorName}'s catalog on Vinylogix.
+            </p>
+          </body>
+        </html>
+      `,
+    });
+
+    console.log(`Access request notification sent to ${data.distributorEmail}`);
+  } catch (error) {
+    console.error('Failed to send access request notification:', error);
+  }
+}
+
+/**
+ * Send confirmation to requester that their access request was submitted
+ */
+export async function sendAccessRequestConfirmation(
+  requesterEmail: string,
+  distributorName: string
+): Promise<void> {
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix <noreply@vinylogix.com>',
+      to: requesterEmail,
+      subject: `Access Request Sent — ${distributorName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #dbeafe; border-radius: 8px; padding: 30px; margin-bottom: 20px; text-align: center; }
+              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>Request Submitted</h1>
+            </div>
+            <div class="card">
+              <p>Your access request to <strong>${distributorName}</strong>'s catalog has been submitted.</p>
+              <p>The distributor will review your request and you'll receive an email once it's been approved or denied.</p>
+            </div>
+            <p style="text-align: center; color: #6c757d; font-size: 14px;">
+              This email was sent by Vinylogix on behalf of ${distributorName}.
+            </p>
+          </body>
+        </html>
+      `,
+    });
+    console.log(`Access request confirmation sent to ${requesterEmail}`);
+  } catch (error) {
+    console.error('Failed to send access request confirmation:', error);
+  }
+}
+
+/**
+ * Send email to requester when their access request is approved
+ */
+export async function sendAccessApprovedEmail(
+  requesterEmail: string,
+  distributorName: string,
+  storefrontSlug?: string
+): Promise<void> {
+  try {
+    const catalogUrl = storefrontSlug
+      ? `${siteUrl}/storefront/${storefrontSlug}`
+      : `${siteUrl}/dashboard`;
+
+    await resend.emails.send({
+      from: 'Vinylogix <noreply@vinylogix.com>',
+      to: requesterEmail,
+      subject: `Access Approved — ${distributorName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #d1fae5; border-radius: 8px; padding: 30px; margin-bottom: 20px; text-align: center; }
+              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+              .button { display: inline-block; background-color: #26222B; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>Access Approved!</h1>
+            </div>
+            <div class="card">
+              <p>Great news! <strong>${distributorName}</strong> has approved your access request.</p>
+              <p>You can now browse their full catalog with prices and place orders.</p>
+            </div>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${catalogUrl}" class="button">Browse Catalog</a>
+            </div>
+            <p style="text-align: center; color: #6c757d; font-size: 14px;">
+              This email was sent by Vinylogix on behalf of ${distributorName}.
+            </p>
+          </body>
+        </html>
+      `,
+    });
+    console.log(`Access approved email sent to ${requesterEmail}`);
+  } catch (error) {
+    console.error('Failed to send access approved email:', error);
+  }
+}
+
+/**
+ * Send email to requester when their access request is denied
+ */
+export async function sendAccessDeniedEmail(
+  requesterEmail: string,
+  distributorName: string
+): Promise<void> {
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix <noreply@vinylogix.com>',
+      to: requesterEmail,
+      subject: `Access Request Update — ${distributorName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #f3f4f6; border-radius: 8px; padding: 30px; margin-bottom: 20px; text-align: center; }
+              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>Access Request Update</h1>
+            </div>
+            <div class="card">
+              <p>Unfortunately, <strong>${distributorName}</strong> was unable to approve your access request at this time.</p>
+              <p>You can contact the distributor directly for more information.</p>
+            </div>
+            <p style="text-align: center; color: #6c757d; font-size: 14px;">
+              This email was sent by Vinylogix on behalf of ${distributorName}.
+            </p>
+          </body>
+        </html>
+      `,
+    });
+    console.log(`Access denied email sent to ${requesterEmail}`);
+  } catch (error) {
+    console.error('Failed to send access denied email:', error);
+  }
+}

@@ -580,6 +580,10 @@ export interface AppNotification {
   requesterUid?: string;
   requesterEmail?: string;
   requesterName?: string;
+  requesterCompanyName?: string;
+  requesterPhone?: string;
+  requesterCity?: string;
+  requesterCountry?: string;
   requestStatus?: 'pending' | 'approved' | 'denied';
 }
 

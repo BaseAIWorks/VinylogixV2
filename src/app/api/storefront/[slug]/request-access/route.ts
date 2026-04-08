@@ -4,6 +4,7 @@ import { requireAuth, authErrorResponse } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
 import { resolveDistributorBySlug } from '@/lib/storefront-helpers';
 import { Timestamp } from 'firebase-admin/firestore';
+import { sendAccessRequestNotification, sendAccessRequestConfirmation } from '@/services/email-service';
 
 export async function POST(
   req: NextRequest,
@@ -61,20 +62,46 @@ export async function POST(
     return NextResponse.json({ error: 'You already have a pending request.' }, { status: 409 });
   }
 
-  // Create access request notification for the distributor
+  // Build requester profile
   const requesterName = [userData.firstName, userData.lastName].filter(Boolean).join(' ') || undefined;
+  const requesterEmail = userData.email || auth.email;
 
+  // Create access request notification for the distributor
   await adminDb.collection('notifications').add({
     distributorId,
     type: 'access_request',
-    message: `${userData.email} has requested access to your catalog.`,
+    message: `${requesterEmail} has requested access to your catalog.`,
     isRead: false,
     createdAt: Timestamp.now(),
     requesterUid: auth.uid,
-    requesterEmail: userData.email || auth.email,
-    requesterName: requesterName || userData.companyName,
+    requesterEmail,
+    requesterName,
+    requesterCompanyName: userData.companyName || undefined,
+    requesterPhone: userData.phoneNumber || undefined,
+    requesterCity: userData.city || undefined,
+    requesterCountry: userData.country || undefined,
     requestStatus: 'pending',
   });
+
+  // Send email notification to the distributor
+  const distributorEmail = distData.contactEmail;
+  if (distributorEmail) {
+    const distributorName = distData.companyName || distData.name;
+    await sendAccessRequestNotification({
+      distributorEmail,
+      distributorName,
+      requesterEmail: requesterEmail!,
+      requesterName,
+      requesterCompanyName: userData.companyName,
+      requesterPhone: userData.phoneNumber,
+      requesterCity: userData.city,
+      requesterCountry: userData.country,
+    });
+  }
+
+  // Send confirmation email to the requester
+  const distributorName = distData.companyName || distData.name;
+  await sendAccessRequestConfirmation(requesterEmail!, distributorName);
 
   return NextResponse.json({ success: true, message: 'Access request sent.' });
 }
