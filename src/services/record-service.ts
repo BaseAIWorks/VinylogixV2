@@ -142,49 +142,55 @@ export async function getInventoryRecords(
   }
 
   const recordsCollectionRef = collection(db, RECORDS_COLLECTION);
-  let q: Query<DocumentData> = query(
-    recordsCollectionRef,
-    where("distributorId", "==", targetDistributorId),
-    where("isInventoryItem", "==", true)
-  );
-
-  // Apply filters
-  if (filters.year) q = query(q, where("year", "==", Number(filters.year)));
-  if (filters.genre) q = query(q, where("genre", "array-contains", filters.genre));
-  if (filters.format) q = query(q, where("formatDetails", "==", filters.format));
-  if (filters.condition) q = query(q, where("media_condition", "==", filters.condition));
-  if (filters.location) q = query(q, where("shelf_locations", "array-contains", filters.location));
-
-  // Apply sorting
-  switch (sortOption) {
-    case 'title_asc':
-      q = query(q, orderBy("title", "asc"));
-      break;
-    case 'title_desc':
-      q = query(q, orderBy("title", "desc"));
-      break;
-    case 'stock_shelves_desc':
-        q = query(q, orderBy("stock_shelves", "desc"));
-        break;
-    case 'stock_storage_desc':
-        q = query(q, orderBy("stock_storage", "desc"));
-        break;
-    case 'added_at_desc':
-    default:
-      q = query(q, orderBy("added_at", "desc"));
-      break;
-  }
-
-  // When searching: fetch ALL records for this distributor and filter in memory.
-  // Firestore doesn't support partial text search natively, so we must scan everything.
   const isSearching = !!searchTerm && searchTerm.trim().length >= 2;
 
-  // Apply pagination (skip when searching — we need to scan from the start)
-  if (lastVisible && !isSearching) {
-    q = query(q, startAfter(lastVisible));
-  }
+  let q: Query<DocumentData>;
 
-  if (!isSearching) {
+  if (isSearching) {
+    // Search: minimal query — no orderBy, no filters, no limit.
+    // orderBy silently excludes docs missing the field or with mismatched types,
+    // so we fetch everything and handle filtering + sorting in memory.
+    q = query(
+      recordsCollectionRef,
+      where("distributorId", "==", targetDistributorId),
+      where("isInventoryItem", "==", true)
+    );
+  } else {
+    // Normal browsing: apply Firestore filters, sort, pagination, and limit.
+    q = query(
+      recordsCollectionRef,
+      where("distributorId", "==", targetDistributorId),
+      where("isInventoryItem", "==", true)
+    );
+
+    if (filters.year) q = query(q, where("year", "==", Number(filters.year)));
+    if (filters.genre) q = query(q, where("genre", "array-contains", filters.genre));
+    if (filters.format) q = query(q, where("formatDetails", "==", filters.format));
+    if (filters.condition) q = query(q, where("media_condition", "==", filters.condition));
+    if (filters.location) q = query(q, where("shelf_locations", "array-contains", filters.location));
+
+    switch (sortOption) {
+      case 'title_asc':
+        q = query(q, orderBy("title", "asc"));
+        break;
+      case 'title_desc':
+        q = query(q, orderBy("title", "desc"));
+        break;
+      case 'stock_shelves_desc':
+        q = query(q, orderBy("stock_shelves", "desc"));
+        break;
+      case 'stock_storage_desc':
+        q = query(q, orderBy("stock_storage", "desc"));
+        break;
+      case 'added_at_desc':
+      default:
+        q = query(q, orderBy("added_at", "desc"));
+        break;
+    }
+
+    if (lastVisible) {
+      q = query(q, startAfter(lastVisible));
+    }
     q = query(q, firestoreLimit(limit));
   }
 
@@ -192,9 +198,10 @@ export async function getInventoryRecords(
     const querySnapshot = await getDocs(q);
     let records = querySnapshot.docs.map(docSnap => processRecordTimestamps({ ...docSnap.data(), id: docSnap.id }));
 
-    // Apply search filter in memory
     if (isSearching) {
       const term = searchTerm!.toLowerCase().trim();
+
+      // 1. Filter by search term
       records = records.filter(record =>
         record.title?.toLowerCase().includes(term) ||
         record.artist?.toLowerCase().includes(term) ||
@@ -203,10 +210,30 @@ export async function getInventoryRecords(
         (Array.isArray(record.shelf_locations) && record.shelf_locations.some(loc => loc.toLowerCase().includes(term))) ||
         (Array.isArray(record.storage_locations) && record.storage_locations.some(loc => loc.toLowerCase().includes(term)))
       );
-      return {
-        records,
-        lastVisible: null,
-      };
+
+      // 2. Apply user's active filters in memory
+      if (filters.year) records = records.filter(r => r.year === Number(filters.year));
+      if (filters.genre) records = records.filter(r => Array.isArray(r.genre) && r.genre.includes(filters.genre!));
+      if (filters.format) records = records.filter(r => r.formatDetails === filters.format);
+      if (filters.condition) records = records.filter(r => r.media_condition === filters.condition);
+      if (filters.location) records = records.filter(r =>
+        (Array.isArray(r.shelf_locations) && r.shelf_locations.includes(filters.location!)) ||
+        (Array.isArray(r.storage_locations) && r.storage_locations.includes(filters.location!))
+      );
+
+      // 3. Apply sort in memory
+      records.sort((a, b) => {
+        switch (sortOption) {
+          case 'title_asc': return (a.title || '').localeCompare(b.title || '');
+          case 'title_desc': return (b.title || '').localeCompare(a.title || '');
+          case 'stock_shelves_desc': return (b.stock_shelves || 0) - (a.stock_shelves || 0);
+          case 'stock_storage_desc': return (b.stock_storage || 0) - (a.stock_storage || 0);
+          case 'added_at_desc':
+          default: return (b.added_at || '').localeCompare(a.added_at || '');
+        }
+      });
+
+      return { records, lastVisible: null };
     }
 
     const newLastVisible = querySnapshot.docs[querySnapshot.docs.length - 1] || null;

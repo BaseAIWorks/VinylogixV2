@@ -76,16 +76,17 @@ export async function GET(
   const genre = url.searchParams.get('genre');
   const format = url.searchParams.get('format');
 
-  // Build query
+  // Build query — when searching/filtering, skip orderBy so records with missing
+  // or mismatched added_at fields aren't silently excluded from results.
+  const isFiltering = !!(search || genre || format);
   let query: FirebaseFirestore.Query = adminDb
     .collection('vinylRecords')
     .where('distributorId', '==', distributorId)
-    .where('isInventoryItem', '==', true)
-    .orderBy('added_at', 'desc');
+    .where('isInventoryItem', '==', true);
 
-  // When searching: fetch all records and filter in memory (Firestore has no text search)
-  // When browsing: use cursor pagination with limit
-  if (!search && !genre && !format) {
+  if (!isFiltering) {
+    // Normal browsing: orderBy + cursor pagination + limit
+    query = query.orderBy('added_at', 'desc');
     if (cursor) {
       const cursorDoc = await adminDb.collection('vinylRecords').doc(cursor).get();
       if (cursorDoc.exists) {
@@ -94,7 +95,7 @@ export async function GET(
     }
     query = query.limit(limitParam + 1);
   }
-  // No limit when searching — scan full inventory to find all matches
+  // When searching/filtering: no orderBy, no limit — scan full inventory
 
   const snapshot = await query.get();
   let records: any[] = snapshot.docs.map((doc: any) => {
@@ -102,12 +103,13 @@ export async function GET(
     return { docId: doc.id, ...data };
   });
 
-  // Apply filters (Firestore doesn't support multiple inequality/array-contains together easily)
+  // Apply search + filters in memory
   if (search) {
     records = records.filter((r: any) =>
       r.title?.toLowerCase().includes(search) ||
       r.artist?.toLowerCase().includes(search) ||
-      r.label?.toLowerCase().includes(search)
+      r.label?.toLowerCase().includes(search) ||
+      (r.barcode && r.barcode.toLowerCase().includes(search))
     );
   }
   if (genre) {
@@ -121,9 +123,19 @@ export async function GET(
     );
   }
 
-  // Pagination
-  const hasMore = records.length > limitParam;
-  const resultRecords = records.slice(0, limitParam);
+  // Sort by added_at desc in memory when filtering (since we skipped orderBy)
+  if (isFiltering) {
+    records.sort((a: any, b: any) => {
+      const aMs = a.added_at?.toDate?.()?.getTime?.() ?? new Date(a.added_at || 0).getTime();
+      const bMs = b.added_at?.toDate?.()?.getTime?.() ?? new Date(b.added_at || 0).getTime();
+      return bMs - aMs;
+    });
+  }
+
+  // Pagination — when filtering, all results are already in memory so return them all.
+  // Cursor pagination doesn't work for filtered results (no orderBy → no stable cursor).
+  const hasMore = isFiltering ? false : records.length > limitParam;
+  const resultRecords = isFiltering ? records : records.slice(0, limitParam);
 
   // Strip to safe fields
   const safeRecords = resultRecords.map((record: any) => {

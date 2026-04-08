@@ -97,6 +97,9 @@ export default function InventoryPage() {
   const hasMoreRef = useRef(hasMore);
   hasMoreRef.current = hasMore;
 
+  // Fetch generation counter — prevents stale async results from overwriting fresh ones
+  const fetchGenRef = useRef(0);
+
   // Scroll to cached position once after records render
   useEffect(() => {
     if (initialCache.current && records.length > 0 && !hasRestoredScroll.current) {
@@ -154,15 +157,23 @@ export default function InventoryPage() {
       return;
     }
 
+    const isSearching = !!debouncedSearchTerm;
+
     if (loadMore) {
         if (isFetchingMore || !hasMore) return;
         setIsFetchingMore(true);
     } else {
         setIsFetching(true);
         setLastVisible(null);
-        setHasMore(true);
+        // When searching, disable infinite scroll — all results come in one fetch.
+        // Setting hasMore=true here previously caused the IntersectionObserver to fire
+        // a duplicate fetch before the first one completed.
+        setHasMore(isSearching ? false : true);
     }
-    
+
+    // Tag this fetch so we can discard results from superseded requests
+    const gen = ++fetchGenRef.current;
+
     try {
         const { records: fetchedRecords, lastVisible: newLastVisible } = await getInventoryRecords(user, {
             distributorId: activeDistributorId,
@@ -172,19 +183,23 @@ export default function InventoryPage() {
             lastVisible: loadMore ? lastVisible : null,
             searchTerm: debouncedSearchTerm || undefined,
         });
-        
+
+        // Discard stale results — a newer fetch has already been started
+        if (gen !== fetchGenRef.current) return;
+
         setRecords(prev => loadMore ? [...prev, ...fetchedRecords] : fetchedRecords);
         setLastVisible(newLastVisible);
-        // Search fetches a large batch (500) and filters in memory — pagination cursors
-        // are skipped during search, so "load more" would re-fetch the same results.
-        setHasMore(debouncedSearchTerm ? false : fetchedRecords.length === 25);
+        setHasMore(isSearching ? false : fetchedRecords.length === 25);
     } catch (error) {
+        if (gen !== fetchGenRef.current) return;
         const errorMessage = (error as Error).message || "An unknown error occurred.";
         const errorDescription = `Could not load inventory records. ${errorMessage}`;
         toast({ title: "Error Loading Inventory", description: errorDescription, variant: "destructive", duration: 15000 });
     } finally {
-        setIsFetching(false);
-        setIsFetchingMore(false);
+        if (gen === fetchGenRef.current) {
+            setIsFetching(false);
+            setIsFetchingMore(false);
+        }
     }
   }, [user, activeDistributorId, filters, sortOption, debouncedSearchTerm, toast, isFetchingMore, hasMore, lastVisible]);
 
