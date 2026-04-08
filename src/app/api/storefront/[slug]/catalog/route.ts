@@ -83,17 +83,18 @@ export async function GET(
     .where('isInventoryItem', '==', true)
     .orderBy('added_at', 'desc');
 
-  // Cursor-based pagination
-  if (cursor) {
-    const cursorDoc = await adminDb.collection('vinylRecords').doc(cursor).get();
-    if (cursorDoc.exists) {
-      query = query.startAfter(cursorDoc);
+  // When searching: fetch all records and filter in memory (Firestore has no text search)
+  // When browsing: use cursor pagination with limit
+  if (!search && !genre && !format) {
+    if (cursor) {
+      const cursorDoc = await adminDb.collection('vinylRecords').doc(cursor).get();
+      if (cursorDoc.exists) {
+        query = query.startAfter(cursorDoc);
+      }
     }
+    query = query.limit(limitParam + 1);
   }
-
-  // Fetch more than limit to allow server-side filtering for search
-  const fetchLimit = search ? 200 : limitParam + 1;
-  query = query.limit(fetchLimit);
+  // No limit when searching — scan full inventory to find all matches
 
   const snapshot = await query.get();
   let records: any[] = snapshot.docs.map((doc: any) => {
