@@ -16,7 +16,7 @@ import { formatPriceForDisplay } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { generateInvoicePdf } from "@/lib/invoice-utils";
-import type { Order, OrderStatus, Distributor } from "@/types";
+import type { Order, OrderStatus, OrderItemStatus, Distributor } from "@/types";
 import ProtectedRoute from "@/components/layout/protected-route";
 
 const statusConfig: Record<OrderStatus, { icon: React.ElementType, color: string, label: string }> = {
@@ -28,6 +28,13 @@ const statusConfig: Record<OrderStatus, { icon: React.ElementType, color: string
   shipped: { icon: Truck, color: 'bg-indigo-500/20 text-indigo-500 border-indigo-500/30', label: 'Shipped' },
   on_hold: { icon: Clock, color: 'bg-orange-500/20 text-orange-500 border-orange-500/30', label: 'On Hold' },
   cancelled: { icon: XCircle, color: 'bg-red-500/20 text-red-500 border-red-500/30', label: 'Cancelled' },
+};
+
+const itemStatusConfig: Record<OrderItemStatus, { label: string; color: string }> = {
+  available: { label: 'Available', color: 'bg-green-500/20 text-green-700 border-green-500/30' },
+  not_available: { label: 'Not Available', color: 'bg-red-500/20 text-red-700 border-red-500/30' },
+  out_of_stock: { label: 'Out of Stock', color: 'bg-orange-500/20 text-orange-700 border-orange-500/30' },
+  back_order: { label: 'Back Order', color: 'bg-amber-500/20 text-amber-700 border-amber-500/30' },
 };
 
 export default function ClientOrderDetailPage() {
@@ -152,8 +159,11 @@ export default function ClientOrderDetailPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {order.items.map(item => (
-                      <TableRow key={item.recordId}>
+                    {order.items.map(item => {
+                      const status = item.itemStatus || 'available';
+                      const excluded = status === 'not_available' || status === 'out_of_stock';
+                      return (
+                      <TableRow key={item.recordId} className={excluded ? 'opacity-60' : ''}>
                         <TableCell>
                           <Image
                             src={item.cover_url || 'https://placehold.co/80x80.png'}
@@ -164,18 +174,27 @@ export default function ClientOrderDetailPage() {
                           />
                         </TableCell>
                         <TableCell>
-                          <p className="font-medium">{item.title}</p>
+                          <p className={`font-medium ${excluded ? 'line-through' : ''}`}>{item.title}</p>
                           <p className="text-sm text-muted-foreground">{item.artist}</p>
+                          {status !== 'available' && (
+                            <Badge variant="outline" className={`mt-1 text-[10px] ${itemStatusConfig[status].color}`}>
+                              {itemStatusConfig[status].label}
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-center">{item.quantity}</TableCell>
-                        <TableCell className="text-right">€ {formatPriceForDisplay(item.priceAtTimeOfOrder)}</TableCell>
-                        <TableCell className="text-right">€ {formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</TableCell>
+                        <TableCell className={`text-right ${excluded ? 'line-through' : ''}`}>€ {formatPriceForDisplay(item.priceAtTimeOfOrder)}</TableCell>
+                        <TableCell className={`text-right ${excluded ? 'line-through' : ''}`}>€ {formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
                 <Separator className="my-4" />
                 <div className="space-y-1 text-right">
+                  {order.originalTotalAmount && order.originalTotalAmount !== order.totalAmount && (
+                    <p className="text-sm text-muted-foreground">Original total: <span className="line-through">€ {formatPriceForDisplay(order.originalTotalAmount)}</span></p>
+                  )}
                   {order.subtotalAmount !== undefined && order.taxAmount !== undefined && (
                     <>
                       <p className="text-sm text-muted-foreground">Subtotal excl. {order.taxLabel || 'VAT'}: € {formatPriceForDisplay(order.subtotalAmount)}</p>
@@ -186,6 +205,7 @@ export default function ClientOrderDetailPage() {
                   )}
                   <p className="font-semibold text-lg">Total: € {formatPriceForDisplay(order.totalAmount)}</p>
                   {order.isReverseCharge && <p className="text-xs text-muted-foreground italic">Reverse charge — VAT to be accounted for by the recipient.</p>}
+                  <p className="text-sm text-muted-foreground">Total Items: {order.items.reduce((sum, item) => sum + item.quantity, 0)}</p>
                   {order.totalWeight && (
                     <p className="text-sm text-muted-foreground">
                       Total Weight: {(order.totalWeight / 1000).toFixed(2)} kg

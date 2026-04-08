@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Order, OrderStatus, User, CartItem, OrderItem } from '@/types';
+import type { Order, OrderStatus, OrderItemStatus, User, CartItem, OrderItem } from '@/types';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, where, limit, Timestamp } from 'firebase/firestore';
 import { deductStockForOrder, restoreStockForOrder, getRecordById } from './record-service';
@@ -148,6 +148,75 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, ac
     }
 
     return updatedOrder;
+}
+
+export async function updateOrderItemStatuses(
+  orderId: string,
+  changes: Array<{ recordId: string; itemStatus: OrderItemStatus }>,
+  actingUser: User
+): Promise<Order> {
+  if (!actingUser.distributorId) throw new Error("User has no distributorId.");
+
+  const orderDocRef = doc(db, ORDERS_COLLECTION, orderId);
+  const orderSnap = await getDoc(orderDocRef);
+
+  if (!orderSnap.exists() || orderSnap.data().distributorId !== actingUser.distributorId) {
+    throw new Error("Permission Denied or Order not found.");
+  }
+
+  const orderData = orderSnap.data() as Order;
+
+  // Build a lookup for the changes
+  const changeMap = new Map(changes.map(c => [c.recordId, c.itemStatus]));
+
+  // Update item statuses
+  const updatedItems = orderData.items.map(item => {
+    const newStatus = changeMap.get(item.recordId);
+    if (newStatus !== undefined) {
+      return { ...item, itemStatus: newStatus };
+    }
+    return item;
+  });
+
+  // Preserve original totals on first adjustment
+  const originalTotalAmount = orderData.originalTotalAmount ?? orderData.totalAmount;
+  const originalSubtotalAmount = orderData.originalSubtotalAmount ?? orderData.subtotalAmount;
+
+  // Recalculate totals — exclude not_available and out_of_stock items
+  const activeItems = updatedItems.filter(item => {
+    const status = item.itemStatus || 'available';
+    return status === 'available' || status === 'back_order';
+  });
+
+  const newSubtotal = activeItems.reduce((sum, item) => sum + (item.priceAtTimeOfOrder * item.quantity), 0);
+
+  // Recalculate tax proportionally if tax data exists
+  let newTaxAmount = orderData.taxAmount;
+  let newTotal = newSubtotal;
+  if (originalSubtotalAmount && originalSubtotalAmount > 0 && orderData.taxAmount !== undefined) {
+    const ratio = newSubtotal / originalSubtotalAmount;
+    newTaxAmount = Math.round(orderData.taxAmount * ratio * 100) / 100;
+    newTotal = newSubtotal + newTaxAmount;
+  } else {
+    newTotal = newSubtotal;
+  }
+
+  const updatePayload: any = {
+    items: updatedItems,
+    totalAmount: newTotal,
+    subtotalAmount: newSubtotal,
+    originalTotalAmount,
+    originalSubtotalAmount,
+    updatedAt: Timestamp.now(),
+  };
+  if (newTaxAmount !== undefined) {
+    updatePayload.taxAmount = newTaxAmount;
+  }
+
+  await updateDoc(orderDocRef, updatePayload);
+
+  const updatedSnap = await getDoc(orderDocRef);
+  return processOrderTimestamps({ ...updatedSnap.data(), id: updatedSnap.id });
 }
 
 export async function createOrder(user: User, cartItems: CartItem[]): Promise<Order> {

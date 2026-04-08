@@ -1,6 +1,6 @@
 import { resend } from '@/lib/resend';
 import { format } from 'date-fns';
-import type { Order } from '@/types';
+import type { Order, OrderItemStatus } from '@/types';
 import { formatPriceForDisplay } from '@/lib/utils';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
@@ -944,5 +944,121 @@ export async function sendAccessDeniedEmail(
     console.log(`Access denied email sent to ${requesterEmail}`);
   } catch (error) {
     console.error('Failed to send access denied email:', error);
+  }
+}
+
+const itemStatusLabels: Record<OrderItemStatus, string> = {
+  available: 'Available',
+  not_available: 'Not Available',
+  out_of_stock: 'Out of Stock',
+  back_order: 'Back Order',
+};
+
+const itemStatusColors: Record<OrderItemStatus, string> = {
+  available: '#16a34a',
+  not_available: '#dc2626',
+  out_of_stock: '#ea580c',
+  back_order: '#d97706',
+};
+
+export async function sendOrderItemChangesEmail(order: Order, distributorName: string): Promise<void> {
+  const changedItems = order.items.filter(item => item.itemStatus && item.itemStatus !== 'available');
+  if (changedItems.length === 0) return;
+
+  const itemRows = changedItems.map(item => {
+    const status = item.itemStatus || 'available';
+    const color = itemStatusColors[status];
+    const label = itemStatusLabels[status];
+    return `
+      <tr>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb;">
+          <strong>${item.artist}</strong> — ${item.title}
+        </td>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">
+          ${item.quantity}
+        </td>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">
+          <span style="display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; color: white; background: ${color};">${label}</span>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  const hasAdjustedTotal = order.originalTotalAmount && order.originalTotalAmount !== order.totalAmount;
+
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix <noreply@vinylogix.com>',
+      to: [order.viewerEmail],
+      subject: `Order Update — ${order.orderNumber || order.id}`,
+      html: `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Update</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background: #1f2937; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="margin: 0; font-size: 20px;">📦 Order Update</h1>
+    </div>
+    <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+        <p>Hello ${order.customerName || ''},</p>
+        <p><strong>${distributorName}</strong> has updated the availability of some items in your order <strong>#${order.orderNumber || order.id}</strong>:</p>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
+          <thead>
+            <tr style="background: #f3f4f6;">
+              <th style="padding: 10px 12px; text-align: left; border-bottom: 2px solid #e5e7eb;">Item</th>
+              <th style="padding: 10px 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">Qty</th>
+              <th style="padding: 10px 12px; text-align: center; border-bottom: 2px solid #e5e7eb;">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemRows}
+          </tbody>
+        </table>
+
+        ${hasAdjustedTotal ? `
+        <div style="background: #fef3c7; border: 1px solid #f59e0b; padding: 15px; border-radius: 6px; margin: 20px 0;">
+          <p style="margin: 0 0 5px 0; font-size: 14px; color: #92400e;">
+            <strong>Order total adjusted:</strong>
+          </p>
+          <p style="margin: 0; font-size: 14px; color: #92400e;">
+            Original: <span style="text-decoration: line-through;">€ ${formatPriceForDisplay(order.originalTotalAmount!)}</span>
+            → New total: <strong>€ ${formatPriceForDisplay(order.totalAmount)}</strong>
+          </p>
+        </div>
+        ` : ''}
+
+        <p>If you have any questions about this update, please contact <strong>${distributorName}</strong> directly.</p>
+
+        <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 0;">View Order Details</a>
+    </div>
+    <div style="text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px;">
+        <p>This email was sent from Vinylogix on behalf of ${distributorName}</p>
+    </div>
+</body>
+</html>
+      `,
+      text: `
+Order Update — ${order.orderNumber || order.id}
+
+Hello ${order.customerName || ''},
+
+${distributorName} has updated the availability of some items in your order:
+
+${changedItems.map(item => `- ${item.artist} — ${item.title} (Qty: ${item.quantity}): ${itemStatusLabels[item.itemStatus || 'available']}`).join('\n')}
+
+${hasAdjustedTotal ? `Order total adjusted: Original €${formatPriceForDisplay(order.originalTotalAmount!)} → New total €${formatPriceForDisplay(order.totalAmount)}` : ''}
+
+View your order: ${siteUrl}/my-orders/${order.id}
+      `,
+    });
+    console.log(`Order item changes email sent to ${order.viewerEmail}`);
+  } catch (error) {
+    console.error('Failed to send order item changes email:', error);
+    throw error;
   }
 }

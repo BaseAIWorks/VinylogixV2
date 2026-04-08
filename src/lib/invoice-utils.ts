@@ -555,12 +555,17 @@ export async function generateInvoicePdf(
     doc.text('* Reverse charge — VAT to be accounted for by the recipient.', margin, currentY);
   }
 
+  // Total items
+  const totalQty = (order.items || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+  currentY += 5;
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...COLORS.secondary);
+  doc.text(`Total items: ${totalQty}`, pageWidth - margin, currentY, { align: 'right' });
+
   // Total weight
   if (order.totalWeight && order.totalWeight > 0) {
-    currentY += 5;
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...COLORS.secondary);
+    currentY += 4;
     doc.text(`Total weight: ${(order.totalWeight / 1000).toFixed(2)} kg`, pageWidth - margin, currentY, { align: 'right' });
   }
 

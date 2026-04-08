@@ -5,13 +5,15 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
-import type { Order, OrderStatus, VinylRecord } from "@/types";
-import { getOrderById, updateOrderStatus, getOrdersByViewerId } from "@/services/order-service";
+import type { Order, OrderStatus, OrderItemStatus, VinylRecord } from "@/types";
+import { getOrderById, updateOrderStatus, updateOrderItemStatuses, getOrdersByViewerId } from "@/services/order-service";
+import { sendOrderItemChangesEmail } from "@/services/email-service";
 import { getRecordById } from "@/services/record-service";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Loader2, ArrowLeft, Package, User, Receipt, Music, CheckCircle, XCircle, Clock, Weight, Printer, Truck, PackageCheck, Hourglass, DollarSign, FileDown, ThumbsUp, ThumbsDown, Send, Building2, Mail, Phone, MapPin, ShoppingCart, AlertCircle } from "lucide-react";
+import { Loader2, ArrowLeft, Package, User, Receipt, Music, CheckCircle, XCircle, Clock, Weight, Printer, Truck, PackageCheck, Hourglass, DollarSign, FileDown, ThumbsUp, ThumbsDown, Send, Building2, Mail, Phone, MapPin, ShoppingCart, AlertCircle, ExternalLink, Save, Bell } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from "next/link";
 import { auth } from "@/lib/firebase";
 import { format } from "date-fns";
@@ -31,6 +33,13 @@ const statusConfig: Record<OrderStatus, { icon: React.ElementType, color: string
     shipped: { icon: Truck, color: 'bg-indigo-500/20 text-indigo-500 border-indigo-500/30', label: 'Shipped' },
     on_hold: { icon: Clock, color: 'bg-orange-500/20 text-orange-500 border-orange-500/30', label: 'On Hold' },
     cancelled: { icon: XCircle, color: 'bg-red-500/20 text-red-500 border-red-500/30', label: 'Cancelled' },
+};
+
+const itemStatusConfig: Record<OrderItemStatus, { label: string; color: string }> = {
+    available: { label: 'Available', color: 'bg-green-500/20 text-green-700 border-green-500/30' },
+    not_available: { label: 'Not Available', color: 'bg-red-500/20 text-red-700 border-red-500/30' },
+    out_of_stock: { label: 'Out of Stock', color: 'bg-orange-500/20 text-orange-700 border-orange-500/30' },
+    back_order: { label: 'Back Order', color: 'bg-amber-500/20 text-amber-700 border-amber-500/30' },
 };
 
 type PackingSlipItem = {
@@ -56,6 +65,14 @@ export default function OrderDetailPage() {
     const [packingSlipItems, setPackingSlipItems] = useState<PackingSlipItem[]>([]);
     const [isLoadingPackingSlip, setIsLoadingPackingSlip] = useState(false);
     const [customerStats, setCustomerStats] = useState<{ totalOrders: number; totalSpent: number; openPayments: number } | null>(null);
+
+    // Item status management
+    const [itemStatusChanges, setItemStatusChanges] = useState<Record<string, OrderItemStatus>>({});
+    const [isSavingItemStatuses, setIsSavingItemStatuses] = useState(false);
+    const [isSendingNotification, setIsSendingNotification] = useState(false);
+    const [notificationSent, setNotificationSent] = useState(false);
+    const hasUnsavedItemChanges = Object.keys(itemStatusChanges).length > 0;
+    const hasItemStatusChanges = order?.items.some(item => item.itemStatus && item.itemStatus !== 'available') ?? false;
 
     const fetchOrder = useCallback(async () => {
         if (!orderId || !user) {
@@ -256,6 +273,57 @@ export default function OrderDetailPage() {
         }
     };
 
+    const handleItemStatusChange = (recordId: string, newStatus: OrderItemStatus) => {
+        const currentSavedStatus = order?.items.find(i => i.recordId === recordId)?.itemStatus || 'available';
+        if (newStatus === currentSavedStatus) {
+            // Revert to saved — remove from pending changes
+            setItemStatusChanges(prev => {
+                const next = { ...prev };
+                delete next[recordId];
+                return next;
+            });
+        } else {
+            setItemStatusChanges(prev => ({ ...prev, [recordId]: newStatus }));
+        }
+    };
+
+    const handleSaveItemStatuses = async () => {
+        if (!order || !user || !hasUnsavedItemChanges) return;
+        setIsSavingItemStatuses(true);
+        try {
+            const changes = Object.entries(itemStatusChanges).map(([recordId, itemStatus]) => ({ recordId, itemStatus }));
+            const updatedOrder = await updateOrderItemStatuses(orderId, changes, user);
+            setOrder(updatedOrder);
+            setItemStatusChanges({});
+            setNotificationSent(false);
+            toast({ title: "Item statuses updated", description: "Order totals have been recalculated." });
+        } catch (error) {
+            toast({ title: "Error", description: "Failed to update item statuses.", variant: "destructive" });
+        } finally {
+            setIsSavingItemStatuses(false);
+        }
+    };
+
+    const handleNotifyClient = async () => {
+        if (!order || !activeDistributor) return;
+        setIsSendingNotification(true);
+        try {
+            await sendOrderItemChangesEmail(order, activeDistributor.companyName || activeDistributor.name || 'Your distributor');
+            setNotificationSent(true);
+            toast({ title: "Client notified", description: `Email sent to ${order.viewerEmail}` });
+        } catch (error) {
+            toast({ title: "Error", description: "Failed to send notification email.", variant: "destructive" });
+        } finally {
+            setIsSendingNotification(false);
+        }
+    };
+
+    const getEffectiveItemStatus = (recordId: string): OrderItemStatus => {
+        return itemStatusChanges[recordId] ?? order?.items.find(i => i.recordId === recordId)?.itemStatus ?? 'available';
+    };
+
+    const isItemExcluded = (status: OrderItemStatus) => status === 'not_available' || status === 'out_of_stock';
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center min-h-[300px]">
@@ -321,14 +389,24 @@ export default function OrderDetailPage() {
                                                     <TableHead>Shelf</TableHead>
                                                     <TableHead>Storage</TableHead>
                                                     <TableHead className="text-right">Weight</TableHead>
+                                                    <TableHead className="w-[40px]"></TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                                {packingSlipItems.map(item => (
-                                                    <TableRow key={item.recordId}>
+                                                {packingSlipItems.map(item => {
+                                                    const orderItem = order.items.find(oi => oi.recordId === item.recordId);
+                                                    const status = orderItem?.itemStatus || 'available';
+                                                    const excluded = isItemExcluded(status);
+                                                    return (
+                                                    <TableRow key={item.recordId} className={excluded ? 'opacity-60' : ''}>
                                                         <TableCell>
-                                                            <p className="font-medium">{item.artist}</p>
+                                                            <p className={`font-medium ${excluded ? 'line-through' : ''}`}>{item.artist}</p>
                                                             <p className="text-sm text-muted-foreground">{item.title}</p>
+                                                            {status !== 'available' && (
+                                                                <Badge variant="outline" className={`mt-1 text-[10px] ${itemStatusConfig[status].color}`}>
+                                                                    {itemStatusConfig[status].label}
+                                                                </Badge>
+                                                            )}
                                                         </TableCell>
                                                         <TableCell className="text-center">{item.quantity}</TableCell>
                                                         <TableCell>{item.shelf_locations?.join(', ') || '-'}</TableCell>
@@ -336,8 +414,14 @@ export default function OrderDetailPage() {
                                                         <TableCell className="text-right text-sm">
                                                             {item.weight ? `${((item.weight * item.quantity) / 1000).toFixed(2)} kg` : '-'}
                                                         </TableCell>
+                                                        <TableCell>
+                                                            <Link href={`/records/${item.recordId}`} title="View record">
+                                                                <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors" />
+                                                            </Link>
+                                                        </TableCell>
                                                     </TableRow>
-                                                ))}
+                                                    );
+                                                })}
                                             </TableBody>
                                         </Table>
                                         {order.totalWeight > 0 && (
@@ -386,27 +470,78 @@ export default function OrderDetailPage() {
                                         <TableHead className="text-center">Qty</TableHead>
                                         <TableHead className="text-right">Price</TableHead>
                                         <TableHead className="text-right">Subtotal</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead className="w-[40px]"></TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {order.items.map(item => (
-                                        <TableRow key={item.recordId}>
+                                    {order.items.map(item => {
+                                        const effectiveStatus = getEffectiveItemStatus(item.recordId);
+                                        const excluded = isItemExcluded(effectiveStatus);
+                                        return (
+                                        <TableRow key={item.recordId} className={excluded ? 'opacity-60' : ''}>
                                             <TableCell>
                                                 <Image src={item.cover_url || 'https://placehold.co/64x64.png'} alt={item.title} width={64} height={64} className="rounded-md aspect-square object-cover" data-ai-hint="album cover"/>
                                             </TableCell>
                                             <TableCell>
-                                                <p className="font-medium">{item.title}</p>
+                                                <p className={`font-medium ${excluded ? 'line-through' : ''}`}>{item.title}</p>
                                                 <p className="text-sm text-muted-foreground">{item.artist}</p>
                                             </TableCell>
                                             <TableCell className="text-center">{item.quantity}</TableCell>
-                                            <TableCell className="text-right">€ {formatPriceForDisplay(item.priceAtTimeOfOrder)}</TableCell>
-                                            <TableCell className="text-right">€ {formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</TableCell>
+                                            <TableCell className={`text-right ${excluded ? 'line-through' : ''}`}>€ {formatPriceForDisplay(item.priceAtTimeOfOrder)}</TableCell>
+                                            <TableCell className={`text-right ${excluded ? 'line-through' : ''}`}>€ {formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</TableCell>
+                                            <TableCell>
+                                                <Select value={effectiveStatus} onValueChange={(val) => handleItemStatusChange(item.recordId, val as OrderItemStatus)}>
+                                                    <SelectTrigger className="w-[140px] h-8 text-xs">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {(Object.entries(itemStatusConfig) as [OrderItemStatus, { label: string; color: string }][]).map(([value, config]) => (
+                                                            <SelectItem key={value} value={value}>
+                                                                <span className={`inline-flex items-center gap-1.5`}>
+                                                                    <span className={`inline-block w-2 h-2 rounded-full ${config.color.split(' ')[0].replace('/20', '')}`}></span>
+                                                                    {config.label}
+                                                                </span>
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Link href={`/records/${item.recordId}`} title="View record">
+                                                    <ExternalLink className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors" />
+                                                </Link>
+                                            </TableCell>
                                         </TableRow>
-                                    ))}
+                                        );
+                                    })}
                                 </TableBody>
                             </Table>
+
+                            {/* Save / Notify buttons */}
+                            {(hasUnsavedItemChanges || (hasItemStatusChanges && !notificationSent)) && (
+                                <div className="flex items-center gap-3 mt-4 p-3 bg-muted/50 rounded-lg">
+                                    {hasUnsavedItemChanges && (
+                                        <Button onClick={handleSaveItemStatuses} disabled={isSavingItemStatuses} size="sm">
+                                            {isSavingItemStatuses ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                            Save Changes
+                                        </Button>
+                                    )}
+                                    {!hasUnsavedItemChanges && hasItemStatusChanges && !notificationSent && (
+                                        <Button onClick={handleNotifyClient} disabled={isSendingNotification} variant="outline" size="sm">
+                                            {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
+                                            Notify Client of Changes
+                                        </Button>
+                                    )}
+                                    {hasUnsavedItemChanges && <span className="text-xs text-muted-foreground">You have unsaved item status changes</span>}
+                                </div>
+                            )}
+
                             <Separator className="my-4" />
                             <div className="space-y-1 text-right">
+                                {order.originalTotalAmount && order.originalTotalAmount !== order.totalAmount && (
+                                    <p className="text-sm text-muted-foreground">Original total: <span className="line-through">€ {formatPriceForDisplay(order.originalTotalAmount)}</span></p>
+                                )}
                                 {order.subtotalAmount !== undefined && order.taxAmount !== undefined && (
                                     <>
                                         <p className="text-sm text-muted-foreground">Subtotal excl. {order.taxLabel || 'VAT'}: € {formatPriceForDisplay(order.subtotalAmount)}</p>
@@ -417,6 +552,7 @@ export default function OrderDetailPage() {
                                 )}
                                 <p className="font-semibold text-lg">Total: € {formatPriceForDisplay(order.totalAmount)}</p>
                                 {order.isReverseCharge && <p className="text-xs text-muted-foreground italic">Reverse charge — VAT to be accounted for by the recipient.</p>}
+                                <p className="text-sm text-muted-foreground">Total Items: {order.items.reduce((sum, item) => sum + item.quantity, 0)}</p>
                                 {order.totalWeight && <p className="text-sm text-muted-foreground">Total Weight: {(order.totalWeight / 1000).toFixed(2)} kg</p>}
                             </div>
                         </CardContent>
