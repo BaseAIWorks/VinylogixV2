@@ -35,10 +35,11 @@ const getDistributorBySlug = cache(async (slug: string) => {
     visibility: (data.visibility || "private") as "open" | "private" | "invite_only",
     storefrontSettings: data.storefrontSettings || undefined,
     cardDisplaySettings: data.cardDisplaySettings || undefined,
+    lowStockThreshold: (data.lowStockThreshold as number) || 3,
   };
 });
 
-async function getInitialCatalog(distributorId: string, limit = 25) {
+async function getInitialCatalog(distributorId: string, lowStockThreshold = 3, limit = 25) {
   const adminDb = getAdminDb();
   if (!adminDb) return { records: [], hasMore: false, nextCursor: null };
 
@@ -58,7 +59,7 @@ async function getInitialCatalog(distributorId: string, limit = 25) {
     const totalStock = (d.stock_shelves || 0) + (d.stock_storage || 0);
     let stockStatus: "in_stock" | "low_stock" | "out_of_stock" = "in_stock";
     if (totalStock === 0) stockStatus = "out_of_stock";
-    else if (totalStock <= 3) stockStatus = "low_stock";
+    else if (totalStock <= lowStockThreshold) stockStatus = "low_stock";
 
     return {
       id: doc.id,
@@ -117,7 +118,7 @@ export default async function StorefrontPage({ params }: StorefrontPageProps) {
   // For open storefronts, pre-fetch the initial catalog server-side
   let initialCatalog = { records: [] as any[], hasMore: false, nextCursor: null as string | null };
   if (distributor.visibility === "open") {
-    initialCatalog = await getInitialCatalog(distributor.id);
+    initialCatalog = await getInitialCatalog(distributor.id, distributor.lowStockThreshold);
   }
 
   return (

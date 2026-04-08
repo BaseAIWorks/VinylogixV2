@@ -50,6 +50,14 @@ export default function StorefrontCatalog({
   const [activeGenre, setActiveGenre] = useState<string | null>(null);
   const observerRef = useRef<HTMLDivElement | null>(null);
 
+  // Refs for stable fetchRecords callback (avoids recreating on every state change)
+  const hasMoreRef = useRef(hasMore);
+  hasMoreRef.current = hasMore;
+  const nextCursorRef = useRef(nextCursor);
+  nextCursorRef.current = nextCursor;
+  const isLoadingMoreRef = useRef(isLoadingMore);
+  isLoadingMoreRef.current = isLoadingMore;
+
   // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
@@ -68,7 +76,7 @@ export default function StorefrontCatalog({
   }, []);
 
   const fetchRecords = useCallback(async (loadMore = false) => {
-    if (loadMore && (!hasMore || isLoadingMore)) return;
+    if (loadMore && (!hasMoreRef.current || isLoadingMoreRef.current)) return;
 
     if (loadMore) {
       setIsLoadingMore(true);
@@ -79,7 +87,7 @@ export default function StorefrontCatalog({
     try {
       const params = new URLSearchParams();
       params.set('limit', '25');
-      if (loadMore && nextCursor) params.set('cursor', nextCursor);
+      if (loadMore && nextCursorRef.current) params.set('cursor', nextCursorRef.current);
       if (debouncedSearch) params.set('search', debouncedSearch);
       if (activeGenre) params.set('genre', activeGenre);
 
@@ -99,17 +107,12 @@ export default function StorefrontCatalog({
       setIsLoading(false);
       setIsLoadingMore(false);
     }
-  }, [slug, debouncedSearch, activeGenre, hasMore, nextCursor, isLoadingMore, getAuthHeader]);
+  }, [slug, debouncedSearch, activeGenre, getAuthHeader]);
 
-  // Refetch when search/filter changes
+  // Refetch when search/filter/auth changes
   useEffect(() => {
     fetchRecords(false);
-  }, [debouncedSearch, activeGenre]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Refetch when user auth state changes (e.g., login)
-  useEffect(() => {
-    fetchRecords(false);
-  }, [user?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchRecords, user?.uid]);
 
   // Infinite scroll
   useEffect(() => {

@@ -38,10 +38,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Request already processed.' }, { status: 400 });
   }
 
-  // Verify the caller is a master of this distributor
+  // Verify the caller is a master/operator of this distributor or superadmin
   const userDoc = await adminDb.collection('users').doc(auth.uid).get();
   const userData = userDoc.data();
-  if (!userData || (userData.role !== 'superadmin' && userData.distributorId !== notifData.distributorId)) {
+  const isOperatorOfDistributor = userData?.distributorId === notifData.distributorId;
+  const isSuperAdmin = userData?.role === 'superadmin';
+  // Also check if user is the masterUserUid on the distributor document
+  let isMasterOfDistributor = false;
+  if (!isOperatorOfDistributor && !isSuperAdmin) {
+    const distDoc = await adminDb.collection('distributors').doc(notifData.distributorId).get();
+    isMasterOfDistributor = distDoc.exists && distDoc.data()?.masterUserUid === auth.uid;
+  }
+  if (!userData || (!isSuperAdmin && !isOperatorOfDistributor && !isMasterOfDistributor)) {
     return NextResponse.json({ error: 'Insufficient permissions.' }, { status: 403 });
   }
 
