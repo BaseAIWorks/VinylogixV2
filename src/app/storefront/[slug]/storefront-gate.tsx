@@ -1,9 +1,11 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { type ReactNode, useState, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { LogIn, Lock, Loader2 } from "lucide-react";
+import { LogIn, Lock, Loader2, Send, CheckCircle2 } from "lucide-react";
+import { auth as firebaseAuth } from "@/lib/firebase";
 import Link from "next/link";
 
 interface StorefrontGateProps {
@@ -20,6 +22,34 @@ export default function StorefrontGate({
   children,
 }: StorefrontGateProps) {
   const { user, loading, clientAccessDistributors } = useAuth();
+  const { toast } = useToast();
+  const [requestStatus, setRequestStatus] = useState<'idle' | 'sending' | 'sent' | 'already_pending'>('idle');
+
+  const handleRequestAccess = useCallback(async () => {
+    if (!user || requestStatus !== 'idle') return;
+    setRequestStatus('sending');
+    try {
+      const currentUser = firebaseAuth.currentUser;
+      if (!currentUser) return;
+      const token = await currentUser.getIdToken();
+      const res = await fetch(`/api/storefront/${slug}/request-access`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setRequestStatus('sent');
+        toast({ title: "Request sent", description: "The distributor will review your access request." });
+      } else if (res.status === 409) {
+        setRequestStatus('already_pending');
+      } else {
+        setRequestStatus('idle');
+        toast({ title: "Error", description: "Could not send request.", variant: "destructive" });
+      }
+    } catch {
+      setRequestStatus('idle');
+      toast({ title: "Error", description: "Could not send request.", variant: "destructive" });
+    }
+  }, [user, requestStatus, slug, toast]);
 
   // Open storefronts — always render
   if (visibility === "open") {
@@ -47,15 +77,23 @@ export default function StorefrontGate({
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
           {visibility === "invite_only"
-            ? "This catalog is only accessible to invited clients. Log in to check your access."
-            : "You need to log in to browse this catalog."}
+            ? "This catalog is only accessible to invited clients. Sign in to request access."
+            : "Sign in to browse this catalog."}
         </p>
-        <Button asChild className="mt-6">
-          <Link href="/login">
-            <LogIn className="mr-2 h-4 w-4" />
-            Log in
-          </Link>
-        </Button>
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <Button asChild>
+            <Link href="/login">
+              <LogIn className="mr-2 h-4 w-4" />
+              Sign in
+            </Link>
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Don&apos;t have an account?{" "}
+            <Link href="/register/client" className="text-primary hover:underline">
+              Register as a client
+            </Link>
+          </p>
+        </div>
       </div>
     );
   }
@@ -73,12 +111,25 @@ export default function StorefrontGate({
           <Lock className="mx-auto h-12 w-12 text-muted-foreground" />
           <h2 className="mt-4 text-xl font-semibold">Invite Only</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            This catalog is only accessible to invited clients. Contact the
-            distributor to request access.
+            This catalog is only accessible to approved clients.
           </p>
-          <Button asChild variant="outline" className="mt-6">
-            <Link href="/dashboard">Go to Dashboard</Link>
-          </Button>
+          <div className="mt-6">
+            {requestStatus === 'sent' || requestStatus === 'already_pending' ? (
+              <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                Access request sent — waiting for approval
+              </div>
+            ) : (
+              <Button onClick={handleRequestAccess} disabled={requestStatus === 'sending'}>
+                {requestStatus === 'sending' ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="mr-2 h-4 w-4" />
+                )}
+                Request Access
+              </Button>
+            )}
+          </div>
         </div>
       );
     }

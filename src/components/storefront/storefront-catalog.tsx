@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Search, LayoutGrid, List, Loader2 } from "lucide-react";
+import { Search, LayoutGrid, List, Loader2, CheckCircle2, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 import PublicRecordCard, { type PublicRecord } from "./public-record-card";
 import type { CardDisplaySettings, StorefrontSettings } from "@/types";
 import { formatPriceForDisplay } from "@/lib/utils";
@@ -32,8 +33,10 @@ export default function StorefrontCatalog({
   initialIsApprovedClient = false,
 }: StorefrontCatalogProps) {
   const { user, addToCart } = useAuth();
+  const { toast } = useToast();
 
   const [records, setRecords] = useState<PublicRecord[]>(initialRecords);
+  const [requestStatus, setRequestStatus] = useState<'idle' | 'sending' | 'sent' | 'already_pending'>('idle');
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [nextCursor, setNextCursor] = useState<string | null>(initialNextCursor);
   const [isApprovedClient, setIsApprovedClient] = useState(initialIsApprovedClient);
@@ -150,6 +153,34 @@ export default function StorefrontCatalog({
     addToCart(recordForCart, 1, distributorId);
   };
 
+  const handleRequestAccess = async () => {
+    if (!user || requestStatus !== 'idle') return;
+    setRequestStatus('sending');
+    try {
+      const headers = await getAuthHeader();
+      const res = await fetch(`/api/storefront/${slug}/request-access`, {
+        method: 'POST',
+        headers,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRequestStatus('sent');
+        toast({ title: "Request sent", description: "The distributor will review your access request." });
+      } else if (res.status === 409) {
+        setRequestStatus('already_pending');
+      } else if (res.status === 400 && data.error?.includes('already have access')) {
+        // User already has access — refetch to update client status
+        fetchRecords(false);
+      } else {
+        setRequestStatus('idle');
+        toast({ title: "Error", description: data.error || "Could not send request.", variant: "destructive" });
+      }
+    } catch {
+      setRequestStatus('idle');
+      toast({ title: "Error", description: "Could not send request.", variant: "destructive" });
+    }
+  };
+
   const showSearch = storefrontSettings?.showSearch !== false;
   const showGenreFilter = storefrontSettings?.showGenreFilter === true;
   const showRecordCount = storefrontSettings?.showRecordCount === true;
@@ -166,9 +197,32 @@ export default function StorefrontCatalog({
         <div className="mb-6 rounded-lg border bg-muted/50 p-4 text-center">
           <p className="text-sm text-muted-foreground">
             {user
-              ? "You're browsing as a visitor. Request access from this distributor to see prices and place orders."
+              ? "You're browsing as a visitor. Request access to see prices and place orders."
               : "Sign in and become an approved client to see prices and place orders."}
           </p>
+          {user && (
+            <div className="mt-3">
+              {requestStatus === 'sent' || requestStatus === 'already_pending' ? (
+                <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  Access request sent — waiting for approval
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={handleRequestAccess}
+                  disabled={requestStatus === 'sending'}
+                >
+                  {requestStatus === 'sending' ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
+                  Request Access
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

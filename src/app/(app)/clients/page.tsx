@@ -11,10 +11,11 @@ import { format, parseISO, subDays, isAfter } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
-import type { User, Order } from "@/types";
+import type { User, Order, AppNotification } from "@/types";
 import { getClientsByDistributorId } from "@/services/user-service";
 import { getOrders } from "@/services/order-service";
 import { inviteClient, removeClientAccess } from "@/services/client-user-service";
+import { getNotifications } from "@/services/notification-service";
 import Link from "next/link";
 import {
   DropdownMenu,
@@ -60,6 +61,8 @@ export default function ClientsPage() {
   const [clientToDelete, setClientToDelete] = useState<User | null>(null);
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
+  const [accessRequests, setAccessRequests] = useState<AppNotification[]>([]);
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -77,12 +80,18 @@ export default function ClientsPage() {
     }
     setIsLoadingData(true);
     try {
-      const [fetchedClients, fetchedOrders] = await Promise.all([
+      const [fetchedClients, fetchedOrders, fetchedNotifications] = await Promise.all([
         getClientsByDistributorId(user.distributorId),
         getOrders(user),
+        getNotifications(user),
       ]);
       setClients(fetchedClients);
       setOrders(fetchedOrders);
+      setAccessRequests(
+        fetchedNotifications.filter(
+          (n) => n.type === 'access_request' && n.requestStatus === 'pending'
+        )
+      );
     } catch (error) {
       toast({ title: "Error", description: "Could not fetch clients.", variant: "destructive" });
     } finally {
@@ -193,6 +202,38 @@ export default function ClientsPage() {
     }
   };
 
+  const handleAccessRequest = async (notificationId: string, action: 'approve' | 'deny', email?: string) => {
+    if (!user?.distributorId) return;
+    setProcessingRequestId(notificationId);
+    try {
+      if (action === 'approve' && email) {
+        // Use existing invite flow to grant access
+        await inviteClient(email, user.distributorId);
+      }
+      // Update the notification status
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const { db } = await import('@/lib/firebase');
+      await updateDoc(doc(db, 'notifications', notificationId), {
+        requestStatus: action === 'approve' ? 'approved' : 'denied',
+        isRead: true,
+      });
+      setAccessRequests((prev) => prev.filter((r) => r.id !== notificationId));
+      toast({
+        title: action === 'approve' ? "Access Approved" : "Request Denied",
+        description: action === 'approve'
+          ? `${email} now has access to your catalog.`
+          : "The access request has been denied.",
+      });
+      if (action === 'approve') {
+        fetchData(); // Refresh client list
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Could not process request.", variant: "destructive" });
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
+
   // Selection handlers
   const toggleClientSelection = (clientId: string) => {
     setSelectedClients(prev => {
@@ -278,6 +319,72 @@ export default function ClientsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Access Requests */}
+      {accessRequests.length > 0 && (
+        <Card className="border-primary/20 shadow-lg">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-3">
+              <Mail className="h-5 w-5 text-primary" />
+              <div>
+                <CardTitle className="text-lg">Access Requests</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {accessRequests.length} pending request{accessRequests.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {accessRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {request.requesterEmail}
+                    </p>
+                    {request.requesterName && (
+                      <p className="text-xs text-muted-foreground">{request.requesterName}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Requested {formatDateSafe(request.createdAt)}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleAccessRequest(request.id, 'deny')}
+                      disabled={processingRequestId === request.id}
+                    >
+                      {processingRequestId === request.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <XCircle className="mr-1 h-3 w-3" />
+                      )}
+                      Deny
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleAccessRequest(request.id, 'approve', request.requesterEmail)}
+                      disabled={processingRequestId === request.id}
+                    >
+                      {processingRequestId === request.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="mr-1 h-3 w-3" />
+                      )}
+                      Approve
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="shadow-lg">
         <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">

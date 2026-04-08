@@ -561,7 +561,7 @@ export interface Order {
 export interface AppNotification {
   id: string;
   distributorId?: string;
-  type: 'low_stock' | 'new_order';
+  type: 'low_stock' | 'new_order' | 'access_request';
   message: string;
   isRead: boolean;
   createdAt: string; // ISO string
@@ -575,6 +575,12 @@ export interface AppNotification {
   orderId?: string;
   orderTotal?: number;
   customerEmail?: string;
+
+  // For access_request
+  requesterUid?: string;
+  requesterEmail?: string;
+  requesterName?: string;
+  requestStatus?: 'pending' | 'approved' | 'denied';
 }
 
 export interface ChangelogEntry {
