@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Users, AlertTriangle, PlusCircle, ArrowLeft, MoreVertical, Edit, Trash2, Eye, Mail, Building2, ShoppingCart, CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react";
+import { Loader2, Users, AlertTriangle, PlusCircle, ArrowLeft, MoreVertical, Edit, Trash2, Eye, Mail, Building2, ShoppingCart, CheckCircle2, XCircle, Clock, RefreshCw, ShieldCheck, ShieldX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/use-auth";
@@ -66,6 +66,8 @@ export default function ClientsPage() {
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
   const [accessRequests, setAccessRequests] = useState<AppNotification[]>([]);
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
+  const [verifyingVatId, setVerifyingVatId] = useState<string | null>(null);
+  const [vatResults, setVatResults] = useState<Record<string, { valid: boolean; name?: string }>>({});
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -255,6 +257,36 @@ export default function ClientsPage() {
     }
   };
 
+  const handleVerifyVat = async (requestId: string, vatNumber: string, country: string) => {
+    setVerifyingVatId(requestId);
+    try {
+      const { auth: firebaseAuth } = await import('@/lib/firebase');
+      const token = await firebaseAuth.currentUser?.getIdToken();
+      const res = await fetch('/api/clients/verify-vat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ vatNumber, country }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Validation failed.');
+      setVatResults((prev) => ({ ...prev, [requestId]: { valid: data.valid, name: data.name } }));
+      toast({
+        title: data.valid ? "VAT Valid" : "VAT Invalid",
+        description: data.valid
+          ? `Verified: ${data.name || vatNumber}`
+          : `The VAT number ${vatNumber} could not be validated.`,
+        variant: data.valid ? "default" : "destructive",
+      });
+    } catch (error: any) {
+      toast({ title: "Verification Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setVerifyingVatId(null);
+    }
+  };
+
   // Selection handlers
   const toggleClientSelection = (clientId: string) => {
     setSelectedClients(prev => {
@@ -377,6 +409,37 @@ export default function ClientsPage() {
                       )}
                       <span>Requested {formatDateSafe(request.createdAt)}</span>
                     </div>
+                    {request.requesterVatNumber && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-muted-foreground">VAT: {request.requesterVatNumber}</span>
+                        {vatResults[request.id] ? (
+                          vatResults[request.id].valid ? (
+                            <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-600 border-green-500/30 gap-1">
+                              <ShieldCheck className="h-3 w-3" /> Valid{vatResults[request.id].name ? ` — ${vatResults[request.id].name}` : ''}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-600 border-red-500/30 gap-1">
+                              <ShieldX className="h-3 w-3" /> Invalid
+                            </Badge>
+                          )
+                        ) : request.requesterCountry ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-5 text-[10px] px-2"
+                            onClick={() => handleVerifyVat(request.id, request.requesterVatNumber!, request.requesterCountry!)}
+                            disabled={verifyingVatId === request.id}
+                          >
+                            {verifyingVatId === request.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <ShieldCheck className="mr-1 h-3 w-3" />
+                            )}
+                            Verify
+                          </Button>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <Button

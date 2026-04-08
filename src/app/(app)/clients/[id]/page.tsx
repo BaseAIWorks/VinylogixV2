@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, UserCircle, ShoppingCart, Library, ListChecks, Loader2, AlertTriangle, Package, Heart, Disc3, Clock, Edit, KeyRound, Mail, Phone, Home, Briefcase, User as UserIcon, CalendarPlus, ShieldCheck, ShieldOff, NotepadText } from "lucide-react";
+import { ArrowLeft, UserCircle, ShoppingCart, Library, ListChecks, Loader2, AlertTriangle, Package, Heart, Disc3, Clock, Edit, KeyRound, Mail, Phone, Home, Briefcase, User as UserIcon, CalendarPlus, ShieldCheck, ShieldOff, ShieldX, NotepadText } from "lucide-react";
 import type { User, VinylRecord, Order, OrderStatus } from "@/types";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -76,6 +76,7 @@ export default function ClientDetailPage() {
 
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [editFormState, setEditFormState] = useState<Partial<User>>({});
+    const [isVerifyingVat, setIsVerifyingVat] = useState(false);
     
     const isClientOnHold = client?.disabledForDistributors?.includes(activeDistributorId || '') || false;
 
@@ -152,6 +153,41 @@ export default function ClientDetailPage() {
         }
     };
     
+    const handleVerifyVat = async () => {
+        if (!client?.vatNumber || !client?.country) return;
+        setIsVerifyingVat(true);
+        try {
+            const { auth: firebaseAuth } = await import('@/lib/firebase');
+            const token = await firebaseAuth.currentUser?.getIdToken();
+            const res = await fetch('/api/clients/verify-vat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    vatNumber: client.vatNumber,
+                    country: client.country,
+                    clientUid: client.uid,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Validation failed.');
+            toast({
+                title: data.valid ? "VAT Valid" : "VAT Invalid",
+                description: data.valid
+                    ? `Verified: ${data.name || client.vatNumber}`
+                    : `The VAT number ${client.vatNumber} could not be validated.`,
+                variant: data.valid ? "default" : "destructive",
+            });
+            fetchData(); // Refresh to show updated vatValidated status
+        } catch (error: any) {
+            toast({ title: "Verification Failed", description: error.message, variant: "destructive" });
+        } finally {
+            setIsVerifyingVat(false);
+        }
+    };
+
     const { collection, wishlist } = useMemo(() => {
         const collection = clientRecords.filter(r => !r.isWishlist);
         const wishlist = clientRecords.filter(r => r.isWishlist);
@@ -223,7 +259,33 @@ export default function ClientDetailPage() {
                             <DetailItem icon={Home} label="Address" value={<div className="whitespace-pre-wrap">{fullAddress}</div>} />
                             <DetailItem icon={Briefcase} label="Chamber of Commerce" value={client.chamberOfCommerce} />
                              <DetailItem icon={Briefcase} label="EORI Number" value={client.eoriNumber} />
-                            <DetailItem icon={UserIcon} label="VAT Number" value={client.vatNumber} />
+                            <DetailItem icon={UserIcon} label="VAT Number" value={client.vatNumber ? (
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span>{client.vatNumber}</span>
+                                    {client.vatValidated ? (
+                                        <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-600 border-green-500/30 gap-1">
+                                            <ShieldCheck className="h-3 w-3" /> Valid{client.vatValidatedName ? ` — ${client.vatValidatedName}` : ''}
+                                        </Badge>
+                                    ) : client.country ? (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-6 text-xs px-2"
+                                            onClick={handleVerifyVat}
+                                            disabled={isVerifyingVat}
+                                        >
+                                            {isVerifyingVat ? (
+                                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                            ) : (
+                                                <ShieldCheck className="h-3 w-3 mr-1" />
+                                            )}
+                                            Verify VAT
+                                        </Button>
+                                    ) : (
+                                        <span className="text-xs text-muted-foreground">(Set country to verify)</span>
+                                    )}
+                                </div>
+                            ) : undefined} />
                             {client.createdAt && <DetailItem icon={CalendarPlus} label="Client Since" value={format(new Date(client.createdAt), 'dd MMM yyyy')} />}
                             {client.notes && <DetailItem icon={NotepadText} label="Notes" value={<div className="whitespace-pre-wrap">{client.notes}</div>} />}
                         </CardContent>

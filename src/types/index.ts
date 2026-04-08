@@ -282,6 +282,9 @@ export type User = {
   billingCountry?: string;
   chamberOfCommerce?: string;
   vatNumber?: string;
+  vatValidated?: boolean;
+  vatValidatedAt?: string; // ISO date string
+  vatValidatedName?: string; // Company name returned by VIES
   eoriNumber?: string;
   notes?: string;
   discogsUsername?: string;
@@ -499,6 +502,8 @@ export type OrderStatus = 'awaiting_approval' | 'pending' | 'awaiting_payment' |
 export const OrderStatuses: OrderStatus[] = ['awaiting_approval', 'pending', 'awaiting_payment', 'paid', 'processing', 'shipped', 'cancelled', 'on_hold'];
 
 
+export type OrderItemStatus = 'available' | 'not_available' | 'out_of_stock' | 'back_order';
+
 export interface OrderItem {
   recordId: string;
   title: string;
@@ -506,6 +511,7 @@ export interface OrderItem {
   cover_url?: string;
   priceAtTimeOfOrder: number;
   quantity: number;
+  itemStatus?: OrderItemStatus;
 }
 
 export interface Order {
@@ -560,6 +566,10 @@ export interface Order {
   approvedBy?: string;
   rejectionReason?: string;
 
+  // Item status adjustment
+  originalTotalAmount?: number; // Preserved when items are marked unavailable
+  originalSubtotalAmount?: number;
+
   // Shipping Tracking Fields
   carrier?: 'postnl' | 'dhl' | 'ups' | 'fedex' | 'dpd' | 'gls' | 'other';
   trackingNumber?: string;
@@ -597,6 +607,7 @@ export interface AppNotification {
   requesterPhone?: string;
   requesterCity?: string;
   requesterCountry?: string;
+  requesterVatNumber?: string;
   requestStatus?: 'pending' | 'approved' | 'denied';
 }
 

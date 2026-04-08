@@ -22,6 +22,50 @@ const EU_COUNTRIES = [
   'Spain', 'Sweden',
 ];
 
+/** Map country names to VIES member-state codes */
+const COUNTRY_TO_VIES_CODE: Record<string, string> = {
+  austria: 'AT', belgium: 'BE', bulgaria: 'BG', croatia: 'HR',
+  cyprus: 'CY', 'czech republic': 'CZ', czechia: 'CZ',
+  denmark: 'DK', estonia: 'EE', finland: 'FI', france: 'FR',
+  germany: 'DE', greece: 'EL', hungary: 'HU', ireland: 'IE',
+  italy: 'IT', latvia: 'LV', lithuania: 'LT', luxembourg: 'LU',
+  malta: 'MT', netherlands: 'NL', 'the netherlands': 'NL',
+  nederland: 'NL', poland: 'PL', portugal: 'PT', romania: 'RO',
+  slovakia: 'SK', slovenia: 'SI', spain: 'ES', sweden: 'SE',
+};
+
+/**
+ * Convert a country name to the VIES member-state code.
+ * Also accepts 2-letter ISO codes directly.
+ */
+export function countryToViesCode(country: string): string | null {
+  const trimmed = country.trim();
+  // Already a 2-letter code?
+  const upper = trimmed.toUpperCase();
+  if (upper.length === 2 && Object.values(COUNTRY_TO_VIES_CODE).includes(upper)) {
+    // Greece is 'GR' as ISO but 'EL' in VIES
+    return upper === 'GR' ? 'EL' : upper;
+  }
+  return COUNTRY_TO_VIES_CODE[trimmed.toLowerCase()] || null;
+}
+
+/**
+ * Strip the country prefix from a VAT number if present.
+ * E.g. "NL123456789B01" with countryCode "NL" → "123456789B01"
+ */
+export function stripVatPrefix(vatNumber: string, countryCode: string): string {
+  const trimmed = vatNumber.trim().toUpperCase();
+  const code = countryCode.toUpperCase();
+  if (trimmed.startsWith(code)) {
+    return trimmed.slice(code.length);
+  }
+  // Greece: ISO is GR, VIES is EL
+  if (code === 'EL' && trimmed.startsWith('GR')) {
+    return trimmed.slice(2);
+  }
+  return trimmed;
+}
+
 export function isEuCountry(country: string): boolean {
   return EU_COUNTRIES.some(c => c.toLowerCase() === country.toLowerCase());
 }

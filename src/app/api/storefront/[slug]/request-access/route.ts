@@ -80,6 +80,7 @@ export async function POST(
     requesterPhone: userData.phoneNumber || undefined,
     requesterCity: userData.city || undefined,
     requesterCountry: userData.country || undefined,
+    requesterVatNumber: userData.vatNumber || undefined,
     requestStatus: 'pending',
   });
 
