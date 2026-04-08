@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Check, Flame, Calculator, ScanLine, BarChart3, Users, Building, Gift, Clock } from "lucide-react";
+import { ArrowRight, Check, Flame, Calculator, ScanLine, BarChart3, Users, Building, Gift, Clock, Minus, Zap, Shield, Disc3 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -11,11 +11,18 @@ import type { SubscriptionInfo, SubscriptionTier } from "@/types";
 import { DistributorTiers } from "@/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatPriceForDisplay } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Header, Footer } from "@/components/landing";
+import { Badge } from "@/components/ui/badge";
+
+// Tier display config
+const tierConfig: Record<string, { label: string; badge?: string; badgeVariant?: string; ctaLabel: string; feeLabel: string }> = {
+  payg: { label: "Pay as you go", ctaLabel: "Start Free", feeLabel: "6% per sale" },
+  essential: { label: "Essential", ctaLabel: "Start Free Trial", feeLabel: "4% per sale" },
+  growth: { label: "Growth", badge: "Most Popular", ctaLabel: "Start Free Trial", feeLabel: "3% per sale" },
+  scale: { label: "Scale", badge: "Best Value", badgeVariant: "outline", ctaLabel: "Start Free Trial", feeLabel: "2% per sale" },
+};
 
 const PricingTierComponent = ({
   tierName,
@@ -30,375 +37,450 @@ const PricingTierComponent = ({
   isPopular?: boolean;
   onChoosePlan: (tier: SubscriptionTier) => void;
 }) => {
-    const isPayg = tier.tier === 'payg';
+  const config = tierConfig[tierName] || { label: tierName, ctaLabel: "Get Started", feeLabel: "" };
+  const isPayg = tier.tier === 'payg';
+  const isScale = tier.tier === 'scale';
 
-    let price: number | undefined;
-    let priceDetails: string = '';
-    let savingsText: string | null = null;
+  let price: number | undefined;
+  let priceDetails: string = '';
+  let perMonthPrice: string | null = null;
+  let savingsText: string | null = null;
 
-    if (isPayg) {
-      price = 0;
-      priceDetails = '';
-    } else {
-      switch (billingCycle) {
-          case 'quarterly':
-              price = tier.quarterlyPrice;
-              priceDetails = '/3 months';
-              if (tier.price && tier.quarterlyPrice) {
-                  const monthlyTotal = tier.price * 3;
-                  const savings = monthlyTotal - tier.quarterlyPrice;
-                  if (savings > 0) savingsText = `Save €${savings.toFixed(0)} every 3 months!`;
-              }
-              break;
-          case 'yearly':
-              price = tier.yearlyPrice;
-              priceDetails = '/year';
-              if (tier.price && tier.yearlyPrice) {
-                  const monthlyTotal = tier.price * 12;
-                  const savings = monthlyTotal - tier.yearlyPrice;
-                  if (savings > 0) savingsText = `Save €${savings.toFixed(0)} a year!`;
-              }
-              break;
-          case 'monthly':
-          default:
-              price = tier.price;
-              priceDetails = '/month';
-              break;
-      }
+  if (isPayg) {
+    price = 0;
+    priceDetails = '';
+  } else {
+    switch (billingCycle) {
+      case 'quarterly':
+        price = tier.quarterlyPrice;
+        priceDetails = '/3 months';
+        if (tier.price && tier.quarterlyPrice) {
+          perMonthPrice = `€${(tier.quarterlyPrice / 3).toFixed(2)}/mo`;
+          const savings = (tier.price * 3) - tier.quarterlyPrice;
+          if (savings > 0) savingsText = `Save €${savings.toFixed(0)}`;
+        }
+        break;
+      case 'yearly':
+        price = tier.yearlyPrice;
+        priceDetails = '/year';
+        if (tier.price && tier.yearlyPrice) {
+          perMonthPrice = `€${(tier.yearlyPrice / 12).toFixed(2)}/mo`;
+          const savings = (tier.price * 12) - tier.yearlyPrice;
+          if (savings > 0) savingsText = `Save €${savings.toFixed(0)}`;
+        }
+        break;
+      default:
+        price = tier.price;
+        priceDetails = '/month';
+        break;
     }
-    
-    return (
-        <div
+  }
+
+  const features = tier.features ? tier.features.split('\n') : [];
+
+  return (
+    <div
+      className={cn(
+        'group relative flex h-full flex-col rounded-2xl border p-6 transition-all duration-300',
+        isPopular
+          ? 'border-primary bg-primary/[0.03] shadow-xl shadow-primary/10 ring-1 ring-primary/20'
+          : 'border-border bg-card hover:border-primary/30 hover:shadow-lg',
+      )}
+    >
+      {/* Badge */}
+      {config.badge && (
+        <div className="absolute -top-3 left-6">
+          <Badge
             className={cn(
-                'relative flex h-full flex-col rounded-2xl border p-8 shadow-lg',
-                isPopular ? 'border-primary ring-2 ring-primary' : 'border-border',
-                'bg-card text-card-foreground'
+              "px-3 py-1 text-xs font-semibold",
+              isPopular
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card border-primary/40 text-primary"
             )}
-        >
-            {isPopular && (
-                <div className="absolute top-0 -translate-y-1/2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground flex items-center gap-1">
-                    <Flame className="h-4 w-4" />
-                    Most Popular
-                </div>
-            )}
-            <div className="flex-1">
-                <h3 className="text-xl font-semibold capitalize">{tierName}</h3>
-                
-                <div className="mt-6">
-                  {price !== undefined ? (
-                    <>
-                      {isPayg ? (
-                        <span className="text-4xl font-bold tracking-tight">Free</span>
-                      ) : (
-                        <>
-                          <span className="text-5xl font-bold tracking-tight">€{price}</span>
-                          {priceDetails && <span className="text-sm font-medium text-muted-foreground">{priceDetails}</span>}
-                        </>
-                      )}
-                    </>
-                  ) : <Skeleton className="h-12 w-32" />}
-                </div>
-                {savingsText && (
-                    <p className="text-sm font-semibold text-primary mt-2">{savingsText}</p>
-                )}
-                
-                <p className="mt-6 text-muted-foreground min-h-[40px]">
-                  {tier.description || <Skeleton className="h-5 w-4/5" />}
-                </p>
+            variant={isPopular ? "default" : "outline"}
+          >
+            {isPopular && <Flame className="mr-1 h-3 w-3" />}
+            {config.badge}
+          </Badge>
+        </div>
+      )}
 
-                <ul role="list" className="mt-8 space-y-4 text-left">
-                    {tier.features ? tier.features.split('\n').map((feature) => (
-                        <li key={feature} className="flex items-start gap-3">
-                            <Check className="h-6 w-6 shrink-0 text-primary" />
-                            <span className="text-muted-foreground">{feature}</span>
-                        </li>
-                    )) : (
-                        <>
-                          <li className="flex items-start gap-3"><Check className="h-6 w-6 shrink-0 text-muted-foreground/50" /><Skeleton className="h-5 w-3/4"/></li>
-                          <li className="flex items-start gap-3"><Check className="h-6 w-6 shrink-0 text-muted-foreground/50" /><Skeleton className="h-5 w-full"/></li>
-                          <li className="flex items-start gap-3"><Check className="h-6 w-6 shrink-0 text-muted-foreground/50" /><Skeleton className="h-5 w-1/2"/></li>
-                        </>
-                    )}
-                </ul>
-            </div>
-            <Button
-                size="lg"
-                className="mt-8 w-full"
-                onClick={() => onChoosePlan(tier.tier)}
-            >
-                Get Started with {tierName.charAt(0).toUpperCase() + tierName.slice(1)} <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-        </div>
-    );
-};
+      <div className="flex-1">
+        {/* Tier name */}
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          {config.label}
+        </h3>
 
-const FeatureListItem = ({ icon: Icon, title, description }: { icon: React.ElementType, title: string, description: string }) => (
-    <div className="flex items-start gap-4">
-        <div className="bg-primary/10 text-primary p-3 rounded-full flex-shrink-0 mt-1">
-            <Icon className="h-6 w-6" />
+        {/* Price */}
+        <div className="mt-4 flex items-baseline gap-1">
+          {price !== undefined ? (
+            isPayg ? (
+              <>
+                <span className="text-4xl font-bold tracking-tight">€0</span>
+                <span className="text-sm text-muted-foreground">/month</span>
+              </>
+            ) : (
+              <>
+                <span className="text-4xl font-bold tracking-tight">€{price}</span>
+                <span className="text-sm text-muted-foreground">{priceDetails}</span>
+              </>
+            )
+          ) : (
+            <Skeleton className="h-10 w-28" />
+          )}
         </div>
-        <div>
-            <h4 className="text-lg font-semibold text-foreground">{title}</h4>
-            <p className="text-muted-foreground">{description}</p>
+
+        {/* Per-month breakdown or savings */}
+        <div className="mt-1 h-5">
+          {savingsText && (
+            <span className="text-sm font-medium text-green-600 dark:text-green-400">{savingsText}</span>
+          )}
+          {perMonthPrice && !savingsText && (
+            <span className="text-xs text-muted-foreground">{perMonthPrice}</span>
+          )}
         </div>
+
+        {/* Fee badge */}
+        <div className="mt-4">
+          <span className={cn(
+            "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+            isPayg
+              ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+              : "bg-muted text-muted-foreground"
+          )}>
+            {config.feeLabel}
+          </span>
+        </div>
+
+        {/* Description */}
+        <p className="mt-4 text-sm text-muted-foreground leading-relaxed">
+          {tier.description || <Skeleton className="h-4 w-full" />}
+        </p>
+
+        {/* Features */}
+        <ul className="mt-6 space-y-2.5">
+          {features.length > 0 ? features.map((feature, i) => (
+            <li key={i} className="flex items-start gap-2.5">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <span className="text-sm text-foreground/80">{feature}</span>
+            </li>
+          )) : (
+            <>
+              {[...Array(3)].map((_, i) => (
+                <li key={i} className="flex items-start gap-2.5">
+                  <Skeleton className="h-4 w-4 rounded shrink-0" />
+                  <Skeleton className="h-4 w-full" />
+                </li>
+              ))}
+            </>
+          )}
+        </ul>
+      </div>
+
+      {/* CTA */}
+      <Button
+        size="lg"
+        className={cn(
+          "mt-8 w-full transition-all",
+          isPopular ? "" : "bg-foreground text-background hover:bg-foreground/90",
+        )}
+        variant={isPopular ? "default" : "outline"}
+        onClick={() => onChoosePlan(tier.tier)}
+      >
+        {config.ctaLabel}
+        <ArrowRight className="ml-2 h-4 w-4" />
+      </Button>
+
+      {/* Trial note */}
+      {!isPayg && (
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          7-day free trial included
+        </p>
+      )}
     </div>
-);
+  );
+};
 
 
 export default function PricingPage() {
-    const router = useRouter();
-    const [billingCycle, setBillingCycle] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
-    const [tiers, setTiers] = useState<Record<SubscriptionTier, SubscriptionInfo> | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
+  const [tiers, setTiers] = useState<Record<SubscriptionTier, SubscriptionInfo> | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchTiers = async () => {
-            setIsLoading(true);
-            try {
-                const data = await getSubscriptionTiers();
-                setTiers(data);
-            } catch (error) {
-                console.error("Failed to load subscription tiers", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchTiers();
-    }, []);
+  useEffect(() => {
+    const fetchTiers = async () => {
+      setIsLoading(true);
+      try {
+        const data = await getSubscriptionTiers();
+        setTiers(data);
+      } catch (error) {
+        console.error("Failed to load subscription tiers", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchTiers();
+  }, []);
 
-    const handleChoosePlan = (tier: SubscriptionTier) => {
-        const params = new URLSearchParams();
-        params.set('tier', tier);
-        params.set('billing', billingCycle);
-        router.push(`/register?${params.toString()}`);
+  const handleChoosePlan = (tier: SubscriptionTier) => {
+    if (tier === 'payg') {
+      router.push('/register?tier=payg');
+      return;
     }
+    const params = new URLSearchParams();
+    params.set('tier', tier);
+    params.set('billing', billingCycle);
+    router.push(`/register?${params.toString()}`);
+  };
 
-    // Example calculation data
-    const salePrice = 500.00;
-    const shippingCost = 15.00;
-    const orderTotal = salePrice + shippingCost;
+  // Fee comparison data (Growth tier as example)
+  const salePrice = 500.00;
+  const shippingCost = 15.00;
+  const orderTotal = salePrice + shippingCost;
+  const stripeFee = orderTotal * 0.015 + 0.25;
+  const vinylogixFee = salePrice * 0.03;
+  const vinylogixTotalFee = stripeFee + vinylogixFee;
+  const otherPlatformFee = orderTotal * 0.09;
+  const otherPlatformPaymentFee = orderTotal * 0.034 + 0.35;
+  const otherPlatformTotalFee = otherPlatformFee + otherPlatformPaymentFee;
+  const savings = otherPlatformTotalFee - vinylogixTotalFee;
 
-    // Vinylogix: 2-8% platform fee on item (varies by tier) + Stripe fees on total
-    // Stripe EU rates: 1.5% + €0.25 (standard EEA cards)
-    const stripeFee = orderTotal * 0.015 + 0.25;
-    const vinylogixFee = salePrice * 0.03; // Using Growth tier (3%) as example
-    const vinylogixTotalFee = stripeFee + vinylogixFee;
+  return (
+    <div className="flex flex-col min-h-screen bg-background text-foreground">
+      <Header />
 
-    // Other platforms: ~9% on item + shipping + PayPal fees (3.40% + €0.35 per PayPal EU)
-    const otherPlatformFee = orderTotal * 0.09;
-    const otherPlatformPaymentFee = orderTotal * 0.034 + 0.35;
-    const otherPlatformTotalFee = otherPlatformFee + otherPlatformPaymentFee;
+      <main className="flex-grow">
+        {/* Hero */}
+        <section className="relative overflow-hidden pt-28 pb-8 md:pt-36 md:pb-12">
+          <div className="absolute inset-0 z-0">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.08),transparent_70%)]" />
+          </div>
 
-    const otherFeatures = [
-        { icon: ScanLine, title: "Advanced Inventory Tools", description: "Utilize barcode scanning, AI content generation, and detailed stock management beyond what standard marketplaces offer." },
-        { icon: Building, title: "Your Own Branded Space", description: "Operate under your own name and logo, building your brand identity directly with your customers." },
-        { icon: BarChart3, title: "In-Depth Analytics", description: "Gain insights into your sales, inventory value, and customer behavior to make smarter business decisions." },
-        { icon: Users, title: "Direct Client Relationships", description: "Manage your client base, view their wishlists, and build lasting relationships without a marketplace intermediary." },
-    ];
+          <div className="container relative z-10 mx-auto max-w-6xl px-4 text-center">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm font-medium text-primary mb-6">
+              <Gift className="h-4 w-4" />
+              7-day free trial on all paid plans
+            </div>
+            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
+              Simple, transparent pricing
+            </h1>
+            <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
+              Start free with pay-as-you-go, or pick a plan that scales with your business. No hidden fees, cancel anytime.
+            </p>
 
-    return (
-      <div className="flex flex-col min-h-screen bg-background text-foreground">
-        <Header />
-
-        <main className="flex-grow">
-            {/* Hero Section with integrated CTA */}
-            <section className="relative overflow-hidden pt-28 pb-12 md:pt-36 md:pb-16">
-                {/* Background effects */}
-                <div className="absolute inset-0 z-0">
-                    <div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-primary/5 to-transparent" />
-                    <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl opacity-30" />
-                    <div className="absolute top-20 right-1/4 w-72 h-72 bg-accent/20 rounded-full blur-3xl opacity-20" />
-                </div>
-
-                <div className="container mx-auto px-4 relative z-10 max-w-5xl">
-                    <div className="text-center">
-                        <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground">
-                            Find the Perfect Plan
-                        </h1>
-                        <p className="mt-4 max-w-2xl mx-auto text-lg text-muted-foreground">
-                            Whether you're a passionate collector or a growing record store, we have a plan that fits your needs. No hidden fees, cancel anytime.
-                        </p>
-                    </div>
-
-                    {/* Integrated Promo Card */}
-                    <div className="mt-10 rounded-2xl bg-card border border-border p-6 md:p-8 shadow-lg transition-all duration-300 hover:shadow-xl hover:shadow-primary/5">
-                        <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
-                            <div className="flex items-center gap-4">
-                                <div className="rounded-full bg-primary/10 p-3">
-                                    <Gift className="h-8 w-8 text-primary" />
-                                </div>
-                                <div>
-                                    <h3 className="text-2xl font-bold text-foreground">Try 7 days for free</h3>
-                                    <p className="text-muted-foreground">All plans include a free trial with all Scale plan features</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3 rounded-xl bg-primary/5 border border-primary/10 px-5 py-3">
-                                <Clock className="h-5 w-5 text-primary shrink-0" />
-                                <div>
-                                    <p className="text-sm font-semibold text-foreground">Early Adopter Bonus</p>
-                                    <p className="text-sm text-muted-foreground">Growth plan before Jan 30 = Scale features free for 6 months</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Billing Cycle Selector */}
-                    <div className="mt-10 flex justify-center">
-                        <RadioGroup defaultValue="monthly" onValueChange={(value) => setBillingCycle(value as any)} className="inline-flex rounded-lg bg-muted p-1">
-                            <div>
-                                <RadioGroupItem value="monthly" id="monthly" className="peer sr-only" />
-                                <Label htmlFor="monthly" className="cursor-pointer rounded-md px-6 py-2 text-sm font-medium transition-all peer-data-[state=checked]:bg-background peer-data-[state=checked]:shadow-sm">
-                                    Monthly
-                                </Label>
-                            </div>
-                            <div>
-                                <RadioGroupItem value="quarterly" id="quarterly" className="peer sr-only" />
-                                <Label htmlFor="quarterly" className="cursor-pointer rounded-md px-6 py-2 text-sm font-medium transition-all peer-data-[state=checked]:bg-background peer-data-[state=checked]:shadow-sm">
-                                    Quarterly
-                                </Label>
-                            </div>
-                            <div>
-                                <RadioGroupItem value="yearly" id="yearly" className="peer sr-only" />
-                                <Label htmlFor="yearly" className="cursor-pointer rounded-md px-6 py-2 text-sm font-medium transition-all peer-data-[state=checked]:bg-background peer-data-[state=checked]:shadow-sm">
-                                    Yearly
-                                </Label>
-                            </div>
-                        </RadioGroup>
-                    </div>
-                </div>
-            </section>
-
-            {/* Pricing Cards */}
-            <div className="py-8 sm:py-12">
-              <div className="container mx-auto px-4 max-w-5xl">
-                  <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
-                      {isLoading || !tiers ? (
-                          [...Array(4)].map((_, i) => (
-                             <div key={i} className="flex flex-col rounded-2xl border p-8 space-y-4">
-                                  <Skeleton className="h-6 w-2/5" />
-                                  <Skeleton className="h-12 w-3/5" />
-                                  <Skeleton className="h-5 w-4/5" />
-                                  <div className="pt-4 space-y-3">
-                                      <Skeleton className="h-5 w-full" />
-                                      <Skeleton className="h-5 w-3/4" />
-                                      <Skeleton className="h-5 w-full" />
-                                  </div>
-                                  <Skeleton className="h-12 w-full mt-auto" />
-                             </div>
-                          ))
-                      ) : (
-                          DistributorTiers.map(tierKey => (
-                               tiers[tierKey] && <PricingTierComponent
-                                  key={tierKey}
-                                  tierName={tierKey}
-                                  tier={tiers[tierKey]}
-                                  billingCycle={billingCycle}
-                                  isPopular={tierKey === 'growth'}
-                                  onChoosePlan={handleChoosePlan}
-                               />
-                          ))
+            {/* Billing toggle */}
+            <div className="mt-10 flex justify-center">
+              <RadioGroup
+                defaultValue="monthly"
+                onValueChange={(v) => setBillingCycle(v as any)}
+                className="inline-flex items-center rounded-full border bg-card p-1 shadow-sm"
+              >
+                {(['monthly', 'quarterly', 'yearly'] as const).map((cycle) => (
+                  <div key={cycle}>
+                    <RadioGroupItem value={cycle} id={cycle} className="peer sr-only" />
+                    <Label
+                      htmlFor={cycle}
+                      className={cn(
+                        "cursor-pointer rounded-full px-5 py-2 text-sm font-medium transition-all",
+                        "peer-data-[state=checked]:bg-foreground peer-data-[state=checked]:text-background peer-data-[state=checked]:shadow-sm",
+                        "hover:bg-muted"
                       )}
+                    >
+                      {cycle === 'quarterly' ? 'Quarterly' : cycle.charAt(0).toUpperCase() + cycle.slice(1)}
+                      {cycle === 'yearly' && (
+                        <span className="ml-1.5 rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-semibold text-green-700 dark:text-green-300">
+                          SAVE
+                        </span>
+                      )}
+                    </Label>
                   </div>
+                ))}
+              </RadioGroup>
+            </div>
+          </div>
+        </section>
+
+        {/* Pricing Cards */}
+        <section className="py-8 sm:py-12">
+          <div className="container mx-auto max-w-6xl px-4">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {isLoading || !tiers ? (
+                [...Array(4)].map((_, i) => (
+                  <div key={i} className="flex flex-col rounded-2xl border p-6 space-y-4">
+                    <Skeleton className="h-4 w-1/3" />
+                    <Skeleton className="h-10 w-2/5" />
+                    <Skeleton className="h-4 w-full" />
+                    <div className="pt-4 space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-4 w-full" />
+                    </div>
+                    <Skeleton className="h-11 w-full mt-auto" />
+                  </div>
+                ))
+              ) : (
+                DistributorTiers.map(tierKey => (
+                  tiers[tierKey] && (
+                    <PricingTierComponent
+                      key={tierKey}
+                      tierName={tierKey}
+                      tier={tiers[tierKey]}
+                      billingCycle={billingCycle}
+                      isPopular={tierKey === 'growth'}
+                      onChoosePlan={handleChoosePlan}
+                    />
+                  )
+                ))
+              )}
+            </div>
+
+            {/* Client callout */}
+            <div className="mt-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                Looking to browse and collect?{' '}
+                <Link href="/register/client" className="font-medium text-primary hover:underline">
+                  Create a free client account
+                </Link>
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Fee comparison */}
+        <section className="py-16 sm:py-24">
+          <div className="container mx-auto max-w-5xl px-4">
+            <div className="text-center">
+              <div className="inline-flex rounded-full bg-primary/10 p-3 mb-4">
+                <Calculator className="h-6 w-6 text-primary" />
+              </div>
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                Keep more of every sale
+              </h2>
+              <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
+                See exactly how much you save compared to other platforms. Example based on a €{formatPriceForDisplay(salePrice)} record + €{formatPriceForDisplay(shippingCost)} shipping.
+              </p>
+            </div>
+
+            <div className="mt-12 grid gap-8 lg:grid-cols-2">
+              {/* Vinylogix card */}
+              <div className="rounded-2xl border-2 border-primary/30 bg-primary/[0.02] p-6 sm:p-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="rounded-full bg-primary/10 p-2">
+                    <Disc3 className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold">Vinylogix <span className="text-sm font-normal text-muted-foreground">(Growth plan)</span></h3>
+                </div>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Platform fee (3% on item)</span>
+                    <span className="font-medium">-€{formatPriceForDisplay(vinylogixFee)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Payment processing (1.5% + €0.25)</span>
+                    <span className="font-medium">-€{formatPriceForDisplay(stripeFee)}</span>
+                  </div>
+                  <div className="my-3 border-t" />
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total fees</span>
+                    <span className="font-semibold">€{formatPriceForDisplay(vinylogixTotalFee)}</span>
+                  </div>
+                  <div className="flex justify-between items-baseline pt-2">
+                    <span className="font-semibold text-base">Your payout</span>
+                    <span className="text-2xl font-bold text-primary">€{formatPriceForDisplay(orderTotal - vinylogixTotalFee)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Other platforms card */}
+              <div className="rounded-2xl border bg-card p-6 sm:p-8 opacity-75">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="rounded-full bg-muted p-2">
+                    <Minus className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-muted-foreground">Other platforms</h3>
+                </div>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Platform fee (~9% on total)</span>
+                    <span className="font-medium">-€{formatPriceForDisplay(otherPlatformFee)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Payment processing (3.4% + €0.35)</span>
+                    <span className="font-medium">-€{formatPriceForDisplay(otherPlatformPaymentFee)}</span>
+                  </div>
+                  <div className="my-3 border-t" />
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total fees</span>
+                    <span className="font-semibold">€{formatPriceForDisplay(otherPlatformTotalFee)}</span>
+                  </div>
+                  <div className="flex justify-between items-baseline pt-2">
+                    <span className="font-semibold text-base">Your payout</span>
+                    <span className="text-2xl font-bold">€{formatPriceForDisplay(orderTotal - otherPlatformTotalFee)}</span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <section className="py-16 sm:py-24">
-                <div className="container mx-auto px-4 max-w-5xl">
-                    <div className="text-center">
-                        <h2 className="text-3xl font-bold tracking-tight text-primary sm:text-4xl">More Than Just a Marketplace</h2>
-                        <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                            We provide a full suite of professional tools to manage and grow your entire business, not just list items for sale.
-                        </p>
-                    </div>
-                    <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {otherFeatures.map(feature => (
-                            <FeatureListItem key={feature.title} {...feature} />
-                        ))}
-                    </div>
-                </div>
-            </section>
+            {/* Savings callout */}
+            <div className="mt-8 mx-auto max-w-lg rounded-xl border border-green-500/20 bg-green-500/5 p-5 text-center">
+              <p className="text-sm text-muted-foreground">You save on this sale</p>
+              <p className="mt-1 text-3xl font-bold text-green-600 dark:text-green-400">€{formatPriceForDisplay(savings)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">per transaction compared to other platforms</p>
+            </div>
+          </div>
+        </section>
 
-            <section className="py-16 sm:py-24 bg-muted/50">
-                <div className="container mx-auto px-4 max-w-5xl">
-                    <div className="text-center">
-                         <div className="inline-flex bg-primary/10 text-primary p-3 rounded-full mb-4">
-                            <Calculator className="h-8 w-8" />
-                        </div>
-                        <h2 className="text-3xl font-bold tracking-tight text-primary sm:text-4xl">Transparent Transaction Fees</h2>
-                        <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                            We believe in clear pricing. Beyond your subscription, you only pay for what you sell, and you'll still keep more of your money compared to other platforms.
-                        </p>
-                    </div>
-
-                    <div className="mt-12 grid lg:grid-cols-2 gap-8 items-start">
-                        <Card className="shadow-lg">
-                            <CardHeader>
-                                <CardTitle>Fee Breakdown</CardTitle>
-                                <CardDescription>Example based on a €{formatPriceForDisplay(salePrice)} record sale + €{formatPriceForDisplay(shippingCost)} shipping.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Item</TableHead>
-                                            <TableHead className="text-center">Vinylogix</TableHead>
-                                            <TableHead className="text-center">Other Platforms</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        <TableRow>
-                                            <TableCell className="font-medium">Record Sale Price</TableCell>
-                                            <TableCell className="text-center">€{formatPriceForDisplay(salePrice)}</TableCell>
-                                            <TableCell className="text-center">€{formatPriceForDisplay(salePrice)}</TableCell>
-                                        </TableRow>
-                                        <TableRow>
-                                            <TableCell className="font-medium">Shipping</TableCell>
-                                            <TableCell className="text-center">€{formatPriceForDisplay(shippingCost)}</TableCell>
-                                            <TableCell className="text-center">€{formatPriceForDisplay(shippingCost)}</TableCell>
-                                        </TableRow>
-                                        <TableRow>
-                                            <TableCell>Platform Fee</TableCell>
-                                            <TableCell className="text-center">4% on item (€{formatPriceForDisplay(vinylogixFee)})</TableCell>
-                                            <TableCell className="text-center">~9% on total (€{formatPriceForDisplay(otherPlatformFee)})</TableCell>
-                                        </TableRow>
-                                        <TableRow>
-                                            <TableCell>Payment Processing</TableCell>
-                                            <TableCell className="text-center">1.5% + €0.25 (€{formatPriceForDisplay(stripeFee)})</TableCell>
-                                            <TableCell className="text-center">3.4% + €0.35 (€{formatPriceForDisplay(otherPlatformPaymentFee)})</TableCell>
-                                        </TableRow>
-                                        <TableRow className="font-bold bg-muted/50">
-                                            <TableCell>Total Fees</TableCell>
-                                            <TableCell className="text-center">€{formatPriceForDisplay(vinylogixTotalFee)}</TableCell>
-                                            <TableCell className="text-center">€{formatPriceForDisplay(otherPlatformTotalFee)}</TableCell>
-                                        </TableRow>
-                                        <TableRow className="font-bold text-lg text-primary">
-                                            <TableCell>Your Payout</TableCell>
-                                            <TableCell className="text-center">€{formatPriceForDisplay(orderTotal - vinylogixTotalFee)}</TableCell>
-                                            <TableCell className="text-center">€{formatPriceForDisplay(orderTotal - otherPlatformTotalFee)}</TableCell>
-                                        </TableRow>
-                                    </TableBody>
-                                </Table>
-                                <p className="text-xs text-muted-foreground mt-4">*Payment processing fees based on Stripe (EU) and PayPal (EU commercial rates). Other platforms typically charge fees on both item price and shipping costs.</p>
-                            </CardContent>
-                        </Card>
-                         <div className="space-y-4">
-                            <h3 className="text-2xl font-bold">Keep More, Earn More.</h3>
-                            <p className="text-muted-foreground">
-                                With Vinylogix, your subscription fee unlocks powerful tools, and our low transaction fee means you take home more from every single sale. Over time, the savings add up, allowing you to reinvest in what you love: more great records.
-                            </p>
-                            <div className="p-6 rounded-lg bg-green-500/10 border border-green-500/20 text-green-700 dark:text-green-300">
-                                <p className="font-bold text-2xl">
-                                    Savings on this sale: €{formatPriceForDisplay(otherPlatformTotalFee - vinylogixTotalFee)}
-                                </p>
-                                <p>That's a significant reduction in fees compared to the competition!</p>
-                            </div>
-                        </div>
-                    </div>
+        {/* Features grid */}
+        <section className="py-16 sm:py-24 border-t">
+          <div className="container mx-auto max-w-5xl px-4">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                Everything you need to run your record business
+              </h2>
+              <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
+                Professional tools included with every plan — no marketplace middleman.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { icon: ScanLine, title: "Inventory Tools", desc: "Barcode scanning, AI descriptions, detailed stock management" },
+                { icon: Building, title: "Your Brand", desc: "Custom storefront with your logo, name, and public catalog" },
+                { icon: BarChart3, title: "Analytics", desc: "Sales insights, inventory value, customer behavior trends" },
+                { icon: Users, title: "Client CRM", desc: "Manage clients, wishlists, access control, and order history" },
+              ].map((f) => (
+                <div key={f.title} className="rounded-xl border bg-card p-5 transition-colors hover:bg-muted/50">
+                  <div className="rounded-lg bg-primary/10 p-2.5 w-fit">
+                    <f.icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="mt-4 font-semibold">{f.title}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
                 </div>
-            </section>
-        </main>
-        
-        <Footer />
-      </div>
-    );
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Final CTA */}
+        <section className="py-16 sm:py-24 bg-muted/30 border-t">
+          <div className="container mx-auto max-w-2xl px-4 text-center">
+            <h2 className="text-2xl font-bold sm:text-3xl">Ready to get started?</h2>
+            <p className="mt-3 text-muted-foreground">
+              Start with pay-as-you-go for free, or try any paid plan free for 7 days.
+            </p>
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Button size="lg" onClick={() => handleChoosePlan('payg' as SubscriptionTier)}>
+                Start Free <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              <Button size="lg" variant="outline" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+                Compare Plans
+              </Button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <Footer />
+    </div>
+  );
 }
