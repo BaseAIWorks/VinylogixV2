@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { UserRole, Distributor, CardDisplaySettings, ClientMenuSettings, PaymentAccount, PaymentAccountType } from "@/types";
+import type { UserRole, Distributor, CardDisplaySettings, ClientMenuSettings, PaymentAccount, PaymentAccountType, StorefrontSettings } from "@/types";
 import { format, differenceInDays, addMonths } from 'date-fns';
 import { getInventoryRecords } from "@/services/record-service";
 import { formatPriceForDisplay } from "@/lib/utils";
@@ -928,7 +928,7 @@ export default function SettingsPage() {
         )}
 
         <Tabs defaultValue={tabParam || (isMaster || isSuperAdmin ? "business" : "account")} className="w-full">
-          <TabsList className={`grid w-full mb-6 ${isMaster ? 'grid-cols-4' : isSuperAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <TabsList className={`grid w-full mb-6 ${isMaster ? 'grid-cols-5' : isSuperAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
             {(isMaster || isSuperAdmin) && (
               <TabsTrigger value="business" className="gap-2">
                 <Building2 className="h-4 w-4" />
@@ -945,6 +945,12 @@ export default function SettingsPage() {
               <TabsTrigger value="clients" className="gap-2">
                 <Users className="h-4 w-4" />
                 <span className="hidden sm:inline">Clients</span>
+              </TabsTrigger>
+            )}
+            {isMaster && (
+              <TabsTrigger value="storefront" className="gap-2">
+                <ExternalLink className="h-4 w-4" />
+                <span className="hidden sm:inline">Storefront</span>
               </TabsTrigger>
             )}
             <TabsTrigger value="account" className="gap-2">
@@ -1960,6 +1966,138 @@ export default function SettingsPage() {
             </TabsContent>
           )}
 
+          {/* ==================== STOREFRONT TAB ==================== */}
+          {isMaster && (
+            <TabsContent value="storefront" className="space-y-6">
+              {/* Visibility */}
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <View className="h-5 w-5 text-primary" />
+                    <div>
+                      <CardTitle className="text-lg">Storefront Visibility</CardTitle>
+                      <CardDescription className="text-sm">Control who can see your public catalog page.</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    {(['open', 'private', 'invite_only'] as const).map((option) => {
+                      const labels = {
+                        open: { title: 'Open', desc: 'Anyone can browse your catalog without logging in. Prices are hidden until they become an approved client.' },
+                        private: { title: 'Private', desc: 'Only logged-in users can see your storefront.' },
+                        invite_only: { title: 'Invite Only', desc: 'Only clients you\'ve explicitly invited can access your catalog.' },
+                      };
+                      const currentVisibility = activeDistributor?.visibility || 'private';
+                      return (
+                        <label
+                          key={option}
+                          className={cn(
+                            "flex items-start gap-3 rounded-lg border p-4 cursor-pointer transition-colors",
+                            currentVisibility === option ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                          )}
+                        >
+                          <input
+                            type="radio"
+                            name="visibility"
+                            value={option}
+                            checked={currentVisibility === option}
+                            onChange={async () => {
+                              if (!activeDistributor || !user) return;
+                              try {
+                                await updateMyDistributorSettings({ visibility: option } as any);
+                                toast({ title: "Visibility updated", description: `Storefront is now ${labels[option].title.toLowerCase()}.` });
+                              } catch {
+                                toast({ title: "Error", description: "Could not update visibility.", variant: "destructive" });
+                              }
+                            }}
+                            className="mt-1"
+                          />
+                          <div>
+                            <p className="text-sm font-medium">{labels[option].title}</p>
+                            <p className="text-xs text-muted-foreground">{labels[option].desc}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Storefront URL */}
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <LinkIcon className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-lg">Storefront URL</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {activeDistributor?.slug ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 rounded-md border bg-muted px-3 py-2 text-sm">
+                          vinylogix.com/storefront/{activeDistributor.slug}
+                        </code>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const url = `${window.location.origin}/storefront/${activeDistributor.slug}`;
+                            navigator.clipboard.writeText(url);
+                            toast({ title: "Copied!", description: "Storefront URL copied to clipboard." });
+                          }}
+                        >
+                          Copy
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(`/storefront/${activeDistributor.slug}`, '_blank')}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        You can change your slug in the Business tab under Public URL.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Set your public URL slug in the Business tab first.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Storefront Customization */}
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <Palette className="h-5 w-5 text-primary" />
+                    <div>
+                      <CardTitle className="text-lg">Customize Storefront</CardTitle>
+                      <CardDescription className="text-sm">Personalize how your catalog appears to visitors.</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <StorefrontCustomizationForm
+                    storefrontSettings={activeDistributor?.storefrontSettings}
+                    onSave={async (settings) => {
+                      try {
+                        await updateMyDistributorSettings({ storefrontSettings: settings } as any);
+                        toast({ title: "Storefront settings saved" });
+                      } catch {
+                        toast({ title: "Error", description: "Could not save storefront settings.", variant: "destructive" });
+                      }
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
           {/* ==================== ACCOUNT TAB ==================== */}
           <TabsContent value="account" className="space-y-6">
             {/* Profile */}
@@ -2128,5 +2266,131 @@ export default function SettingsPage() {
           </TabsContent>
         </Tabs>
       </div>
+  );
+}
+
+// ---- Storefront Customization Sub-Form ----
+function StorefrontCustomizationForm({
+  storefrontSettings,
+  onSave,
+}: {
+  storefrontSettings?: StorefrontSettings;
+  onSave: (settings: StorefrontSettings) => Promise<void>;
+}) {
+  const [isSaving, setIsSaving] = useState(false);
+  const [headline, setHeadline] = useState(storefrontSettings?.headline || '');
+  const [description, setDescription] = useState(storefrontSettings?.description || '');
+  const [showSearch, setShowSearch] = useState(storefrontSettings?.showSearch !== false);
+  const [showGenreFilter, setShowGenreFilter] = useState(storefrontSettings?.showGenreFilter || false);
+  const [showFormatFilter, setShowFormatFilter] = useState(storefrontSettings?.showFormatFilter || false);
+  const [catalogLayout, setCatalogLayout] = useState<'grid' | 'compact'>(storefrontSettings?.catalogLayout || 'grid');
+  const [showRecordCount, setShowRecordCount] = useState(storefrontSettings?.showRecordCount || false);
+
+  useEffect(() => {
+    setHeadline(storefrontSettings?.headline || '');
+    setDescription(storefrontSettings?.description || '');
+    setShowSearch(storefrontSettings?.showSearch !== false);
+    setShowGenreFilter(storefrontSettings?.showGenreFilter || false);
+    setShowFormatFilter(storefrontSettings?.showFormatFilter || false);
+    setCatalogLayout(storefrontSettings?.catalogLayout || 'grid');
+    setShowRecordCount(storefrontSettings?.showRecordCount || false);
+  }, [storefrontSettings]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await onSave({
+        headline: headline || undefined,
+        description: description || undefined,
+        showSearch,
+        showGenreFilter,
+        showFormatFilter,
+        catalogLayout,
+        showRecordCount,
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="sf-headline">Headline</Label>
+        <Input
+          id="sf-headline"
+          placeholder="Welcome to our vinyl collection"
+          value={headline}
+          onChange={(e) => setHeadline(e.target.value)}
+          maxLength={120}
+        />
+        <p className="text-xs text-muted-foreground">Shown below your company name on the storefront.</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="sf-description">Description</Label>
+        <Textarea
+          id="sf-description"
+          placeholder="Tell visitors about your record store..."
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          maxLength={500}
+          rows={3}
+        />
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <p className="text-sm font-medium">Catalog Options</p>
+
+        <div className="flex items-center justify-between">
+          <Label htmlFor="sf-layout" className="text-sm">Default layout</Label>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={catalogLayout === 'grid' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setCatalogLayout('grid')}
+            >
+              Grid
+            </Button>
+            <Button
+              type="button"
+              variant={catalogLayout === 'compact' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setCatalogLayout('compact')}
+            >
+              Compact
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <Label htmlFor="sf-search" className="text-sm">Show search bar</Label>
+          <Switch id="sf-search" checked={showSearch} onCheckedChange={setShowSearch} />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <Label htmlFor="sf-genre" className="text-sm">Show genre filter</Label>
+          <Switch id="sf-genre" checked={showGenreFilter} onCheckedChange={setShowGenreFilter} />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <Label htmlFor="sf-format" className="text-sm">Show format filter</Label>
+          <Switch id="sf-format" checked={showFormatFilter} onCheckedChange={setShowFormatFilter} />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <Label htmlFor="sf-count" className="text-sm">Show record count</Label>
+          <Switch id="sf-count" checked={showRecordCount} onCheckedChange={setShowRecordCount} />
+        </div>
+      </div>
+
+      <Button onClick={handleSave} disabled={isSaving} className="w-full sm:w-auto">
+        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+        Save Storefront Settings
+      </Button>
+    </div>
   );
 }

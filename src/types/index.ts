@@ -122,6 +122,17 @@ export interface WeightOption {
     isFixed: boolean; // If true, the weight is not editable on the record form
 }
 
+export interface StorefrontSettings {
+  headline?: string;
+  description?: string;
+  showSearch?: boolean;
+  showGenreFilter?: boolean;
+  showFormatFilter?: boolean;
+  catalogLayout?: 'grid' | 'compact';
+  showRecordCount?: boolean;
+  featuredRecordIds?: string[];
+}
+
 export interface Distributor {
   id: string; // Firestore document ID
   name: string;
@@ -154,6 +165,8 @@ export interface Distributor {
   storageLocations?: string[];
   cardDisplaySettings?: CardDisplaySettings;
   clientMenuSettings?: ClientMenuSettings;
+  visibility?: 'open' | 'private' | 'invite_only';
+  storefrontSettings?: StorefrontSettings;
   suppliers?: Supplier[]; // This can be deprecated in the future
   weightOptions?: WeightOption[];
   isSubscriptionExempt?: boolean;
