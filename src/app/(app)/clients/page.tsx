@@ -665,6 +665,11 @@ export default function ClientsPage() {
                       <TableCell className="font-medium" onClick={() => router.push(`/clients/${client.uid}`)}>
                         <div className="flex items-center gap-2">
                           {`${client.firstName || ''} ${client.lastName || ''}`.trim() || '-'}
+                          {client.vatValidated && (
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-green-500/10 border border-green-500/30 px-1.5 py-0.5 text-[10px] font-medium text-green-700" title={`VAT verified${client.vatValidatedName ? `: ${client.vatValidatedName}` : ''}`}>
+                              <ShieldCheck className="h-3 w-3" /> VAT
+                            </span>
+                          )}
                           {client.role === 'master' && (
                             <Badge variant="secondary" className="text-xs">
                               <Building2 className="h-3 w-3 mr-1" />

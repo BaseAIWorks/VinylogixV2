@@ -239,7 +239,15 @@ export default function ClientDetailPage() {
                     </Button>
                     <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                         <div>
-                            <h2 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3"><UserCircle className="h-8 w-8 text-primary"/>{`${client.firstName || ''} ${client.lastName || ''}`.trim() || 'Client Details'}</h2>
+                            <h2 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
+                                <UserCircle className="h-8 w-8 text-primary"/>
+                                {`${client.firstName || ''} ${client.lastName || ''}`.trim() || 'Client Details'}
+                                {client.vatValidated && (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 border border-green-500/30 px-2.5 py-1 text-xs font-medium text-green-700" title={`VAT verified${client.vatValidatedName ? `: ${client.vatValidatedName}` : ''}`}>
+                                        <ShieldCheck className="h-3.5 w-3.5" /> VAT Verified
+                                    </span>
+                                )}
+                            </h2>
                             <p className="text-muted-foreground">{client.email}</p>
                         </div>
                          <Button onClick={() => setIsEditDialogOpen(true)}>
