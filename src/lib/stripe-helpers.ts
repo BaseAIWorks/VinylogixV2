@@ -2,7 +2,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 
 // Default platform fees by tier (fallback if Firestore settings not found)
 const DEFAULT_FEES: Record<string, number> = {
-  payg: 0.08,
+  payg: 0.06,
   essential: 0.04,
   growth: 0.03,
   scale: 0.02,

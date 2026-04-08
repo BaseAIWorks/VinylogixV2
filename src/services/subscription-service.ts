@@ -22,7 +22,7 @@ const defaultTiers: Record<SubscriptionTier, SubscriptionInfo> = {
     quarterlyPrice: 0,
     yearlyPrice: 0,
     description: "Start selling with no monthly fee. Pay only when you sell.",
-    features: "Up to 50 records\nOrder Management\n8% transaction fee\nNo monthly commitment",
+    features: "Up to 50 records\nOrder Management\n6% transaction fee\nNo monthly commitment",
   },
   essential: {
     tier: 'essential',

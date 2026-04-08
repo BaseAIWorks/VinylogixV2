@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
 
   // Store platform fee config
   const platformFees = {
-    payg: 0.08,
+    payg: 0.06,
     essential: 0.04,
     growth: 0.03,
     scale: 0.02,
