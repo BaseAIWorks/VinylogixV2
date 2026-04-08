@@ -24,6 +24,27 @@ interface ExistingAccountEmailData {
   websiteUrl: string;
 }
 
+// Promotional footer for invitation emails — encourages shop owners to become distributors
+const createDistributorPromoHtml = () => `
+    <div style="text-align: center; margin-top: 32px; padding: 28px 24px; border-top: 1px solid #e5e7eb;">
+        <img src="${siteUrl}/logo_v2_Black.png" alt="Vinylogix" width="140" style="display: block; margin: 0 auto 16px auto; max-width: 140px; height: auto;" />
+        <p style="font-size: 16px; color: #1f2937; margin: 0 0 8px 0; font-weight: 700;">Are you a vinyl distributor or label?</p>
+        <p style="font-size: 14px; color: #4b5563; margin: 0 0 20px 0; line-height: 1.6;">Start selling on Vinylogix — the complete B2B platform for vinyl businesses. Manage your catalog, connect with record shops worldwide, and streamline your orders.</p>
+        <a href="${siteUrl}/register?ref=invitation-email" style="display: inline-block; background: #E86A33; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 600;">Start Your Free Trial</a>
+        <p style="font-size: 12px; color: #9ca3af; margin: 12px 0 0 0;">No credit card required</p>
+    </div>
+`;
+
+const createDistributorPromoText = () => `
+---
+Are you a vinyl distributor or label?
+Start selling on Vinylogix — the complete B2B platform for vinyl businesses.
+Manage your catalog, connect with record shops worldwide, and streamline your orders.
+
+Start your free trial: ${siteUrl}/register?ref=invitation-email
+No credit card required.
+---`;
+
 // Template for new account creation
 const createNewAccountEmailHtml = (data: NewAccountEmailData) => `
 <!DOCTYPE html>
@@ -72,7 +93,9 @@ const createNewAccountEmailHtml = (data: NewAccountEmailData) => `
         
         <p>Welcome to the world of vinyl records!</p>
     </div>
-    
+
+    ${createDistributorPromoHtml()}
+
     <div class="footer">
         <p>This email was sent from Vinylogix on behalf of ${data.distributor.companyName || data.distributor.name}</p>
         <p>If you didn't expect this invitation, please contact <a href="mailto:${data.distributor.contactEmail}">${data.distributor.contactEmail}</a></p>
@@ -125,7 +148,9 @@ const createExistingAccountEmailHtml = (data: ExistingAccountEmailData) => `
         
         <p>Happy record hunting!</p>
     </div>
-    
+
+    ${createDistributorPromoHtml()}
+
     <div class="footer">
         <p>This email was sent from Vinylogix on behalf of ${data.distributor.companyName || data.distributor.name}</p>
         <p>If you didn't expect this invitation, please contact <a href="mailto:${data.distributor.contactEmail}">${data.distributor.contactEmail}</a></p>
@@ -157,6 +182,7 @@ Login at: ${data.websiteUrl}/login
 If you have questions, contact: ${data.distributor.contactEmail}
 
 Welcome to the world of vinyl records!
+${createDistributorPromoText()}
       `,
     });
 
@@ -187,6 +213,7 @@ Login at: ${data.websiteUrl}/login
 If you have questions, contact: ${data.distributor.contactEmail}
 
 Happy record hunting!
+${createDistributorPromoText()}
       `,
     });
 

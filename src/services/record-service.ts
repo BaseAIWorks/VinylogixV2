@@ -175,17 +175,18 @@ export async function getInventoryRecords(
       break;
   }
 
-  // When searching: fetch a larger batch and filter in memory
-  // Firestore doesn't support partial text search natively
+  // When searching: fetch ALL records for this distributor and filter in memory.
+  // Firestore doesn't support partial text search natively, so we must scan everything.
   const isSearching = !!searchTerm && searchTerm.trim().length >= 2;
-  const fetchLimit = isSearching ? 500 : limit;
 
   // Apply pagination (skip when searching — we need to scan from the start)
   if (lastVisible && !isSearching) {
     q = query(q, startAfter(lastVisible));
   }
 
-  q = query(q, firestoreLimit(fetchLimit));
+  if (!isSearching) {
+    q = query(q, firestoreLimit(limit));
+  }
 
   try {
     const querySnapshot = await getDocs(q);
@@ -202,11 +203,9 @@ export async function getInventoryRecords(
         (Array.isArray(record.shelf_locations) && record.shelf_locations.some(loc => loc.toLowerCase().includes(term))) ||
         (Array.isArray(record.storage_locations) && record.storage_locations.some(loc => loc.toLowerCase().includes(term)))
       );
-      // Return up to `limit` results; hasMore = true if there could be more matches beyond the fetch window
-      const hasMore = querySnapshot.docs.length === fetchLimit;
       return {
-        records: records.slice(0, limit),
-        lastVisible: hasMore ? querySnapshot.docs[querySnapshot.docs.length - 1] : null,
+        records,
+        lastVisible: null,
       };
     }
 

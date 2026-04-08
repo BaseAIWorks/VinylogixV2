@@ -175,7 +175,9 @@ export default function InventoryPage() {
         
         setRecords(prev => loadMore ? [...prev, ...fetchedRecords] : fetchedRecords);
         setLastVisible(newLastVisible);
-        setHasMore(fetchedRecords.length === 25);
+        // Search fetches a large batch (500) and filters in memory — pagination cursors
+        // are skipped during search, so "load more" would re-fetch the same results.
+        setHasMore(debouncedSearchTerm ? false : fetchedRecords.length === 25);
     } catch (error) {
         const errorMessage = (error as Error).message || "An unknown error occurred.";
         const errorDescription = `Could not load inventory records. ${errorMessage}`;
@@ -376,7 +378,9 @@ export default function InventoryPage() {
   const pageTitle = user?.role === 'viewer' ? 'Catalog' : 'Inventory';
   const activeDistributorName = activeDistributor?.name;
 
-  if ((authLoading || isFetching) && records.length === 0) {
+  // Only show the full-page spinner on very first load (no records yet, no search active).
+  // During search re-fetches we keep the UI mounted so the search input retains focus.
+  if ((authLoading || isFetching) && records.length === 0 && !debouncedSearchTerm) {
     return (
         <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
