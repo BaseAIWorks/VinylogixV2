@@ -1516,7 +1516,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const publicRoutes = ['/', '/login', '/register/client', '/register', '/features', '/pricing', '/help', '/contact', '/solutions'];
     const isPublicRoute =
-      publicRoutes.includes(pathname) || pathname.startsWith('/register');
+      publicRoutes.includes(pathname) || pathname.startsWith('/register') || pathname.startsWith('/storefront');
     const isAuthRoute =
       ['/login', '/register/client', '/register'].includes(pathname) ||
       pathname.startsWith('/register');
