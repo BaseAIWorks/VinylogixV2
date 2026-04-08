@@ -173,6 +173,13 @@ export default function ClientDetailPage() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Validation failed.');
+            // Update local state immediately so UI reflects the result
+            setClient(prev => prev ? {
+                ...prev,
+                vatValidated: data.valid,
+                vatValidatedAt: new Date().toISOString(),
+                vatValidatedName: data.valid ? (data.name || undefined) : undefined,
+            } : prev);
             toast({
                 title: data.valid ? "VAT Valid" : "VAT Invalid",
                 description: data.valid
@@ -180,7 +187,6 @@ export default function ClientDetailPage() {
                     : `The VAT number ${client.vatNumber} could not be validated.`,
                 variant: data.valid ? "default" : "destructive",
             });
-            fetchData(); // Refresh to show updated vatValidated status
         } catch (error: any) {
             toast({ title: "Verification Failed", description: error.message, variant: "destructive" });
         } finally {

@@ -61,7 +61,8 @@ export async function POST(req: NextRequest) {
     };
 
     // Store validation result on user document if clientUid provided
-    if (clientUid && result.valid) {
+    let persisted = false;
+    if (clientUid) {
       const adminDb = getAdminDb();
       if (adminDb) {
         // Verify caller is a master user before writing to another user's doc
@@ -69,15 +70,16 @@ export async function POST(req: NextRequest) {
         const callerData = callerSnap.data();
         if (callerData?.role === 'master' || callerData?.role === 'worker') {
           await adminDb.collection('users').doc(clientUid).update({
-            vatValidated: true,
+            vatValidated: result.valid,
             vatValidatedAt: new Date().toISOString(),
-            vatValidatedName: result.name || null,
+            ...(result.valid && result.name ? { vatValidatedName: result.name } : {}),
           });
+          persisted = true;
         }
       }
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, persisted });
   } catch (error: any) {
     console.error('VIES validation error:', error);
     return NextResponse.json(
