@@ -124,6 +124,7 @@ export default async function StorefrontPage({ params }: StorefrontPageProps) {
     <>
       <StorefrontHeader
         name={distributor.name}
+        slug={slug}
         companyName={distributor.companyName}
         logoUrl={distributor.logoUrl}
         headline={distributor.storefrontSettings?.headline}

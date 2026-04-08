@@ -51,7 +51,7 @@ export default function StorefrontGate({
             : "You need to log in to browse this catalog."}
         </p>
         <Button asChild className="mt-6">
-          <Link href={`/login?returnTo=/storefront/${slug}`}>
+          <Link href="/login">
             <LogIn className="mr-2 h-4 w-4" />
             Log in
           </Link>

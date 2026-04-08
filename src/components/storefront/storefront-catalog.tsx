@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Search, LayoutGrid, List, Loader2, LogIn } from "lucide-react";
+import { Search, LayoutGrid, List, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import PublicRecordCard, { type PublicRecord } from "./public-record-card";
 import type { CardDisplaySettings, StorefrontSettings } from "@/types";
 import { formatPriceForDisplay } from "@/lib/utils";
-import Link from "next/link";
 import { auth } from "@/lib/firebase";
 
 interface StorefrontCatalogProps {
@@ -162,22 +161,14 @@ export default function StorefrontCatalog({
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      {/* Client CTA banner */}
+      {/* Info banner for non-clients */}
       {!isApprovedClient && (
         <div className="mb-6 rounded-lg border bg-muted/50 p-4 text-center">
           <p className="text-sm text-muted-foreground">
             {user
-              ? "You're browsing as a visitor. Contact this distributor to become an approved client and see prices."
-              : "Prices and ordering are available for approved clients."}
+              ? "You're browsing as a visitor. Request access from this distributor to see prices and place orders."
+              : "Sign in and become an approved client to see prices and place orders."}
           </p>
-          {!user && (
-            <Button asChild variant="outline" size="sm" className="mt-2">
-              <Link href={`/login?returnTo=/storefront/${slug}`}>
-                <LogIn className="mr-2 h-4 w-4" />
-                Login to see prices
-              </Link>
-            </Button>
-          )}
         </div>
       )}
 
