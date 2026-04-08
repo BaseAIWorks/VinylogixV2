@@ -24,11 +24,20 @@ import { Badge } from "@/components/ui/badge";
 
 
 export default function InventoryPage() {
-  const { 
-    user, loading: authLoading, toggleFavorite, activeDistributorId, activeDistributor, 
-    isFetchingDiscogsInventory, discogsInventoryReleaseIds, syncDiscogsInventory, 
-    globalSearchTerm, setGlobalSearchTerm, addToCart
-  } = useAuth(); 
+  const {
+    user, loading: authLoading, toggleFavorite, activeDistributorId, activeDistributor,
+    isFetchingDiscogsInventory, discogsInventoryReleaseIds, syncDiscogsInventory,
+    addToCart
+  } = useAuth();
+
+  // Local search state — decoupled from global search to avoid unnecessary Firestore scans
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]); 
   
   // Read cache without consuming it (no side effects during render)
   const readCache = (): { records: VinylRecord[]; hasMore: boolean; scrollY: number } | null => {
@@ -161,6 +170,7 @@ export default function InventoryPage() {
             sortOption,
             limit: 25,
             lastVisible: loadMore ? lastVisible : null,
+            searchTerm: debouncedSearchTerm || undefined,
         });
         
         setRecords(prev => loadMore ? [...prev, ...fetchedRecords] : fetchedRecords);
@@ -174,7 +184,7 @@ export default function InventoryPage() {
         setIsFetching(false);
         setIsFetchingMore(false);
     }
-  }, [user, activeDistributorId, filters, sortOption, toast, isFetchingMore, hasMore, lastVisible]);
+  }, [user, activeDistributorId, filters, sortOption, debouncedSearchTerm, toast, isFetchingMore, hasMore, lastVisible]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -205,20 +215,11 @@ export default function InventoryPage() {
       return;
     }
     fetchPaginatedRecords(false);
-  }, [authLoading, user, activeDistributorId, filters, sortOption]);
+  }, [authLoading, user, activeDistributorId, filters, sortOption, debouncedSearchTerm]);
   
 
-  const filteredRecords = useMemo(() => {
-    const lowerSearchTerm = globalSearchTerm.toLowerCase().trim();
-    if (!lowerSearchTerm) return records;
-    return records.filter(record => 
-        record.title?.toLowerCase().includes(lowerSearchTerm) ||
-        record.artist?.toLowerCase().includes(lowerSearchTerm) ||
-        (record.barcode && record.barcode.toLowerCase().includes(lowerSearchTerm)) ||
-        (record.shelf_locations && record.shelf_locations.some(loc => loc.toLowerCase().includes(lowerSearchTerm))) ||
-        (record.storage_locations && record.storage_locations.some(loc => loc.toLowerCase().includes(lowerSearchTerm)))
-    );
-  }, [records, globalSearchTerm]);
+  // Records are now filtered server-side via getInventoryRecords searchTerm param
+  const filteredRecords = records;
   
   const dynamicFilterOptions = useMemo(() => {
     if (!records || records.length === 0) {
@@ -401,8 +402,8 @@ export default function InventoryPage() {
               type="search"
               placeholder="Search by title, artist, barcode, or location... (Press /)"
               className="pl-10 w-full"
-              value={globalSearchTerm}
-              onChange={(e) => setGlobalSearchTerm(e.target.value)}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <div className="flex flex-shrink-0 items-center gap-2">
@@ -485,7 +486,7 @@ export default function InventoryPage() {
             <Music2 className="mx-auto h-16 w-16 text-muted-foreground" />
             <h3 className="mt-4 text-xl font-semibold text-foreground">No Records Found</h3>
             <p className="mt-2 text-muted-foreground">
-              {globalSearchTerm || Object.values(filters).some(f => f) ? "Try adjusting your search or filters." : (user?.role === 'viewer' && !activeDistributorId) ? "Please select a distributor's catalog to begin browsing." : "The inventory is empty. Check back later!"}
+              {searchTerm || Object.values(filters).some(f => f) ? "Try adjusting your search or filters." : (user?.role === 'viewer' && !activeDistributorId) ? "Please select a distributor's catalog to begin browsing." : "The inventory is empty. Check back later!"}
             </p>
             {user?.role !== 'viewer' && (
               <Button asChild className="mt-6 bg-accent hover:bg-accent/90 text-accent-foreground">

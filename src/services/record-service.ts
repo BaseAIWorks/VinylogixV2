@@ -130,9 +130,10 @@ export async function getInventoryRecords(
     sortOption?: SortOption;
     limit?: number;
     lastVisible?: DocumentSnapshot | null;
+    searchTerm?: string;
   }
 ): Promise<{ records: VinylRecord[], lastVisible: DocumentSnapshot | null }> {
-  const { distributorId, filters = {}, sortOption = 'added_at_desc', limit = 25, lastVisible } = options;
+  const { distributorId, filters = {}, sortOption = 'added_at_desc', limit = 25, lastVisible, searchTerm } = options;
   const targetDistributorId = user.role === 'viewer' ? distributorId : user.distributorId;
 
   if (!targetDistributorId) {
@@ -174,16 +175,41 @@ export async function getInventoryRecords(
       break;
   }
 
-  // Apply pagination
-  if (lastVisible) {
+  // When searching: fetch a larger batch and filter in memory
+  // Firestore doesn't support partial text search natively
+  const isSearching = !!searchTerm && searchTerm.trim().length >= 2;
+  const fetchLimit = isSearching ? 500 : limit;
+
+  // Apply pagination (skip when searching — we need to scan from the start)
+  if (lastVisible && !isSearching) {
     q = query(q, startAfter(lastVisible));
   }
-  
-  q = query(q, firestoreLimit(limit));
+
+  q = query(q, firestoreLimit(fetchLimit));
 
   try {
     const querySnapshot = await getDocs(q);
-    const records = querySnapshot.docs.map(docSnap => processRecordTimestamps({ ...docSnap.data(), id: docSnap.id }));
+    let records = querySnapshot.docs.map(docSnap => processRecordTimestamps({ ...docSnap.data(), id: docSnap.id }));
+
+    // Apply search filter in memory
+    if (isSearching) {
+      const term = searchTerm!.toLowerCase().trim();
+      records = records.filter(record =>
+        record.title?.toLowerCase().includes(term) ||
+        record.artist?.toLowerCase().includes(term) ||
+        (record.barcode && record.barcode.toLowerCase().includes(term)) ||
+        (record.label && record.label.toLowerCase().includes(term)) ||
+        (Array.isArray(record.shelf_locations) && record.shelf_locations.some(loc => loc.toLowerCase().includes(term))) ||
+        (Array.isArray(record.storage_locations) && record.storage_locations.some(loc => loc.toLowerCase().includes(term)))
+      );
+      // Return up to `limit` results; hasMore = true if there could be more matches beyond the fetch window
+      const hasMore = querySnapshot.docs.length === fetchLimit;
+      return {
+        records: records.slice(0, limit),
+        lastVisible: hasMore ? querySnapshot.docs[querySnapshot.docs.length - 1] : null,
+      };
+    }
+
     const newLastVisible = querySnapshot.docs[querySnapshot.docs.length - 1] || null;
     return { records, lastVisible: newLastVisible };
   } catch (error) {
