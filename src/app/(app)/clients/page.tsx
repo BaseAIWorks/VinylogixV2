@@ -414,13 +414,47 @@ export default function ClientsPage() {
                         <span className="text-xs text-muted-foreground">VAT: {request.requesterVatNumber}</span>
                         {vatResults[request.id] ? (
                           vatResults[request.id].valid ? (
-                            <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-600 border-green-500/30 gap-1">
-                              <ShieldCheck className="h-3 w-3" /> Valid{vatResults[request.id].name ? ` — ${vatResults[request.id].name}` : ''}
-                            </Badge>
+                            <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1 rounded-md bg-green-500/10 border border-green-500/30 px-2 py-0.5">
+                                <ShieldCheck className="h-3 w-3 text-green-600" />
+                                <span className="text-[10px] font-medium text-green-700">Verified{vatResults[request.id].name ? ` — ${vatResults[request.id].name}` : ''}</span>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
+                                onClick={() => handleVerifyVat(request.id, request.requesterVatNumber!, request.requesterCountry!)}
+                                disabled={verifyingVatId === request.id}
+                                title="Re-verify"
+                              >
+                                {verifyingVatId === request.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="h-3 w-3" />
+                                )}
+                              </Button>
+                            </div>
                           ) : (
-                            <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-600 border-red-500/30 gap-1">
-                              <ShieldX className="h-3 w-3" /> Invalid
-                            </Badge>
+                            <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1 rounded-md bg-red-500/10 border border-red-500/30 px-2 py-0.5">
+                                <ShieldX className="h-3 w-3 text-red-600" />
+                                <span className="text-[10px] font-medium text-red-700">Invalid</span>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
+                                onClick={() => handleVerifyVat(request.id, request.requesterVatNumber!, request.requesterCountry!)}
+                                disabled={verifyingVatId === request.id}
+                                title="Retry verification"
+                              >
+                                {verifyingVatId === request.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="h-3 w-3" />
+                                )}
+                              </Button>
+                            </div>
                           )
                         ) : request.requesterCountry ? (
                           <Button

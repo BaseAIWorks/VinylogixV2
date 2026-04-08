@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, UserCircle, ShoppingCart, Library, ListChecks, Loader2, AlertTriangle, Package, Heart, Disc3, Clock, Edit, KeyRound, Mail, Phone, Home, Briefcase, User as UserIcon, CalendarPlus, ShieldCheck, ShieldOff, ShieldX, NotepadText } from "lucide-react";
+import { ArrowLeft, UserCircle, ShoppingCart, Library, ListChecks, Loader2, AlertTriangle, Package, Heart, Disc3, Clock, Edit, KeyRound, Mail, Phone, Home, Briefcase, User as UserIcon, CalendarPlus, ShieldCheck, ShieldOff, ShieldX, RefreshCw, NotepadText } from "lucide-react";
 import type { User, VinylRecord, Order, OrderStatus } from "@/types";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -260,27 +260,51 @@ export default function ClientDetailPage() {
                             <DetailItem icon={Briefcase} label="Chamber of Commerce" value={client.chamberOfCommerce} />
                              <DetailItem icon={Briefcase} label="EORI Number" value={client.eoriNumber} />
                             <DetailItem icon={UserIcon} label="VAT Number" value={client.vatNumber ? (
-                                <div className="flex items-center gap-2 flex-wrap">
+                                <div className="space-y-1.5">
                                     <span>{client.vatNumber}</span>
                                     {client.vatValidated ? (
-                                        <Badge variant="outline" className="text-[10px] bg-green-500/10 text-green-600 border-green-500/30 gap-1">
-                                            <ShieldCheck className="h-3 w-3" /> Valid{client.vatValidatedName ? ` — ${client.vatValidatedName}` : ''}
-                                        </Badge>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-1.5 rounded-md bg-green-500/10 border border-green-500/30 px-2.5 py-1">
+                                                <ShieldCheck className="h-4 w-4 text-green-600" />
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-medium text-green-700">Verified{client.vatValidatedName ? ` — ${client.vatValidatedName}` : ''}</span>
+                                                    {client.vatValidatedAt && (
+                                                        <span className="text-[10px] text-green-600/70">{format(new Date(client.vatValidatedAt), 'dd MMM yyyy, HH:mm')}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                                onClick={handleVerifyVat}
+                                                disabled={isVerifyingVat}
+                                                title="Re-verify VAT number"
+                                            >
+                                                {isVerifyingVat ? (
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                ) : (
+                                                    <RefreshCw className="h-3.5 w-3.5" />
+                                                )}
+                                            </Button>
+                                        </div>
                                     ) : client.country ? (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-6 text-xs px-2"
-                                            onClick={handleVerifyVat}
-                                            disabled={isVerifyingVat}
-                                        >
-                                            {isVerifyingVat ? (
-                                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                            ) : (
-                                                <ShieldCheck className="h-3 w-3 mr-1" />
-                                            )}
-                                            Verify VAT
-                                        </Button>
+                                        <div>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-7 text-xs px-3"
+                                                onClick={handleVerifyVat}
+                                                disabled={isVerifyingVat}
+                                            >
+                                                {isVerifyingVat ? (
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                                                ) : (
+                                                    <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
+                                                )}
+                                                Verify VAT
+                                            </Button>
+                                        </div>
                                     ) : (
                                         <span className="text-xs text-muted-foreground">(Set country to verify)</span>
                                     )}
