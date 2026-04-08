@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/select";
 import type { UserRole, Distributor, CardDisplaySettings, ClientMenuSettings, PaymentAccount, PaymentAccountType, StorefrontSettings } from "@/types";
 import { format, differenceInDays, addMonths } from 'date-fns';
-import { getInventoryRecords } from "@/services/record-service";
+import { getAllInventoryRecords } from "@/services/record-service";
 import { formatPriceForDisplay } from "@/lib/utils";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -726,7 +726,7 @@ export default function SettingsPage() {
     toast({ title: "Exporting Data", description: "Preparing your CSV file..." });
 
     try {
-      const { records } = await getInventoryRecords(user, { distributorId: user.distributorId });
+      const records = await getAllInventoryRecords(user, user.distributorId);
       if (records.length === 0) {
         toast({ title: "No Data", description: "There are no records to export.", variant: "default" });
         setIsExportingCSV(false);
