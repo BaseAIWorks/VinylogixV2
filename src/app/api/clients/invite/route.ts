@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     // Verify authentication
     const caller = await requireAuth(req);
 
-    const { email, distributorId } = await req.json();
+    const { email, distributorId, name } = await req.json();
 
     if (!email || !distributorId) {
       return NextResponse.json(
@@ -151,7 +151,12 @@ export async function POST(req: NextRequest) {
       });
 
       const newTimestamp = Timestamp.now();
-      const newUserFirestoreData = {
+      // Parse optional name into first/last
+      const nameParts = name ? name.trim().split(/\s+/) : [];
+      const firstName = nameParts[0] || undefined;
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined;
+
+      const newUserFirestoreData: Record<string, any> = {
         email,
         role: 'viewer',
         accessibleDistributorIds: [distributorId],
@@ -164,6 +169,8 @@ export async function POST(req: NextRequest) {
         invitedByDistributorId: distributorId,
         invitedByUid: caller.uid,
       };
+      if (firstName) newUserFirestoreData.firstName = firstName;
+      if (lastName) newUserFirestoreData.lastName = lastName;
 
       await adminDb.collection('users').doc(userRecord.uid).set(newUserFirestoreData);
 

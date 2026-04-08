@@ -11,12 +11,12 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   };
 }
 
-export async function inviteClient(email: string, distributorId: string): Promise<{ success: boolean, message: string }> {
+export async function inviteClient(email: string, distributorId: string, name?: string): Promise<{ success: boolean, message: string }> {
   try {
     const response = await fetch('/api/clients/invite', {
       method: 'POST',
       headers: await getAuthHeaders(),
-      body: JSON.stringify({ email, distributorId }),
+      body: JSON.stringify({ email, distributorId, name }),
     });
 
     const result = await response.json();

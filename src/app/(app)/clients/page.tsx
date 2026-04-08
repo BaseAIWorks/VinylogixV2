@@ -74,6 +74,7 @@ export default function ClientsPage() {
   // State for Invite Dialog
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
   const [isInviting, setIsInviting] = useState(false);
 
   const fetchData = useCallback(async () => {
@@ -199,13 +200,14 @@ export default function ClientsPage() {
     }
     setIsInviting(true);
     try {
-      const result = await inviteClient(inviteEmail, user.distributorId);
+      const result = await inviteClient(inviteEmail, user.distributorId, inviteName || undefined);
       toast({
         title: "Success!",
         description: result.message,
       });
       setIsInviteDialogOpen(false);
       setInviteEmail("");
+      setInviteName("");
       await fetchData();
     } catch (error: any) {
       toast({
@@ -436,16 +438,28 @@ export default function ClientsPage() {
                     Enter the client's email to send an invitation. If they don't have an account, one will be created for them with a temporary password.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-2">
-                  <Label htmlFor="invite-email">Client's Email</Label>
-                  <Input
-                    id="invite-email"
-                    type="email"
-                    placeholder="client@email.com"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleInviteClient()}
-                  />
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="invite-email">Client's Email <span className="text-destructive">*</span></Label>
+                    <Input
+                      id="invite-email"
+                      type="email"
+                      placeholder="client@email.com"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleInviteClient()}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="invite-name">Name <span className="text-xs text-muted-foreground">(optional)</span></Label>
+                    <Input
+                      id="invite-name"
+                      type="text"
+                      placeholder="John Doe"
+                      value={inviteName}
+                      onChange={(e) => setInviteName(e.target.value)}
+                    />
+                  </div>
                 </div>
                 <DialogFooter>
                   <DialogClose asChild><Button type="button" variant="ghost">Cancel</Button></DialogClose>
@@ -526,11 +540,15 @@ export default function ClientsPage() {
                     </TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead className="hidden sm:table-cell">Email</TableHead>
-                    <TableHead className="hidden md:table-cell text-center">Status</TableHead>
-                    <TableHead className="hidden lg:table-cell text-center">Orders</TableHead>
-                    <TableHead className="hidden lg:table-cell text-right">Total Spent</TableHead>
-                    <TableHead className="hidden xl:table-cell">Last Order</TableHead>
-                    <TableHead className="hidden xl:table-cell">Invited</TableHead>
+                    {statusFilter !== 'pending' && (
+                      <>
+                        <TableHead className="hidden md:table-cell text-center">Status</TableHead>
+                        <TableHead className="hidden lg:table-cell text-center">Orders</TableHead>
+                        <TableHead className="hidden lg:table-cell text-right">Total Spent</TableHead>
+                        <TableHead className="hidden xl:table-cell">Last Order</TableHead>
+                      </>
+                    )}
+                    <TableHead className={statusFilter === 'pending' ? 'hidden sm:table-cell' : 'hidden xl:table-cell'}>Invited</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -564,70 +582,74 @@ export default function ClientsPage() {
                       <TableCell className="hidden sm:table-cell" onClick={() => router.push(`/clients/${client.uid}`)}>
                         {client.email}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell text-center" onClick={() => router.push(`/clients/${client.uid}`)}>
-                        {client.clientStatus === 'pending' ? (
-                          <Badge variant="outline" className="bg-amber-500/20 text-amber-600 border-amber-500/30">
-                            Pending Invite
-                          </Badge>
-                        ) : client.clientStatus === 'active' ? (
-                          <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-500/30">
-                            Active
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-gray-500/20 text-gray-500 border-gray-500/30">
-                            Inactive
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-center" onClick={() => router.push(`/clients/${client.uid}`)}>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-auto p-1" onClick={(e) => e.stopPropagation()}>
-                              <Badge variant="secondary" className="cursor-pointer">
-                                {client.totalOrders}
+                      {statusFilter !== 'pending' && (
+                        <>
+                          <TableCell className="hidden md:table-cell text-center" onClick={() => router.push(`/clients/${client.uid}`)}>
+                            {client.clientStatus === 'pending' ? (
+                              <Badge variant="outline" className="bg-amber-500/20 text-amber-600 border-amber-500/30">
+                                Pending Invite
                               </Badge>
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-80" align="center">
-                            <div className="space-y-2">
-                              <h4 className="font-semibold text-sm">Recent Orders</h4>
-                              {client.recentOrders.length > 0 ? (
+                            ) : client.clientStatus === 'active' ? (
+                              <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-500/30">
+                                Active
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-gray-500/20 text-gray-500 border-gray-500/30">
+                                Inactive
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-center" onClick={() => router.push(`/clients/${client.uid}`)}>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-auto p-1" onClick={(e) => e.stopPropagation()}>
+                                  <Badge variant="secondary" className="cursor-pointer">
+                                    {client.totalOrders}
+                                  </Badge>
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80" align="center">
                                 <div className="space-y-2">
-                                  {client.recentOrders.map(order => (
-                                    <Link
-                                      key={order.id}
-                                      href={`/orders/${order.id}`}
-                                      className="flex items-center justify-between p-2 rounded-md hover:bg-muted text-sm"
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-                                        <span className="font-mono">{order.orderNumber || order.id.slice(0, 8)}</span>
-                                      </div>
-                                      <span className="text-muted-foreground">
-                                        € {formatPriceForDisplay(order.totalAmount)}
-                                      </span>
-                                    </Link>
-                                  ))}
-                                  {client.totalOrders > 3 && (
-                                    <p className="text-xs text-muted-foreground text-center pt-1">
-                                      +{client.totalOrders - 3} more orders
-                                    </p>
+                                  <h4 className="font-semibold text-sm">Recent Orders</h4>
+                                  {client.recentOrders.length > 0 ? (
+                                    <div className="space-y-2">
+                                      {client.recentOrders.map(order => (
+                                        <Link
+                                          key={order.id}
+                                          href={`/orders/${order.id}`}
+                                          className="flex items-center justify-between p-2 rounded-md hover:bg-muted text-sm"
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+                                            <span className="font-mono">{order.orderNumber || order.id.slice(0, 8)}</span>
+                                          </div>
+                                          <span className="text-muted-foreground">
+                                            € {formatPriceForDisplay(order.totalAmount)}
+                                          </span>
+                                        </Link>
+                                      ))}
+                                      {client.totalOrders > 3 && (
+                                        <p className="text-xs text-muted-foreground text-center pt-1">
+                                          +{client.totalOrders - 3} more orders
+                                        </p>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">No orders yet.</p>
                                   )}
                                 </div>
-                              ) : (
-                                <p className="text-sm text-muted-foreground">No orders yet.</p>
-                              )}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell text-right font-medium" onClick={() => router.push(`/clients/${client.uid}`)}>
-                        € {formatPriceForDisplay(client.totalSpent)}
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell" onClick={() => router.push(`/clients/${client.uid}`)}>
-                        {formatDateSafe(client.lastOrderDate)}
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell text-sm text-muted-foreground" onClick={() => router.push(`/clients/${client.uid}`)}>
+                              </PopoverContent>
+                            </Popover>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell text-right font-medium" onClick={() => router.push(`/clients/${client.uid}`)}>
+                            € {formatPriceForDisplay(client.totalSpent)}
+                          </TableCell>
+                          <TableCell className="hidden xl:table-cell" onClick={() => router.push(`/clients/${client.uid}`)}>
+                            {formatDateSafe(client.lastOrderDate)}
+                          </TableCell>
+                        </>
+                      )}
+                      <TableCell className={statusFilter === 'pending' ? 'hidden sm:table-cell text-sm' : 'hidden xl:table-cell text-sm text-muted-foreground'} onClick={() => router.push(`/clients/${client.uid}`)}>
                         {formatDateSafe(client.invitedAt)}
                       </TableCell>
                       <TableCell className="text-right">
