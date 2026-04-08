@@ -36,6 +36,7 @@ const getDistributorBySlug = cache(async (slug: string) => {
     storefrontSettings: data.storefrontSettings || undefined,
     cardDisplaySettings: data.cardDisplaySettings || undefined,
     lowStockThreshold: (data.lowStockThreshold as number) || 3,
+    website: data.website as string | undefined,
   };
 });
 
@@ -75,6 +76,7 @@ async function getInitialCatalog(distributorId: string, lowStockThreshold = 3, l
       sleeve_condition: d.sleeve_condition,
       cover_url: d.cover_url,
       label: d.label,
+      tracklist: d.tracklist,
       stockStatus,
       // No prices in server-rendered initial load (anonymous)
     };
@@ -130,6 +132,7 @@ export default async function StorefrontPage({ params }: StorefrontPageProps) {
         logoUrl={distributor.logoUrl}
         headline={distributor.storefrontSettings?.headline}
         description={distributor.storefrontSettings?.description}
+        website={distributor.website}
       />
       <StorefrontGate
         visibility={distributor.visibility}

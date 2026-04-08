@@ -7,7 +7,7 @@ import { resolveDistributorBySlug, checkUserAccessToDistributor } from '@/lib/st
 // Fields safe for public (no-price) display
 const PUBLIC_RECORD_FIELDS = [
   'id', 'title', 'artist', 'year', 'genre', 'style', 'format', 'formatDetails',
-  'country', 'media_condition', 'sleeve_condition', 'cover_url', 'label',
+  'country', 'media_condition', 'sleeve_condition', 'cover_url', 'label', 'tracklist',
 ] as const;
 
 // Additional fields for approved clients

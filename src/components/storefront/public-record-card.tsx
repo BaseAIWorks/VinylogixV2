@@ -1,10 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, Euro } from "lucide-react";
+import { ShoppingCart, Euro, Eye } from "lucide-react";
 import { formatPriceForDisplay } from "@/lib/utils";
 import type { CardDisplaySettings } from "@/types";
 
@@ -24,6 +23,7 @@ export interface PublicRecord {
   label?: string;
   stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock';
   sellingPrice?: number;
+  tracklist?: { position?: string; title?: string; duration?: string }[];
 }
 
 interface PublicRecordCardProps {
@@ -31,6 +31,7 @@ interface PublicRecordCardProps {
   cardDisplaySettings?: CardDisplaySettings;
   isApprovedClient?: boolean;
   onAddToCart?: (recordId: string) => void;
+  onClick?: (record: PublicRecord) => void;
 }
 
 export default function PublicRecordCard({
@@ -38,6 +39,7 @@ export default function PublicRecordCard({
   cardDisplaySettings,
   isApprovedClient,
   onAddToCart,
+  onClick,
 }: PublicRecordCardProps) {
   const settings = cardDisplaySettings || {
     showTitle: true,
@@ -52,37 +54,68 @@ export default function PublicRecordCard({
 
   const stockBadge = () => {
     if (!record.stockStatus || record.stockStatus === 'out_of_stock') {
-      return <Badge variant="destructive" className="text-xs">Out of Stock</Badge>;
+      return <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Out of Stock</Badge>;
     }
     if (record.stockStatus === 'low_stock') {
-      return <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">Low Stock</Badge>;
+      return <Badge className="text-[10px] px-1.5 py-0 bg-amber-500/90 hover:bg-amber-500/90 text-white border-0">Low Stock</Badge>;
     }
-    return <Badge variant="secondary" className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">In Stock</Badge>;
+    return null; // Don't show badge for in-stock (cleaner)
   };
 
+  const badge = stockBadge();
+
   return (
-    <Card className="group overflow-hidden transition-shadow hover:shadow-md">
-      <div className="relative aspect-square overflow-hidden bg-muted">
+    <div
+      className="group cursor-pointer"
+      onClick={() => onClick?.(record)}
+    >
+      {/* Image */}
+      <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
         {record.cover_url ? (
           <Image
             src={record.cover_url}
             alt={record.title || 'Vinyl Record'}
             fill
-            className="object-cover transition-transform group-hover:scale-105"
+            className="object-cover transition-all duration-300 group-hover:scale-105"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
           />
         ) : (
-          <div className="flex h-full items-center justify-center">
-            <div className="text-4xl text-muted-foreground/30">&#9834;</div>
+          <div className="flex h-full items-center justify-center bg-gradient-to-br from-muted to-muted-foreground/5">
+            <div className="text-5xl text-muted-foreground/20">&#9834;</div>
           </div>
         )}
-        <div className="absolute right-2 top-2">
-          {stockBadge()}
+
+        {/* Stock badge */}
+        {badge && (
+          <div className="absolute left-2 top-2">{badge}</div>
+        )}
+
+        {/* Hover overlay */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 opacity-0 backdrop-blur-[2px] transition-opacity duration-200 group-hover:opacity-100">
+          <Button size="sm" variant="secondary" className="h-8 text-xs">
+            <Eye className="mr-1.5 h-3.5 w-3.5" />
+            View Details
+          </Button>
+          {isApprovedClient && onAddToCart && record.stockStatus !== 'out_of_stock' && record.sellingPrice != null && (
+            <Button
+              size="sm"
+              className="h-8 text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddToCart(record.id);
+              }}
+            >
+              <ShoppingCart className="mr-1.5 h-3.5 w-3.5" />
+              Add to Cart
+            </Button>
+          )}
         </div>
       </div>
-      <CardContent className="space-y-1.5 p-3">
+
+      {/* Content */}
+      <div className="mt-2.5 space-y-1">
         {settings.showTitle && record.title && (
-          <p className="line-clamp-1 text-sm font-semibold leading-tight">
+          <p className="line-clamp-1 text-sm font-medium leading-snug group-hover:text-primary transition-colors">
             {record.title}
           </p>
         )}
@@ -91,51 +124,37 @@ export default function PublicRecordCard({
             {record.artist}
           </p>
         )}
-        <div className="flex flex-wrap items-center gap-1">
-          {settings.showYear && record.year && (
-            <span className="text-xs text-muted-foreground">{record.year}</span>
+
+        {/* Metadata row */}
+        <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground/70">
+          {record.year && <span>{record.year}</span>}
+          {record.formatDetails && (
+            <span>{record.year ? '· ' : ''}{record.formatDetails}</span>
           )}
-          {settings.showFormat && record.formatDetails && (
-            <span className="text-xs text-muted-foreground">
-              {settings.showYear && record.year ? '· ' : ''}{record.formatDetails}
-            </span>
-          )}
-          {settings.showCountry && record.country && (
-            <span className="text-xs text-muted-foreground">
-              · {record.country}
-            </span>
+          {record.media_condition && (
+            <span>{(record.year || record.formatDetails) ? '· ' : ''}{record.media_condition}</span>
           )}
         </div>
-        {record.media_condition && (
-          <p className="text-xs text-muted-foreground">
-            Media: {record.media_condition}
-            {record.sleeve_condition ? ` / Sleeve: ${record.sleeve_condition}` : ''}
-          </p>
+
+        {/* Genre tags */}
+        {record.genre && record.genre.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-0.5">
+            {record.genre.slice(0, 2).map((g) => (
+              <span key={g} className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                {g}
+              </span>
+            ))}
+          </div>
         )}
 
-        {isApprovedClient && record.sellingPrice != null && record.sellingPrice >= 0 ? (
-          <div className="flex items-center justify-between pt-1">
-            <span className="flex items-center gap-0.5 text-sm font-semibold text-primary">
-              <Euro className="h-3.5 w-3.5" />
-              {formatPriceForDisplay(record.sellingPrice)}
-            </span>
-            {onAddToCart && record.stockStatus !== 'out_of_stock' && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 px-2 text-xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAddToCart(record.id);
-                }}
-              >
-                <ShoppingCart className="mr-1 h-3 w-3" />
-                Add
-              </Button>
-            )}
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
+        {/* Price */}
+        {isApprovedClient && record.sellingPrice != null && record.sellingPrice >= 0 && (
+          <p className="flex items-center gap-0.5 pt-1 text-sm font-semibold text-primary">
+            <Euro className="h-3.5 w-3.5" />
+            {formatPriceForDisplay(record.sellingPrice)}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
