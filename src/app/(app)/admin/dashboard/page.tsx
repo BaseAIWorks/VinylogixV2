@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building, PlusCircle, Loader2, AlertTriangle, ArrowLeft, MoreHorizontal, Trash2, CheckCircle, XCircle, Hourglass } from "lucide-react";
+import { Building, PlusCircle, Loader2, AlertTriangle, ArrowLeft, MoreHorizontal, Trash2, CheckCircle, XCircle, Hourglass, Clock } from "lucide-react";
 import type { Distributor, SubscriptionInfo, SubscriptionTier } from "@/types";
 import { SubscriptionTiers } from "@/types";
 import { useState, useEffect, useCallback } from "react";
@@ -349,6 +349,9 @@ export default function AdminDashboardPage() {
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem onClick={() => handleStatusUpdate(distributor.id, 'pending')}>
                                                                 <Hourglass className="mr-2 h-4 w-4 text-yellow-500" /> Set Pending
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => handleStatusUpdate(distributor.id, 'awaiting_approval')}>
+                                                                <Clock className="mr-2 h-4 w-4 text-amber-500" /> Set Awaiting Approval
                                                             </DropdownMenuItem>
                                                             <DropdownMenuSeparator />
                                                             <DropdownMenuItem className="text-destructive" onClick={() => { setDistributorToDelete(distributor); setIsDeleteDialogOpen(true); }}>

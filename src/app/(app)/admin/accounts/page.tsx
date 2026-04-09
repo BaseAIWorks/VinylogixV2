@@ -27,9 +27,9 @@ const subscriptionStatusColors: Record<string, string> = {
     active: 'text-green-500',
     trialing: 'text-blue-500',
     past_due: 'text-orange-500',
-    cancelled: 'text-red-500',
-    incomplete: 'text-yellow-500',
     canceled: 'text-red-500',
+    cancelled: 'text-red-500', // alternate spelling fallback
+    incomplete: 'text-yellow-500',
 };
 
 

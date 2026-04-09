@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Building, Users, Package, UserCircle, Key, Loader2, BarChart3, AlertTriangle, Trash2, Edit, DollarSign, TrendingUp, Briefcase, KeyRound, Save, Mail, Phone, Home, Link as LinkIcon } from "lucide-react";
 import type { Distributor, User, VinylRecord, Order, SubscriptionTier, SubscriptionInfo } from "@/types";
-import { SubscriptionTiers } from "@/types";
+import { DistributorTiers } from "@/types";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -198,7 +198,7 @@ export default function DistributorDetailPage() {
     
     const onSubscriptionTierChange = (tier: SubscriptionTier) => {
         if (!subscriptionTiers) return;
-        setEditFormState(prev => ({ ...prev, subscription: subscriptionTiers[tier] }));
+        setEditFormState(prev => ({ ...prev, subscriptionTier: tier, subscription: subscriptionTiers[tier] }));
     }
 
     if (isLoading) {
@@ -291,7 +291,7 @@ export default function DistributorDetailPage() {
                                                 <Switch checked={editFormState.isSubscriptionExempt || false} onCheckedChange={(checked) => setEditFormState(prev => ({...prev, isSubscriptionExempt: checked}))} />
                                             </div>
                                             <div className="space-y-1"><Label htmlFor="subscriptionTier">Subscription Tier</Label>
-                                                <Select value={editFormState.subscription?.tier} onValueChange={onSubscriptionTierChange} disabled={editFormState.isSubscriptionExempt}><SelectTrigger id="subscriptionTier"><SelectValue placeholder="Select a tier" /></SelectTrigger><SelectContent>{SubscriptionTiers.map(tier => <SelectItem key={tier} value={tier} className="capitalize">{tier}</SelectItem>)}</SelectContent></Select>
+                                                <Select value={editFormState.subscriptionTier || editFormState.subscription?.tier} onValueChange={onSubscriptionTierChange} disabled={editFormState.isSubscriptionExempt}><SelectTrigger id="subscriptionTier"><SelectValue placeholder="Select a tier" /></SelectTrigger><SelectContent>{DistributorTiers.map(tier => <SelectItem key={tier} value={tier} className="capitalize">{tier}</SelectItem>)}</SelectContent></Select>
                                             </div>
                                         </div>
                                         <DialogFooter><Button onClick={handleUpdateDetails}><Save className="mr-2 h-4 w-4" />Save Changes</Button></DialogFooter>
@@ -342,11 +342,14 @@ export default function DistributorDetailPage() {
                                 <Badge variant="secondary" className="text-base">Managed Account</Badge>
                             ) : (
                                 <>
-                                 <DetailItem icon={Briefcase} label="Tier" value={<Badge className="capitalize">{distributor.subscription?.tier || 'N/A'}</Badge>} />
+                                 <DetailItem icon={Briefcase} label="Tier" value={<Badge className="capitalize">{distributor.subscriptionTier || distributor.subscription?.tier || 'N/A'}</Badge>} />
+                                 <DetailItem icon={TrendingUp} label="Status" value={<Badge variant="outline" className={`capitalize ${(distributor.subscriptionStatus || distributor.subscription?.status) === 'active' ? 'text-green-600 border-green-500' : (distributor.subscriptionStatus || distributor.subscription?.status) === 'past_due' ? 'text-orange-600 border-orange-500' : 'text-red-600 border-red-500'}`}>{(distributor.subscriptionStatus || distributor.subscription?.status || 'N/A').replace('_', ' ')}</Badge>} />
                                  <DetailItem icon={Package} label="Max Records" value={distributor.subscription?.maxRecords === -1 ? 'Unlimited' : distributor.subscription?.maxRecords} />
                                  <DetailItem icon={Users} label="Max Users" value={distributor.subscription?.maxUsers === -1 ? 'Unlimited' : distributor.subscription?.maxUsers} />
                                  <DetailItem icon={DollarSign} label="Orders Enabled" value={distributor.subscription?.allowOrders ? "Yes" : "No"} />
-                                 <DetailItem icon={Users} label="AI Features Enabled" value={distributor.subscription?.allowAiFeatures ? "Yes" : "No"} />
+                                 {distributor.stripeAccountId && (
+                                   <DetailItem icon={Key} label="Stripe Connect" value={<Badge variant="outline" className={`capitalize ${distributor.stripeAccountStatus === 'verified' ? 'text-green-600 border-green-500' : distributor.stripeAccountStatus === 'restricted' ? 'text-red-600 border-red-500' : 'text-yellow-600 border-yellow-500'}`}>{distributor.stripeAccountStatus || 'pending'}</Badge>} />
+                                 )}
                                 </>
                             )}
                         </CardContent>

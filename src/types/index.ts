@@ -168,7 +168,7 @@ export interface Distributor {
   contactEmail: string;
   masterUserUid?: string; // UID of the master account for this distributor
   creatorUid?: string; // UID of the superadmin who created it
-  status: 'active' | 'inactive' | 'pending';
+  status: 'active' | 'inactive' | 'pending' | 'awaiting_approval';
   createdAt: string; // ISO date string
   addressLine1?: string;
   addressLine2?: string;
