@@ -258,6 +258,8 @@ export default function AdminStatisticsPage() {
                         createdAt: u.createdAt!,
                         lastLoginAt: u.lastLoginAt,
                         profileComplete: u.profileComplete,
+                        originType: u.originType,
+                        originDistributorName: u.originDistributorName,
                     };
                 }),
             totalClients: allUsers.filter(u => u.role === 'viewer').length,
@@ -497,11 +499,19 @@ export default function AdminStatisticsPage() {
                                                 </div>
                                             </TableCell>
                                             <TableCell className="hidden md:table-cell">
-                                                {isPending ? (
-                                                    <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30">Invite Sent</Badge>
-                                                ) : (
-                                                    <Badge variant="outline" className="text-[10px] bg-green-500/20 text-green-600 border-green-500/30">Accepted</Badge>
-                                                )}
+                                                <div className="flex flex-wrap gap-1">
+                                                    {isPending ? (
+                                                        <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30">Invite Sent</Badge>
+                                                    ) : (
+                                                        <Badge variant="outline" className="text-[10px] bg-green-500/20 text-green-600 border-green-500/30">Accepted</Badge>
+                                                    )}
+                                                    {client.originType === 'invited' && (
+                                                        <Badge variant="outline" className="text-[10px] bg-indigo-500/10 text-indigo-600 border-indigo-500/30">Invited</Badge>
+                                                    )}
+                                                    {client.originType === 'access_request' && (
+                                                        <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-600 border-purple-500/30">Request</Badge>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                             <TableCell>
                                                 <div>

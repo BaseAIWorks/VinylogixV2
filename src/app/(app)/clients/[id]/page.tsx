@@ -242,6 +242,16 @@ export default function ClientDetailPage() {
                             <h2 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
                                 <UserCircle className="h-8 w-8 text-primary"/>
                                 {`${client.firstName || ''} ${client.lastName || ''}`.trim() || 'Client Details'}
+                                {client.originType === 'invited' && (
+                                    <span className="inline-flex items-center rounded-full bg-indigo-500/10 border border-indigo-500/30 px-2.5 py-1 text-xs font-medium text-indigo-600">
+                                        Invited{client.originDistributorName ? ` by ${client.originDistributorName}` : ''}
+                                    </span>
+                                )}
+                                {client.originType === 'access_request' && (
+                                    <span className="inline-flex items-center rounded-full bg-purple-500/10 border border-purple-500/30 px-2.5 py-1 text-xs font-medium text-purple-600">
+                                        Access Request
+                                    </span>
+                                )}
                                 {client.vatValidated && (
                                     <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 border border-green-500/30 px-2.5 py-1 text-xs font-medium text-green-700" title={`VAT verified${client.vatValidatedName ? `: ${client.vatValidatedName}` : ''}`}>
                                         <ShieldCheck className="h-3.5 w-3.5" /> VAT Verified

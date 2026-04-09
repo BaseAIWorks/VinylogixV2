@@ -674,6 +674,12 @@ export default function ClientsPage() {
                           {isNewClient(client) && (
                             <span className="inline-flex items-center rounded-full bg-blue-500/10 border border-blue-500/30 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">New</span>
                           )}
+                          {client.originType === 'invited' && (
+                            <span className="inline-flex items-center rounded-full bg-indigo-500/10 border border-indigo-500/30 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600" title={client.originDistributorName ? `Invited by ${client.originDistributorName}` : 'Invited'}>Invited</span>
+                          )}
+                          {client.originType === 'access_request' && (
+                            <span className="inline-flex items-center rounded-full bg-purple-500/10 border border-purple-500/30 px-1.5 py-0.5 text-[10px] font-medium text-purple-600">Request</span>
+                          )}
                           {client.vatValidated && (
                             <span className="inline-flex items-center gap-0.5 rounded-full bg-green-500/10 border border-green-500/30 px-1.5 py-0.5 text-[10px] font-medium text-green-700" title={`VAT verified${client.vatValidatedName ? `: ${client.vatValidatedName}` : ''}`}>
                               <ShieldCheck className="h-3 w-3" /> VAT
