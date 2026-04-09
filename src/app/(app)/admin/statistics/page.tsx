@@ -475,7 +475,7 @@ export default function AdminStatisticsPage() {
                                     const isPending = !hasLoggedIn && client.profileComplete === false;
                                     const isNew = isAfter(parseISO(client.createdAt), subDays(new Date(), 14));
                                     return (
-                                        <TableRow key={client.uid}>
+                                        <TableRow key={client.uid} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/admin/users/${client.uid}`)}>
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
                                                     <div>
