@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     const caller = await verifyAuth(req);
     const viewerId = caller?.uid || '';
 
-    const { distributorId, items, customerEmail, shippingAddress, billingAddress, customerName, phoneNumber } = await req.json();
+    const { distributorId, items, customerEmail, shippingAddress, billingAddress, customerName, phoneNumber, customerCountry, shippingMethod } = await req.json();
 
     if (!distributorId || !items || items.length === 0) {
       return NextResponse.json(
@@ -143,12 +143,33 @@ export async function POST(req: NextRequest) {
     }
 
     // Calculate total amount using database prices (in cents)
-    const totalAmountCents = validatedItems.reduce((sum: number, item) => {
+    const productTotalCents = validatedItems.reduce((sum: number, item) => {
       return sum + Math.round((item.dbRecord.sellingPrice as number) * 100) * item.quantity;
     }, 0);
 
-    // Calculate 4% platform fee (in cents)
-    const platformFeeAmount = Math.round(totalAmountCents * 0.04);
+    // Calculate shipping cost server-side
+    let shippingCostCents = 0;
+    let shippingZoneName = '';
+    let freeShippingApplied = false;
+    if (distributor.shippingConfig?.enabled) {
+      const { calculateShipping } = await import('@/lib/shipping-utils');
+      const totalWeight = validatedItems.reduce((sum, item) => sum + (item.dbRecord.weight || 0) * item.quantity, 0);
+      const shippingResult = calculateShipping(
+        distributor.shippingConfig,
+        customerCountry,
+        totalWeight,
+        productTotalCents / 100,
+        shippingMethod || 'shipping'
+      );
+      shippingCostCents = Math.round(shippingResult.shippingCost * 100);
+      shippingZoneName = shippingResult.zoneName || '';
+      freeShippingApplied = shippingResult.freeShippingApplied;
+    }
+
+    const totalAmountCents = productTotalCents + shippingCostCents;
+
+    // Calculate 4% platform fee on product total only (not shipping)
+    const platformFeeAmount = Math.round(productTotalCents * 0.04);
 
     // Generate a temporary order ID for reference
     const tempOrderId = `TEMP-${Date.now()}-${Math.random().toString(36).substring(7)}`;
@@ -181,6 +202,12 @@ export async function POST(req: NextRequest) {
       paymentMethod: 'paypal',
       status: 'pending_payment',
       createdAt: new Date().toISOString(),
+      ...(shippingCostCents > 0 || freeShippingApplied || shippingMethod === 'pickup' ? {
+        shippingCost: shippingCostCents / 100,
+        shippingZoneName,
+        shippingMethod: shippingMethod || 'shipping',
+        freeShippingApplied,
+      } : {}),
     };
 
     await adminDb.collection('pendingOrders').doc(tempOrderId).set(pendingOrderData);

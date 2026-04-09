@@ -565,6 +565,15 @@ export default function OrderDetailPage() {
                                         </p>
                                     </>
                                 )}
+                                {order.shippingCost !== undefined && order.shippingCost > 0 && (
+                                    <p className="text-sm text-muted-foreground">Shipping{order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}: € {formatPriceForDisplay(order.shippingCost)}</p>
+                                )}
+                                {order.freeShippingApplied && (
+                                    <p className="text-sm text-green-600">Free shipping applied</p>
+                                )}
+                                {order.shippingMethod === 'pickup' && (
+                                    <p className="text-sm text-muted-foreground">Pickup (no shipping)</p>
+                                )}
                                 <p className="font-semibold text-lg">Total: € {formatPriceForDisplay(order.totalAmount)}</p>
                                 {order.isReverseCharge && <p className="text-xs text-muted-foreground italic">Reverse charge — VAT to be accounted for by the recipient.</p>}
                                 <p className="text-sm text-muted-foreground">Total Items: {order.items.reduce((sum, item) => sum + item.quantity, 0)}</p>
@@ -711,8 +720,13 @@ export default function OrderDetailPage() {
                                     <span className="text-muted-foreground">Order Total:</span>
                                     <span className="font-medium">€{formatPriceForDisplay(order.totalAmount)}</span>
                                 </div>
+                                {order.shippingCost !== undefined && order.shippingCost > 0 && (
+                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                        <span>(incl. shipping: €{formatPriceForDisplay(order.shippingCost)})</span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Platform Fee (4%):</span>
+                                    <span className="text-muted-foreground">Platform Fee ({order.appliedFeePercentage || 4}%):</span>
                                     <span className="text-red-600">-€{formatPriceForDisplay(order.platformFeeAmount / 100)}</span>
                                 </div>
                                 <Separator />

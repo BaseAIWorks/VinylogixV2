@@ -12,10 +12,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Home, FileText, ShoppingBag, CreditCard, Loader2, Check, ArrowLeft, AlertCircle } from "lucide-react";
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { User, Distributor } from "@/types";
 import { getDistributorById } from "@/services/distributor-service";
+import { calculateShipping, findShippingZone } from "@/lib/shipping-utils";
+import { Truck, Package } from "lucide-react";
 
 const formatAddress = (user: Partial<User>, type: 'shipping' | 'billing' = 'shipping'): string => {
     if (type === 'billing' && user.useDifferentBillingAddress) {
@@ -66,6 +68,7 @@ export default function CheckoutPage() {
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('stripe');
     const [distributor, setDistributor] = useState<Distributor | null>(null);
     const [isLoadingDistributor, setIsLoadingDistributor] = useState(true);
+    const [shippingMethod, setShippingMethod] = useState<'shipping' | 'pickup'>('shipping');
 
     // Get the distributor ID from the first cart item
     const distributorId = cart.length > 0 ? cart[0].distributorId : null;
@@ -112,6 +115,16 @@ export default function CheckoutPage() {
         return missing;
     };
     const missingFields = getMissingAddressFields();
+
+    // Shipping calculation
+    const totalWeight = useMemo(() => cart.reduce((sum, item) => sum + (item.record.weight || 0) * item.quantity, 0), [cart]);
+    const shippingResult = useMemo(() => {
+        if (!distributor?.shippingConfig?.enabled) return null;
+        return calculateShipping(distributor.shippingConfig, user.country, totalWeight, cartTotal, shippingMethod);
+    }, [distributor?.shippingConfig, user.country, totalWeight, cartTotal, shippingMethod]);
+    const shippingCost = shippingResult?.shippingCost || 0;
+    const orderTotal = cartTotal + shippingCost;
+    const hasShippingZone = distributor?.shippingConfig?.enabled ? !!findShippingZone(distributor.shippingConfig, user.country) : true;
 
     // Check available payment methods
     const stripeAvailable = distributor?.stripeAccountId && distributor.stripeAccountStatus === 'verified';
@@ -187,6 +200,8 @@ export default function CheckoutPage() {
                 customerName,
                 shippingAddress,
                 billingAddress,
+                customerCountry: user.country,
+                shippingMethod,
             }),
         });
 
@@ -223,6 +238,8 @@ export default function CheckoutPage() {
                 billingAddress,
                 customerName,
                 phoneNumber: user.phoneNumber || user.mobileNumber,
+                customerCountry: user.country,
+                shippingMethod,
             }),
         });
 
@@ -268,6 +285,7 @@ export default function CheckoutPage() {
             customerEoriNumber: user.eoriNumber,
             customerChamberOfCommerce: user.chamberOfCommerce,
             customerCountry: user.country,
+            shippingMethod,
         });
         clearCart();
         router.push(`/my-orders/${order.id}?requested=true`);
@@ -373,9 +391,52 @@ export default function CheckoutPage() {
                             ))}
                         </CardContent>
                         <CardFooter className="flex-col items-stretch space-y-4 pt-4 border-t">
-                           <div className="flex justify-between font-semibold text-lg">
-                                <span>Total</span>
-                                <span>€ {formatPriceForDisplay(cartTotal)}</span>
+                           {/* Shipping method selector */}
+                           {distributor?.shippingConfig?.enabled && (
+                             <div className="space-y-2">
+                               {distributor.shippingConfig.allowPickup && (
+                                 <RadioGroup value={shippingMethod} onValueChange={(v) => setShippingMethod(v as 'shipping' | 'pickup')} className="flex gap-3">
+                                   <div className={`flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer flex-1 ${shippingMethod === 'shipping' ? 'border-primary bg-primary/5' : 'border-border'}`} onClick={() => setShippingMethod('shipping')}>
+                                     <RadioGroupItem value="shipping" id="ship" />
+                                     <Label htmlFor="ship" className="cursor-pointer flex items-center gap-1.5 text-xs"><Truck className="h-3.5 w-3.5" />Shipping</Label>
+                                   </div>
+                                   <div className={`flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer flex-1 ${shippingMethod === 'pickup' ? 'border-primary bg-primary/5' : 'border-border'}`} onClick={() => setShippingMethod('pickup')}>
+                                     <RadioGroupItem value="pickup" id="pick" />
+                                     <Label htmlFor="pick" className="cursor-pointer flex items-center gap-1.5 text-xs"><Package className="h-3.5 w-3.5" />Pickup</Label>
+                                   </div>
+                                 </RadioGroup>
+                               )}
+                               {shippingMethod === 'shipping' && !hasShippingZone && user.country && (
+                                 <p className="text-xs text-orange-600">Shipping to {user.country} is not available. Contact the distributor.</p>
+                               )}
+                               {shippingMethod === 'shipping' && !user.country && (
+                                 <p className="text-xs text-orange-600">Set your country in <Link href="/settings" className="underline">settings</Link> to calculate shipping.</p>
+                               )}
+                             </div>
+                           )}
+
+                           <div className="space-y-1">
+                             <div className="flex justify-between text-sm text-muted-foreground">
+                               <span>Subtotal</span>
+                               <span>€ {formatPriceForDisplay(cartTotal)}</span>
+                             </div>
+                             {distributor?.shippingConfig?.enabled && shippingMethod === 'shipping' && (
+                               <div className="flex justify-between text-sm text-muted-foreground">
+                                 <span>Shipping{shippingResult?.zoneName ? ` (${shippingResult.zoneName})` : ''}</span>
+                                 <span>{shippingResult?.freeShippingApplied ? 'Free' : `€ ${formatPriceForDisplay(shippingCost)}`}</span>
+                               </div>
+                             )}
+                             {shippingMethod === 'pickup' && (
+                               <div className="flex justify-between text-sm text-muted-foreground">
+                                 <span>Pickup</span>
+                                 <span>€ 0,00</span>
+                               </div>
+                             )}
+                             <Separator className="my-1" />
+                             <div className="flex justify-between font-semibold text-lg">
+                               <span>Total</span>
+                               <span>€ {formatPriceForDisplay(orderTotal)}</span>
+                             </div>
                            </div>
                            {distributor?.taxMode === 'manual' && distributor.manualTaxRate && (
                                <p className="text-xs text-muted-foreground text-right">

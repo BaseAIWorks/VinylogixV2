@@ -201,6 +201,29 @@ export async function updateOrderItemStatuses(
     newTotal = newSubtotal;
   }
 
+  // Recalculate shipping if weight-based and distributor has shipping config
+  let shippingCost = orderData.shippingCost || 0;
+  if (orderData.shippingCost !== undefined && orderData.shippingMethod === 'shipping') {
+    try {
+      const distributor = await getDistributorById(actingUser.distributorId);
+      if (distributor?.shippingConfig?.enabled) {
+        const { calculateShipping } = await import('@/lib/shipping-utils');
+        const newTotalWeight = activeItems.reduce((sum, item) => {
+          // Weight might not be on order items, so we keep existing shipping if not available
+          return sum;
+        }, 0);
+        // If we can't recalculate (no weight data on order items), keep original shipping
+        // Shipping recalculation would require fetching record weights, which is complex
+        // For now, keep the existing shipping cost
+      }
+    } catch (e) {
+      // Keep existing shipping cost on error
+    }
+  }
+
+  // Add shipping to total
+  newTotal = newTotal + shippingCost;
+
   const updatePayload: any = {
     items: updatedItems,
     totalAmount: newTotal,
@@ -259,10 +282,13 @@ export async function recalculateOrderTax(
   const { calculateTax } = await import('@/lib/tax-utils');
   const taxResult = calculateTax(itemTotal, distributor.manualTaxRate, taxBehavior, reverseCharge);
 
+  // Preserve shipping cost in the grand total
+  const shippingCost = orderData.shippingCost || 0;
+
   const updatePayload: any = {
     subtotalAmount: taxResult.subtotal,
     taxAmount: taxResult.taxAmount,
-    totalAmount: taxResult.total,
+    totalAmount: taxResult.total + shippingCost,
     taxRate: taxResult.taxRate,
     taxInclusive: taxBehavior === 'inclusive',
     taxLabel: distributor.manualTaxLabel || 'VAT',

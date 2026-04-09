@@ -203,6 +203,15 @@ export default function ClientOrderDetailPage() {
                       </p>
                     </>
                   )}
+                  {order.shippingCost !== undefined && order.shippingCost > 0 && (
+                    <p className="text-sm text-muted-foreground">Shipping{order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}: € {formatPriceForDisplay(order.shippingCost)}</p>
+                  )}
+                  {order.freeShippingApplied && (
+                    <p className="text-sm text-green-600">Free shipping applied</p>
+                  )}
+                  {order.shippingMethod === 'pickup' && (
+                    <p className="text-sm text-muted-foreground">Pickup (no shipping)</p>
+                  )}
                   <p className="font-semibold text-lg">Total: € {formatPriceForDisplay(order.totalAmount)}</p>
                   {order.isReverseCharge && <p className="text-xs text-muted-foreground italic">Reverse charge — VAT to be accounted for by the recipient.</p>}
                   <p className="text-sm text-muted-foreground">Total Items: {order.items.reduce((sum, item) => sum + item.quantity, 0)}</p>

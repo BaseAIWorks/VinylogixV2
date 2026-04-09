@@ -538,6 +538,31 @@ export async function generateInvoicePdf(
     currentY += 5;
   }
 
+  // Shipping line
+  if (order.shippingCost !== undefined && order.shippingCost > 0) {
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...COLORS.secondary);
+    doc.text(`Shipping${order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}:`, totalsX, currentY);
+    doc.setTextColor(...COLORS.text);
+    doc.text(`\u20AC ${formatPriceForDisplay(order.shippingCost)}`, pageWidth - margin, currentY, { align: 'right' });
+    currentY += 4;
+  } else if (order.freeShippingApplied) {
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...COLORS.secondary);
+    doc.text('Shipping:', totalsX, currentY);
+    doc.setTextColor(...COLORS.text);
+    doc.text('Free', pageWidth - margin, currentY, { align: 'right' });
+    currentY += 4;
+  } else if (order.shippingMethod === 'pickup') {
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...COLORS.secondary);
+    doc.text('Pickup (no shipping)', totalsX, currentY);
+    currentY += 4;
+  }
+
   // Total
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");

@@ -157,6 +157,15 @@ export async function createOrderFromCheckout(session: Stripe.Checkout.Session):
     newOrderData.phoneNumber = clientUser.phoneNumber;
   }
 
+  // Add shipping data from session metadata
+  const metaShippingCost = parseFloat(session.metadata?.shippingCost || '0');
+  if (metaShippingCost > 0 || session.metadata?.freeShippingApplied === 'true' || session.metadata?.shippingMethod === 'pickup') {
+    newOrderData.shippingCost = metaShippingCost;
+    newOrderData.shippingZoneName = session.metadata?.shippingZoneName || null;
+    newOrderData.shippingMethod = session.metadata?.shippingMethod || 'shipping';
+    newOrderData.freeShippingApplied = session.metadata?.freeShippingApplied === 'true';
+  }
+
   // Add client business details from user profile
   if (clientUser?.companyName) newOrderData.customerCompanyName = clientUser.companyName;
   if (clientUser?.vatNumber) newOrderData.customerVatNumber = clientUser.vatNumber;
@@ -480,6 +489,7 @@ export async function createOrderRequestServer(params: {
   customerEoriNumber?: string;
   customerChamberOfCommerce?: string;
   customerCountry?: string;
+  shippingMethod?: 'shipping' | 'pickup';
 }): Promise<Order> {
   const adminDb = getAdminDb();
   if (!adminDb) throw new Error("Admin DB not initialized.");
@@ -535,23 +545,51 @@ export async function createOrderRequestServer(params: {
   if (params.customerEoriNumber) newOrderData.customerEoriNumber = params.customerEoriNumber;
   if (params.customerChamberOfCommerce) newOrderData.customerChamberOfCommerce = params.customerChamberOfCommerce;
 
-  // Calculate tax for request orders (manual mode)
+  // Fetch distributor settings for tax + shipping
   const distSnap = await adminDb.collection('distributors').doc(distributorId).get();
   const distData = distSnap.exists ? distSnap.data() : null;
+
+  // Calculate shipping
+  if (distData?.shippingConfig?.enabled) {
+    try {
+      const { calculateShipping } = await import('@/lib/shipping-utils');
+      const shippingResult = calculateShipping(
+        distData.shippingConfig,
+        params.customerCountry,
+        totalWeight,
+        totalAmount,
+        params.shippingMethod || 'shipping'
+      );
+      if (shippingResult.shippingCost > 0 || shippingResult.freeShippingApplied || shippingResult.method === 'pickup') {
+        newOrderData.shippingCost = shippingResult.shippingCost;
+        newOrderData.shippingZoneName = shippingResult.zoneName;
+        newOrderData.shippingMethod = shippingResult.method;
+        newOrderData.freeShippingApplied = shippingResult.freeShippingApplied;
+        newOrderData.totalAmount = totalAmount + shippingResult.shippingCost;
+      }
+    } catch (shipErr) {
+      console.warn('Could not calculate shipping for order request:', shipErr);
+    }
+  }
+
+  // Calculate tax for request orders (manual mode) — tax on product total only
+  const productTotal = totalAmount; // Before shipping was added
   if (distData?.taxMode === 'manual' && distData.manualTaxRate) {
     try {
       const { calculateTax, isReverseChargeApplicable } = await import('@/lib/tax-utils');
       const reverseCharge = isReverseChargeApplicable(
         params.customerVatNumber, params.customerCountry, distData.country
       );
-      const taxResult = calculateTax(totalAmount, distData.manualTaxRate, distData.taxBehavior || 'inclusive', reverseCharge);
+      const taxResult = calculateTax(productTotal, distData.manualTaxRate, distData.taxBehavior || 'inclusive', reverseCharge);
       newOrderData.subtotalAmount = taxResult.subtotal;
       newOrderData.taxAmount = taxResult.taxAmount;
       newOrderData.taxRate = taxResult.taxRate;
       newOrderData.taxInclusive = (distData.taxBehavior || 'inclusive') === 'inclusive';
       newOrderData.taxLabel = distData.manualTaxLabel || 'VAT';
       newOrderData.isReverseCharge = taxResult.isReverseCharge;
-      if (reverseCharge) newOrderData.totalAmount = taxResult.total;
+      // Grand total = tax-adjusted product total + shipping
+      const taxAdjustedTotal = reverseCharge ? taxResult.total : productTotal;
+      newOrderData.totalAmount = taxAdjustedTotal + (newOrderData.shippingCost || 0);
     } catch (taxErr) {
       console.warn('Could not calculate tax for order request:', taxErr);
     }

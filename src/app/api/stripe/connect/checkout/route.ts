@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     const caller = await verifyAuth(req);
     const userId = caller?.uid || '';
 
-    const { distributorId, items, customerEmail, customerName, shippingAddress, billingAddress } = await req.json();
+    const { distributorId, items, customerEmail, customerName, shippingAddress, billingAddress, customerCountry, shippingMethod } = await req.json();
 
     if (!distributorId || !items || items.length === 0) {
       return NextResponse.json(
@@ -159,14 +159,49 @@ export async function POST(req: NextRequest) {
 
     // Calculate total amount using database prices
     // We've already validated all sellingPrice values exist and are > 0 above
-    const totalAmount = validatedItems.reduce((sum: number, item) => {
+    const productTotal = validatedItems.reduce((sum: number, item) => {
       return sum + (item.dbRecord.sellingPrice as number) * item.quantity;
     }, 0);
 
-    // Calculate platform fee based on distributor's subscription tier
+    // Calculate shipping cost server-side
+    let shippingCost = 0;
+    let shippingZoneName = '';
+    let freeShippingApplied = false;
+    if (distributor.shippingConfig?.enabled) {
+      const { calculateShipping } = await import('@/lib/shipping-utils');
+      const totalWeight = validatedItems.reduce((sum, item) => sum + (item.dbRecord.weight || 0) * item.quantity, 0);
+      const shippingResult = calculateShipping(
+        distributor.shippingConfig,
+        customerCountry,
+        totalWeight,
+        productTotal,
+        shippingMethod || 'shipping'
+      );
+      shippingCost = shippingResult.shippingCost;
+      shippingZoneName = shippingResult.zoneName || '';
+      freeShippingApplied = shippingResult.freeShippingApplied;
+
+      // Add shipping as a separate line item
+      if (shippingCost > 0) {
+        lineItems.push({
+          price_data: {
+            currency: 'eur',
+            product_data: {
+              name: `Shipping${shippingZoneName ? ` (${shippingZoneName})` : ''}`,
+              description: 'Shipping cost',
+              images: [],
+            },
+            unit_amount: Math.round(shippingCost * 100),
+          },
+          quantity: 1,
+        } as any);
+      }
+    }
+
+    // Calculate platform fee on product total only (not shipping)
     const { getPlatformFeeRate } = await import('@/lib/stripe-helpers');
     const feeRate = await getPlatformFeeRate(distributorId);
-    const platformFeeAmount = Math.round(totalAmount * 100 * feeRate);
+    const platformFeeAmount = Math.round(productTotal * 100 * feeRate);
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
 
@@ -209,6 +244,10 @@ export async function POST(req: NextRequest) {
         billingAddress: billingAddress || '',
         // Store cart items as JSON (limited to 500 chars, but should be enough for most orders)
         cartItems: JSON.stringify(cartItemsData).substring(0, 500),
+        shippingCost: shippingCost.toString(),
+        shippingZoneName,
+        shippingMethod: shippingMethod || 'shipping',
+        freeShippingApplied: freeShippingApplied.toString(),
       },
     });
 
