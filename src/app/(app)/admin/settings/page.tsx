@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Loader2, AlertTriangle, Save, Shapes, ArrowLeft, Trash2, PlusCircle, Weight, Palette, CreditCard } from "lucide-react";
 import type { SubscriptionInfo, SubscriptionTier, WeightOption } from "@/types";
 import { SubscriptionTiers } from "@/types";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { getSubscriptionTiers, updateSubscriptionTiers, getWeightOptions, updateWeightOptions } from "@/services/client-subscription-service";
@@ -87,7 +87,7 @@ export default function PlatformSettingsPage() {
     const handleTierInputChange = (tier: SubscriptionTier, field: keyof SubscriptionInfo, value: string | number | boolean) => {
         if (!tiers) return;
 
-        if (field === 'maxRecords' || field === 'maxUsers' || field === 'price' || field === 'yearlyPrice' || field === 'discountedPrice') {
+        if (field === 'maxRecords' || field === 'maxUsers' || field === 'price' || field === 'yearlyPrice' || field === 'quarterlyPrice' || field === 'discountedPrice') {
             const numValue = Number(value);
             if (isNaN(numValue)) {
                  if (value === "") { 
@@ -130,8 +130,15 @@ export default function PlatformSettingsPage() {
     };
 
     const handleAddWeightOption = () => {
+        const newLabel = "";
+        const isDuplicate = weightOptions.some(o => o.label.trim().toLowerCase() === newLabel);
         setWeightOptions([...weightOptions, { id: `new_${weightOptionIdCounter++}`, label: "", weight: 0, isFixed: false }]);
     };
+
+    const hasDuplicateWeightLabels = useMemo(() => {
+        const labels = weightOptions.map(o => o.label.trim().toLowerCase()).filter(l => l);
+        return new Set(labels).size !== labels.length;
+    }, [weightOptions]);
 
     const handleRemoveWeightOption = (id: string) => {
         setWeightOptions(weightOptions.filter((opt) => opt.id !== id));
@@ -206,6 +213,7 @@ export default function PlatformSettingsPage() {
                                     <div className="space-y-1"><Label htmlFor={`maxRecords-${tierKey}`}>Max Records</Label><Input id={`maxRecords-${tierKey}`} type="number" value={tiers[tierKey].maxRecords} onChange={e => handleTierInputChange(tierKey, 'maxRecords', e.target.value)} placeholder="Use -1 for unlimited"/><p className="text-xs text-muted-foreground">Use -1 for unlimited records.</p></div>
                                     <div className="space-y-1"><Label htmlFor={`maxUsers-${tierKey}`}>Max Users</Label><Input id={`maxUsers-${tierKey}`} type="number" value={tiers[tierKey].maxUsers} onChange={e => handleTierInputChange(tierKey, 'maxUsers', e.target.value)} placeholder="Use -1 for unlimited"/><p className="text-xs text-muted-foreground">Use -1 for unlimited users.</p></div>
                                     <div className="space-y-1"><Label htmlFor={`price-${tierKey}`}>Monthly Price (€)</Label><Input id={`price-${tierKey}`} type="number" step="0.01" value={tiers[tierKey].price ?? ''} onChange={e => handleTierInputChange(tierKey, 'price', e.target.value)} placeholder="e.g. 29.99"/></div>
+                                    <div className="space-y-1"><Label htmlFor={`quarterlyPrice-${tierKey}`}>Quarterly Price (€)</Label><Input id={`quarterlyPrice-${tierKey}`} type="number" step="0.01" value={tiers[tierKey].quarterlyPrice ?? ''} onChange={e => handleTierInputChange(tierKey, 'quarterlyPrice', e.target.value)} placeholder="e.g. 79.00"/></div>
                                     <div className="space-y-1"><Label htmlFor={`yearlyPrice-${tierKey}`}>Yearly Price (€)</Label><Input id={`yearlyPrice-${tierKey}`} type="number" step="0.01" value={tiers[tierKey].yearlyPrice ?? ''} onChange={e => handleTierInputChange(tierKey, 'yearlyPrice', e.target.value)} placeholder="e.g. 290.00"/></div>
                                     <div className="space-y-1"><Label htmlFor={`discountedPrice-${tierKey}`}>Offer Price (€)</Label><Input id={`discountedPrice-${tierKey}`} type="number" step="0.01" value={tiers[tierKey].discountedPrice ?? ''} onChange={e => handleTierInputChange(tierKey, 'discountedPrice', e.target.value)} placeholder="e.g. 24.99"/><p className="text-xs text-muted-foreground">Optional discounted monthly price.</p></div>
                                     <div className="flex items-center justify-between rounded-lg border p-3"><div className="space-y-0.5"><Label htmlFor={`allowOrders-${tierKey}`}>Allow Orders</Label></div><Switch id={`allowOrders-${tierKey}`} checked={tiers[tierKey].allowOrders} onCheckedChange={checked => handleTierInputChange(tierKey, 'allowOrders', checked)}/></div>
@@ -242,6 +250,9 @@ export default function PlatformSettingsPage() {
                                 </div>
                             ))}
                              <Button variant="outline" onClick={handleAddWeightOption}><PlusCircle className="mr-2 h-4 w-4"/> Add Option</Button>
+                             {hasDuplicateWeightLabels && (
+                                 <p className="text-xs text-orange-600">Warning: Duplicate weight option labels detected.</p>
+                             )}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -266,6 +277,12 @@ export default function PlatformSettingsPage() {
                                         <FormLabel>Logo URL</FormLabel>
                                         <FormControl><Input placeholder="https://example.com/logo.png" {...field} /></FormControl>
                                         <FormDescription>Enter a direct URL to your logo image. It should be a square image (e.g., PNG, JPG).</FormDescription>
+                                        {field.value && (
+                                            <div className="mt-2 p-3 border rounded-lg bg-muted/50 flex items-center gap-3">
+                                                <img src={field.value} alt="Logo preview" className="h-12 w-12 rounded object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                                                <span className="text-xs text-muted-foreground">Preview</span>
+                                            </div>
+                                        )}
                                         <FormMessage />
                                     </FormItem>
                                 )} />
@@ -338,6 +355,14 @@ export default function PlatformSettingsPage() {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            {/* Sticky bottom save button */}
+            <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm border-t py-3 -mx-4 px-4 flex justify-end">
+                <Button onClick={handleSaveChanges} disabled={isSaving}>
+                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    Save All Changes
+                </Button>
+            </div>
         </div>
     );
 }
