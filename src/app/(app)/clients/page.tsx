@@ -42,7 +42,7 @@ import { BulkActionsBar, type BulkAction } from "@/components/ui/bulk-actions-ba
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatPriceForDisplay } from "@/lib/utils";
 
-type ClientStatus = 'pending' | 'active' | 'inactive';
+type ClientStatus = 'pending' | 'active' | 'registered' | 'inactive';
 
 interface ClientWithStats extends User {
   totalOrders: number;
@@ -71,7 +71,7 @@ export default function ClientsPage() {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "pending">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "registered" | "inactive" | "pending">("active");
 
   // State for Invite Dialog
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
@@ -125,14 +125,18 @@ export default function ClientsPage() {
       const lastOrderDate = sortedOrders[0]?.createdAt || null;
       const isActive = lastOrderDate ? isAfter(parseISO(lastOrderDate), ninetyDaysAgo) : false;
 
-      // Determine 3-state client status
+      // Determine client status
       const hasLoggedIn = client.lastLoginAt && client.createdAt &&
         Math.abs(new Date(client.lastLoginAt).getTime() - new Date(client.createdAt).getTime()) > 60000;
       let clientStatus: ClientStatus = 'inactive';
       if (!hasLoggedIn && client.profileComplete === false) {
-        clientStatus = 'pending';
+        clientStatus = 'pending'; // Invite sent, not yet accepted/logged in
       } else if (isActive) {
-        clientStatus = 'active';
+        clientStatus = 'active'; // Has ordered in last 90 days
+      } else if (hasLoggedIn && clientOrders.length === 0) {
+        clientStatus = 'registered'; // Logged in but never ordered
+      } else {
+        clientStatus = 'inactive'; // Has ordered before but not in 90 days
       }
 
       return {
@@ -162,12 +166,8 @@ export default function ClientsPage() {
     }
 
     // Status filter
-    if (statusFilter === "pending") {
-      result = result.filter(client => client.clientStatus === 'pending');
-    } else if (statusFilter === "active") {
-      result = result.filter(client => client.clientStatus === 'active');
-    } else if (statusFilter === "inactive") {
-      result = result.filter(client => client.clientStatus === 'inactive');
+    if (statusFilter !== "all") {
+      result = result.filter(client => client.clientStatus === statusFilter);
     }
 
     return result;
@@ -177,6 +177,15 @@ export default function ClientsPage() {
     if (!dateString) return 'Never';
     try {
       return format(parseISO(dateString), 'dd MMM yyyy');
+    } catch (e) {
+      return 'Invalid Date';
+    }
+  };
+
+  const formatDateTimeSafe = (dateString?: string | null) => {
+    if (!dateString) return 'Never';
+    try {
+      return format(parseISO(dateString), 'dd MMM yyyy, HH:mm');
     } catch (e) {
       return 'Invalid Date';
     }
@@ -348,7 +357,14 @@ export default function ClientsPage() {
   // Count active/inactive for display
   const pendingCount = clientsWithStats.filter(c => c.clientStatus === 'pending').length;
   const activeCount = clientsWithStats.filter(c => c.clientStatus === 'active').length;
+  const registeredCount = clientsWithStats.filter(c => c.clientStatus === 'registered').length;
   const inactiveCount = clientsWithStats.filter(c => c.clientStatus === 'inactive').length;
+
+  const isNewClient = (client: ClientWithStats) => {
+    if (!client.invitedAt && !client.createdAt) return false;
+    const date = client.invitedAt || client.createdAt;
+    return date ? isAfter(parseISO(date), subDays(new Date(), 14)) : false;
+  };
 
   if (authLoading || isLoadingData) {
     return (
@@ -516,7 +532,7 @@ export default function ClientsPage() {
             <div>
               <CardTitle>Your Clients</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                {clientsWithStats.length} total · {activeCount} active · {inactiveCount} inactive{pendingCount > 0 ? ` · ${pendingCount} pending` : ''}
+                {clientsWithStats.length} total · {activeCount} active · {registeredCount} registered · {inactiveCount} inactive{pendingCount > 0 ? ` · ${pendingCount} pending` : ''}
               </p>
             </div>
           </div>
@@ -594,30 +610,18 @@ export default function ClientsPage() {
               >
                 All
               </Button>
-              <Button
-                variant={statusFilter === "active" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setStatusFilter("active")}
-              >
-                <CheckCircle2 className="mr-1 h-4 w-4" />
-                Active
+              <Button variant={statusFilter === "active" ? "default" : "outline"} size="sm" onClick={() => setStatusFilter("active")}>
+                <CheckCircle2 className="mr-1 h-4 w-4" />Active ({activeCount})
               </Button>
-              <Button
-                variant={statusFilter === "inactive" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setStatusFilter("inactive")}
-              >
-                <XCircle className="mr-1 h-4 w-4" />
-                Inactive
+              <Button variant={statusFilter === "registered" ? "default" : "outline"} size="sm" onClick={() => setStatusFilter("registered")}>
+                <Users className="mr-1 h-4 w-4" />Registered ({registeredCount})
+              </Button>
+              <Button variant={statusFilter === "inactive" ? "default" : "outline"} size="sm" onClick={() => setStatusFilter("inactive")}>
+                <XCircle className="mr-1 h-4 w-4" />No Recent Orders ({inactiveCount})
               </Button>
               {pendingCount > 0 && (
-                <Button
-                  variant={statusFilter === "pending" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setStatusFilter("pending")}
-                >
-                  <Clock className="mr-1 h-4 w-4" />
-                  Pending ({pendingCount})
+                <Button variant={statusFilter === "pending" ? "default" : "outline"} size="sm" onClick={() => setStatusFilter("pending")}>
+                  <Clock className="mr-1 h-4 w-4" />Pending Invite ({pendingCount})
                 </Button>
               )}
             </div>
@@ -665,6 +669,9 @@ export default function ClientsPage() {
                       <TableCell className="font-medium" onClick={() => router.push(`/clients/${client.uid}`)}>
                         <div className="flex items-center gap-2">
                           {`${client.firstName || ''} ${client.lastName || ''}`.trim() || '-'}
+                          {isNewClient(client) && (
+                            <span className="inline-flex items-center rounded-full bg-blue-500/10 border border-blue-500/30 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">New</span>
+                          )}
                           {client.vatValidated && (
                             <span className="inline-flex items-center gap-0.5 rounded-full bg-green-500/10 border border-green-500/30 px-1.5 py-0.5 text-[10px] font-medium text-green-700" title={`VAT verified${client.vatValidatedName ? `: ${client.vatValidatedName}` : ''}`}>
                               <ShieldCheck className="h-3 w-3" /> VAT
@@ -688,16 +695,20 @@ export default function ClientsPage() {
                         <>
                           <TableCell className="hidden md:table-cell text-center" onClick={() => router.push(`/clients/${client.uid}`)}>
                             {client.clientStatus === 'pending' ? (
-                              <Badge variant="outline" className="bg-amber-500/20 text-amber-600 border-amber-500/30">
-                                Pending Invite
+                              <Badge variant="outline" className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px]">
+                                Invite Sent
                               </Badge>
                             ) : client.clientStatus === 'active' ? (
-                              <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-500/30">
+                              <Badge variant="outline" className="bg-green-500/20 text-green-600 border-green-500/30 text-[10px]">
                                 Active
                               </Badge>
+                            ) : client.clientStatus === 'registered' ? (
+                              <Badge variant="outline" className="bg-blue-500/20 text-blue-600 border-blue-500/30 text-[10px]">
+                                Registered
+                              </Badge>
                             ) : (
-                              <Badge variant="outline" className="bg-gray-500/20 text-gray-500 border-gray-500/30">
-                                Inactive
+                              <Badge variant="outline" className="bg-gray-500/20 text-gray-500 border-gray-500/30 text-[10px]">
+                                No Recent Orders
                               </Badge>
                             )}
                           </TableCell>
@@ -752,7 +763,7 @@ export default function ClientsPage() {
                         </>
                       )}
                       <TableCell className={statusFilter === 'pending' ? 'hidden sm:table-cell text-sm' : 'hidden xl:table-cell text-sm text-muted-foreground'} onClick={() => router.push(`/clients/${client.uid}`)}>
-                        {formatDateSafe(client.invitedAt)}
+                        {formatDateTimeSafe(client.invitedAt)}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>

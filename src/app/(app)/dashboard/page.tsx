@@ -7,10 +7,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo, useCallback } from "react";
-import type { VinylRecord, Order, OrderStatus, Distributor } from "@/types";
+import type { VinylRecord, Order, OrderStatus, Distributor, User } from "@/types";
 import { getAllInventoryRecords, getLatestRecordsFromDistributors } from "@/services/record-service";
 import { getOrders } from "@/services/order-service";
 import { getDistributorById } from "@/services/distributor-service";
+import { getClientsByDistributorId } from "@/services/user-service";
 import { useToast } from "@/hooks/use-toast";
 import { formatPriceForDisplay, cn } from "@/lib/utils";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
@@ -119,6 +120,7 @@ export default function DashboardPage() {
     const [isLoadingStats, setIsLoadingStats] = useState(true);
     const [dateRange, setDateRange] = useState<DateRangePreset>("30days");
     const [distributor, setDistributor] = useState<Distributor | null>(null);
+    const [clientUsers, setClientUsers] = useState<User[]>([]);
 
      const fetchMasterStatsData = useCallback(async () => {
         if (!user || user.role !== 'master' || !user.distributorId) {
@@ -127,14 +129,16 @@ export default function DashboardPage() {
         }
         setIsLoadingStats(true);
         try {
-            const [fetchedRecords, fetchedOrders, fetchedDistributor] = await Promise.all([
+            const [fetchedRecords, fetchedOrders, fetchedDistributor, fetchedClients] = await Promise.all([
                 getAllInventoryRecords(user, user.distributorId),
                 getOrders(user),
                 getDistributorById(user.distributorId),
+                getClientsByDistributorId(user.distributorId),
             ]);
             setRecords(fetchedRecords);
             setOrders(fetchedOrders);
             setDistributor(fetchedDistributor);
+            setClientUsers(fetchedClients);
         } catch (error) {
             toast({ title: "Error", description: `Could not load dashboard statistics.`, variant: "destructive" });
         } finally {
@@ -259,6 +263,19 @@ export default function DashboardPage() {
         const ordersNeedAttention = orders.filter(o => o.status === 'pending' || o.status === 'awaiting_payment').length;
         const recentOrders = orders.slice(0, 5);
 
+        // Client stats
+        const totalClients = clientUsers.length;
+        const fourteenDaysAgo = subDays(new Date(), 14);
+        const newClients = clientUsers.filter(c => {
+            const date = c.invitedAt || c.createdAt;
+            return date ? isAfter(parseISO(date), fourteenDaysAgo) : false;
+        }).length;
+        const pendingInvites = clientUsers.filter(c => {
+            const hasLoggedIn = c.lastLoginAt && c.createdAt &&
+                Math.abs(new Date(c.lastLoginAt).getTime() - new Date(c.createdAt).getTime()) > 60000;
+            return !hasLoggedIn && c.profileComplete === false;
+        }).length;
+
         return {
             totalRecords,
             totalItems,
@@ -266,6 +283,9 @@ export default function DashboardPage() {
             totalSellingValue: `€ ${formatPriceForDisplay(totalSellingValue)}`,
             ordersNeedAttention,
             recentOrders,
+            totalClients,
+            newClients,
+            pendingInvites,
             lowStockCount: lowStockRecords.length,
             filteredOrderCount: currentOrderCount,
             revenue: currentRevenue,
@@ -273,7 +293,7 @@ export default function DashboardPage() {
             orderCountTrend,
             dateRangeLabel: dateRangeOptions.find(o => o.value === dateRange)?.label || "",
         };
-    }, [records, orders, user, dateRange, getDateCutoff, getPreviousPeriodCutoff, distributor]);
+    }, [records, orders, user, dateRange, getDateCutoff, getPreviousPeriodCutoff, distributor, clientUsers]);
 
     // Viewer stats
     const viewerStats = useMemo(() => {
@@ -490,6 +510,27 @@ export default function DashboardPage() {
                             icon={Clock}
                             highlight={masterStats.ordersNeedAttention > 0}
                             href={masterStats.ordersNeedAttention > 0 ? "/orders?status=awaiting_payment" : undefined}
+                          />
+                      </div>
+
+                      {/* Client Stats */}
+                      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                          <StatCard title="Total Clients" value={masterStats.totalClients} subtext="Active client accounts" icon={Users} href="/clients" />
+                          <StatCard
+                            title="New Clients (14d)"
+                            value={masterStats.newClients}
+                            subtext={masterStats.newClients > 0 ? "Recently joined" : "No new clients"}
+                            icon={Users}
+                            highlight={masterStats.newClients > 0}
+                            href="/clients"
+                          />
+                          <StatCard
+                            title="Pending Invites"
+                            value={masterStats.pendingInvites}
+                            subtext={masterStats.pendingInvites > 0 ? "Awaiting acceptance" : "All invites accepted"}
+                            icon={Clock}
+                            highlight={masterStats.pendingInvites > 0}
+                            href="/clients?status=pending"
                           />
                       </div>
                     </>
