@@ -322,6 +322,9 @@ export type User = {
   invitedAt?: string; // ISO string — when the invite was sent
   invitedByDistributorId?: string; // Which distributor sent the invite
   invitedByUid?: string; // UID of the master who invited
+  originType?: 'invited' | 'access_request' | 'self_signup' | 'admin_created';
+  originDistributorId?: string;
+  originDistributorName?: string;
 };
 
 export type MediaCondition = "Mint (M)" | "Near Mint (NM)" | "Very Good Plus (VG+)" | "Very Good (VG)" | "Good Plus (G+)" | "Good (G)" | "Fair (F)" | "Poor (P)";
@@ -777,4 +780,64 @@ export interface ApiLog {
     api: ApiName;
     timestamp: string; // ISO string
     distributorId?: string;
+}
+
+// ===================================
+// User Activity Tracking
+// ===================================
+export type ActivityAction =
+  | 'session_start'
+  | 'collection_browse'
+  | 'cart_update'
+  | 'order_placed'
+  | 'order_status_change'
+  | 'settings_update'
+  | 'record_added'
+  | 'record_edited'
+  | 'client_invited'
+  | 'access_request'
+  | 'import_completed';
+
+export interface UserActivity {
+  id: string;
+  userId: string;
+  userEmail: string;
+  userRole: string;
+  sessionId: string;
+  action: ActivityAction;
+  details?: string;
+  metadata?: {
+    distributorId?: string;
+    distributorName?: string;
+    orderId?: string;
+    recordCount?: number;
+    page?: string;
+  };
+  createdAt: string; // ISO string
+}
+
+// ===================================
+// System Monitoring
+// ===================================
+export type SystemLogType = 'api_call' | 'api_error' | 'webhook_event' | 'webhook_error' | 'email_error' | 'email_sent' | 'system_alert';
+export type SystemLogSource = 'stripe_webhook' | 'paypal_webhook' | 'stripe_checkout' | 'paypal_checkout' | 'email_service' | 'vies_api' | 'system';
+export type SystemLogStatus = 'success' | 'error' | 'warning';
+
+export interface SystemLog {
+  id: string;
+  type: SystemLogType;
+  source: SystemLogSource;
+  status: SystemLogStatus;
+  message: string;
+  metadata?: {
+    endpoint?: string;
+    statusCode?: number;
+    errorMessage?: string;
+    distributorId?: string;
+    orderId?: string;
+    duration?: number;
+  };
+  createdAt: string; // ISO string
+  resolvedAt?: string;
+  isResolved?: boolean;
 }
