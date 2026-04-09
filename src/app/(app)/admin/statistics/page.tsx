@@ -13,7 +13,7 @@ import { getAllUsers } from "@/services/admin-user-service";
 import { getAllRecords } from "@/services/record-service";
 import { getAllOrders } from "@/services/admin-order-service";
 import { useRouter } from "next/navigation";
-import { format, parseISO, subDays, isAfter } from 'date-fns';
+import { format, parseISO, subDays, isAfter, formatDistanceToNow } from 'date-fns';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart as RechartsPieChart, Pie, Cell, AreaChart, Area } from "recharts";
 import { formatPriceForDisplay } from "@/lib/utils";
@@ -238,6 +238,33 @@ export default function AdminStatisticsPage() {
             paymentMethodData,
             revenueTrendData,
             newSignups,
+
+            // Recent client signups (last 20, sorted newest first)
+            recentClients: allUsers
+                .filter(u => u.role === 'viewer' && u.createdAt)
+                .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+                .slice(0, 20)
+                .map(u => {
+                    // Find which distributor(s) this client belongs to
+                    const distNames = (u.accessibleDistributorIds || [])
+                        .map(did => distributors.find(d => d.id === did)?.name)
+                        .filter(Boolean);
+                    return {
+                        uid: u.uid,
+                        name: [u.firstName, u.lastName].filter(Boolean).join(' ') || u.email || 'Unknown',
+                        email: u.email || '',
+                        companyName: u.companyName,
+                        distributors: distNames as string[],
+                        createdAt: u.createdAt!,
+                        lastLoginAt: u.lastLoginAt,
+                        profileComplete: u.profileComplete,
+                    };
+                }),
+            totalClients: allUsers.filter(u => u.role === 'viewer').length,
+            newClientsCount: allUsers.filter(u => {
+                if (u.role !== 'viewer' || !u.createdAt) return false;
+                return isAfter(parseISO(u.createdAt), subDays(new Date(), 14));
+            }).length,
         };
     }, [distributors, allUsers, allRecords, allOrders, dateFilter]);
 
@@ -283,8 +310,8 @@ export default function AdminStatisticsPage() {
                     <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                         <StatCard title="Paid Orders" value={stats.paidOrderCount} subtext={`${stats.totalOrders} total incl. unpaid`} icon={ShoppingCart} color="bg-green-500" href="/admin/revenue" />
                         <StatCard title="Platform Fees Earned" value={`€ ${formatPriceForDisplay(stats.totalPlatformFees)}`} subtext="From order commissions (2-6%)" icon={Wallet} color="bg-green-600" />
-                        <StatCard title="Items in Stock" value={stats.totalItemsInStock} subtext={`${stats.totalInventoryRecords} unique records`} icon={Package} color="bg-chart-3" />
-                        <StatCard title="Total Stock Value" value={`€ ${formatPriceForDisplay(stats.totalStockValue)}`} subtext="Based on selling prices" icon={CreditCard} color="bg-chart-4" />
+                        <StatCard title="Total Clients" value={stats.totalClients} subtext={`${stats.newClientsCount} new in last 14 days`} icon={Users} color="bg-blue-500" />
+                        <StatCard title="Items in Stock" value={stats.totalItemsInStock} subtext={`${stats.totalInventoryRecords} unique records · € ${formatPriceForDisplay(stats.totalStockValue)}`} icon={Package} color="bg-chart-3" />
                     </div>
                 </>
             )}
@@ -416,6 +443,76 @@ export default function AdminStatisticsPage() {
                            </TableBody>
                        </Table>
                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Recent Client Signups */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5"/>Recent Client Signups</CardTitle>
+                    <CardDescription>Latest 20 clients across all distributors.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Client</TableHead>
+                                    <TableHead className="hidden sm:table-cell">Company</TableHead>
+                                    <TableHead>Distributor</TableHead>
+                                    <TableHead className="hidden md:table-cell">Status</TableHead>
+                                    <TableHead>Signed Up</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {stats.recentClients.length > 0 ? stats.recentClients.map(client => {
+                                    const hasLoggedIn = client.lastLoginAt && client.createdAt &&
+                                        Math.abs(new Date(client.lastLoginAt).getTime() - new Date(client.createdAt).getTime()) > 60000;
+                                    const isPending = !hasLoggedIn && client.profileComplete === false;
+                                    const isNew = isAfter(parseISO(client.createdAt), subDays(new Date(), 14));
+                                    return (
+                                        <TableRow key={client.uid}>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <div>
+                                                        <p className="font-medium text-sm">{client.name}</p>
+                                                        <p className="text-xs text-muted-foreground">{client.email}</p>
+                                                    </div>
+                                                    {isNew && !isPending && (
+                                                        <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-600 border-blue-500/30">New</Badge>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{client.companyName || '-'}</TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {client.distributors.map(name => (
+                                                        <Badge key={name} variant="secondary" className="text-[10px]">{name}</Badge>
+                                                    ))}
+                                                    {client.distributors.length === 0 && <span className="text-xs text-muted-foreground">-</span>}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="hidden md:table-cell">
+                                                {isPending ? (
+                                                    <Badge variant="outline" className="text-[10px] bg-amber-500/20 text-amber-600 border-amber-500/30">Invite Sent</Badge>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-[10px] bg-green-500/20 text-green-600 border-green-500/30">Accepted</Badge>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div>
+                                                    <p className="text-sm">{format(parseISO(client.createdAt), 'dd MMM yyyy, HH:mm')}</p>
+                                                    <p className="text-xs text-muted-foreground">{formatDistanceToNow(parseISO(client.createdAt), { addSuffix: true })}</p>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                }) : (
+                                    <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">No clients yet.</TableCell></TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </CardContent>
             </Card>
         </div>
