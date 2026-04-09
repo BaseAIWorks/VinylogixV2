@@ -267,6 +267,10 @@ export default function DashboardPage() {
         const totalClients = clientUsers.length;
         const fourteenDaysAgo = subDays(new Date(), 14);
         const newClients = clientUsers.filter(c => {
+            // Only count clients who accepted the invite (logged in), not pending invites
+            const hasLoggedIn = c.lastLoginAt && c.createdAt &&
+                Math.abs(new Date(c.lastLoginAt).getTime() - new Date(c.createdAt).getTime()) > 60000;
+            if (!hasLoggedIn && c.profileComplete === false) return false;
             const date = c.invitedAt || c.createdAt;
             return date ? isAfter(parseISO(date), fourteenDaysAgo) : false;
         }).length;
