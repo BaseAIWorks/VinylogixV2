@@ -5,10 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building, PlusCircle, Loader2, AlertTriangle, ArrowLeft, MoreHorizontal, Trash2, CheckCircle, XCircle, Hourglass, Clock } from "lucide-react";
+import { Building, PlusCircle, Loader2, AlertTriangle, ArrowLeft, MoreHorizontal, Trash2, CheckCircle, XCircle, Hourglass, Clock, Search, ArrowUpDown, CreditCard, Eye, EyeOff } from "lucide-react";
 import type { Distributor, SubscriptionInfo, SubscriptionTier } from "@/types";
-import { SubscriptionTiers } from "@/types";
-import { useState, useEffect, useCallback } from "react";
+import { DistributorTiers } from "@/types";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { getDistributors, addDistributor, updateDistributor, deleteDistributor } from "@/services/distributor-service";
@@ -46,6 +46,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+type SortField = 'name' | 'status' | 'tier' | 'createdAt';
+type SortDirection = 'asc' | 'desc';
 
 export default function AdminDashboardPage() {
     const { user, addUser, loading: authLoading } = useAuth();
@@ -55,6 +57,11 @@ export default function AdminDashboardPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [subscriptionTiers, setSubscriptionTiers] = useState<Record<SubscriptionTier, SubscriptionInfo> | null>(null);
 
+    // Search & Filter
+    const [searchQuery, setSearchQuery] = useState("");
+    const [statusFilter, setStatusFilter] = useState<"all" | Distributor['status']>("all");
+    const [sortField, setSortField] = useState<SortField>('createdAt');
+    const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
     // State for Add Dialog
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -63,13 +70,12 @@ export default function AdminDashboardPage() {
     const [newMasterUserLastName, setNewMasterUserLastName] = useState("");
     const [newMasterUserEmail, setNewMasterUserEmail] = useState("");
     const [newMasterUserPassword, setNewMasterUserPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
     const [newDistributorTier, setNewDistributorTier] = useState<SubscriptionTier>('growth');
-
 
     // State for Delete Dialog
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [distributorToDelete, setDistributorToDelete] = useState<Distributor | null>(null);
-
 
     const fetchInitialData = useCallback(async () => {
         if (!user || user.role !== 'superadmin') {
@@ -84,7 +90,6 @@ export default function AdminDashboardPage() {
             ]);
             setDistributors(distributorsData);
             setSubscriptionTiers(tiersData);
-
         } catch (error) {
             const errorMessage = (error as Error).message || "An unknown error occurred.";
             toast({ title: "Error", description: `Could not fetch initial data. ${errorMessage}`, variant: "destructive", duration: 7000 });
@@ -99,14 +104,63 @@ export default function AdminDashboardPage() {
         }
     }, [user, authLoading, fetchInitialData]);
 
+    // Filtered and sorted distributors
+    const filteredDistributors = useMemo(() => {
+        let result = distributors;
+
+        // Search
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            result = result.filter(d =>
+                d.name.toLowerCase().includes(q) ||
+                d.contactEmail.toLowerCase().includes(q) ||
+                (d.subscriptionTier || d.subscription?.tier || '').toLowerCase().includes(q)
+            );
+        }
+
+        // Status filter
+        if (statusFilter !== 'all') {
+            result = result.filter(d => d.status === statusFilter);
+        }
+
+        // Sort
+        result = [...result].sort((a, b) => {
+            let cmp = 0;
+            switch (sortField) {
+                case 'name': cmp = a.name.localeCompare(b.name); break;
+                case 'status': cmp = a.status.localeCompare(b.status); break;
+                case 'tier': cmp = (a.subscriptionTier || '').localeCompare(b.subscriptionTier || ''); break;
+                case 'createdAt': cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(); break;
+            }
+            return sortDirection === 'asc' ? cmp : -cmp;
+        });
+
+        return result;
+    }, [distributors, searchQuery, statusFilter, sortField, sortDirection]);
+
+    const toggleSort = (field: SortField) => {
+        if (sortField === field) {
+            setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortField(field);
+            setSortDirection('asc');
+        }
+    };
+
+    const statusCounts = useMemo(() => {
+        const counts: Record<string, number> = { all: distributors.length, active: 0, inactive: 0, pending: 0, awaiting_approval: 0 };
+        distributors.forEach(d => { if (counts[d.status] !== undefined) counts[d.status]++; });
+        return counts;
+    }, [distributors]);
+
     const handleAddDialogOpening = (open: boolean) => {
         if (open) {
-            // Reset state when dialog opens
             setNewCompanyName("");
             setNewMasterUserFirstName("");
             setNewMasterUserLastName("");
             setNewMasterUserEmail("");
             setNewMasterUserPassword("");
+            setShowPassword(false);
             setNewDistributorTier("growth");
         }
         setIsAddDialogOpen(open);
@@ -129,66 +183,63 @@ export default function AdminDashboardPage() {
         let newDistributorId: string | null = null;
         try {
             const subscription = subscriptionTiers[newDistributorTier];
-            // Step 1: Create the Distributor document to get an ID.
-            const newDistributor = await addDistributor({ 
-                name: newCompanyName, 
-                companyName: newCompanyName, // Set branding name on creation
-                contactEmail: newMasterUserEmail, 
+            const newDistributor = await addDistributor({
+                name: newCompanyName,
+                companyName: newCompanyName,
+                contactEmail: newMasterUserEmail,
                 status: 'pending',
                 subscription: subscription,
+                subscriptionTier: newDistributorTier,
             }, user);
             newDistributorId = newDistributor.id;
 
-            // Step 2: Create the Master User associated with this new distributor ID.
             const newMasterUid = await addUser(
-                newMasterUserEmail, 
-                newMasterUserPassword, 
-                'master', 
-                newDistributorId, 
-                { firstName: newMasterUserFirstName, lastName: newMasterUserLastName } // Pass details
+                newMasterUserEmail,
+                newMasterUserPassword,
+                'master',
+                newDistributorId,
+                { firstName: newMasterUserFirstName, lastName: newMasterUserLastName }
             );
-            
+
             if (!newMasterUid) {
                 throw new Error("Failed to get UID for the new master user.");
             }
-            
-            // Step 3: Update distributor with the master user's UID for permission linking.
+
             await updateDistributor(newDistributorId, { masterUserUid: newMasterUid }, user);
 
-            toast({ 
-                title: "Setup Complete", 
+            toast({
+                title: "Setup Complete",
                 description: `Distributor "${newDistributor.name}" and Master User have been created.`,
-                duration: 7000 
+                duration: 7000
             });
 
-            // Reset form and state on success
             handleAddDialogOpening(false);
             fetchInitialData();
-            
+
         } catch (error) {
              const errorMessage = (error as Error).message || "An unknown error occurred.";
              const finalDescription = `Failed to create distributor: ${errorMessage}. The partially created distributor has been automatically rolled back. Please check your user permissions and try again`;
-             
+
              if (newDistributorId) {
-                 console.log(`Attempting to roll back creation of distributor ID: ${newDistributorId}`);
+                 console.error(`Attempting to roll back creation of distributor ID: ${newDistributorId}`);
                  await deleteDistributor(newDistributorId);
              }
 
-             toast({ 
-                 title: "Distributor Creation Failed", 
+             toast({
+                 title: "Distributor Creation Failed",
                  description: finalDescription,
-                 variant: "destructive", 
-                 duration: 15000 
+                 variant: "destructive",
+                 duration: 15000
              });
         }
     };
-    
+
     const handleStatusUpdate = async (distributorId: string, newStatus: Distributor['status']) => {
         if (!user) return;
         try {
             await updateDistributor(distributorId, { status: newStatus }, user);
             toast({ title: "Status Updated", description: "The distributor's status has been changed." });
-            fetchInitialData(); // Re-fetch to update the UI
+            fetchInitialData();
         } catch (error) {
             const errorMessage = (error as Error).message || "Please check the console for details.";
             toast({ title: "Error", description: `Failed to update status. ${errorMessage}`, variant: "destructive" });
@@ -214,9 +265,15 @@ export default function AdminDashboardPage() {
         active: 'bg-green-500/20 text-green-500 border-green-500/30',
         inactive: 'bg-gray-500/20 text-gray-500 border-gray-500/30',
         awaiting_approval: 'bg-amber-500/20 text-amber-500 border-amber-500/30',
-    pending: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
+        pending: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
     };
-    
+
+    const tierColors: Record<string, string> = {
+        payg: 'bg-gray-500/20 text-gray-600 border-gray-500/30',
+        essential: 'bg-blue-500/20 text-blue-600 border-blue-500/30',
+        growth: 'bg-purple-500/20 text-purple-600 border-purple-500/30',
+        scale: 'bg-primary/20 text-primary border-primary/30',
+    };
 
     if (authLoading || isLoading) {
         return (
@@ -225,7 +282,7 @@ export default function AdminDashboardPage() {
             </div>
         );
     }
-    
+
     if (user?.role !== 'superadmin') {
         return (
             <div className="flex flex-col items-center justify-center text-center p-6 min-h-[calc(100vh-200px)]">
@@ -238,6 +295,15 @@ export default function AdminDashboardPage() {
             </div>
         );
     }
+
+    const SortableHeader = ({ field, children, className }: { field: SortField; children: React.ReactNode; className?: string }) => (
+        <TableHead className={`cursor-pointer select-none hover:text-foreground ${className || ''}`} onClick={() => toggleSort(field)}>
+            <div className="flex items-center gap-1">
+                {children}
+                <ArrowUpDown className={`h-3 w-3 ${sortField === field ? 'text-foreground' : 'text-muted-foreground/50'}`} />
+            </div>
+        </TableHead>
+    );
 
     return (
         <>
@@ -277,7 +343,12 @@ export default function AdminDashboardPage() {
                                 </div>
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="master-password" className="text-right">Password</Label>
-                                    <Input id="master-password" type="password" value={newMasterUserPassword} onChange={(e) => setNewMasterUserPassword(e.target.value)} className="col-span-3" placeholder="Temporary password" autoComplete="new-password" />
+                                    <div className="col-span-3 relative">
+                                        <Input id="master-password" type={showPassword ? "text" : "password"} value={newMasterUserPassword} onChange={(e) => setNewMasterUserPassword(e.target.value)} placeholder="Temporary password (min 6 chars)" autoComplete="new-password" className="pr-10" />
+                                        <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-full px-3 hover:bg-transparent" onClick={() => setShowPassword(!showPassword)}>
+                                            {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                                        </Button>
+                                    </div>
                                 </div>
                                 <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="subscription-tier" className="text-right">Subscription</Label>
@@ -286,7 +357,7 @@ export default function AdminDashboardPage() {
                                             <SelectValue placeholder="Select a tier" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {SubscriptionTiers.map(tier => (
+                                            {DistributorTiers.map(tier => (
                                                 <SelectItem key={tier} value={tier} className="capitalize">{tier}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -307,69 +378,134 @@ export default function AdminDashboardPage() {
                         <CardTitle className="flex items-center gap-3">
                             <Building className="h-5 w-5" />
                             <span>All Distributors</span>
+                            <Badge variant="secondary" className="ml-auto text-xs">{distributors.length} total</Badge>
                         </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                       {distributors.length > 0 ? (
+                    <CardContent className="space-y-4">
+                       {/* Search and Filter */}
+                       <div className="flex flex-col sm:flex-row gap-3">
+                           <div className="relative flex-1">
+                               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                               <Input
+                                   placeholder="Search by name, email, or tier..."
+                                   value={searchQuery}
+                                   onChange={(e) => setSearchQuery(e.target.value)}
+                                   className="pl-9"
+                               />
+                           </div>
+                           <div className="flex gap-1.5 flex-wrap">
+                               {(['all', 'active', 'inactive', 'pending', 'awaiting_approval'] as const).map(status => (
+                                   <Button
+                                       key={status}
+                                       variant={statusFilter === status ? "default" : "outline"}
+                                       size="sm"
+                                       onClick={() => setStatusFilter(status)}
+                                       className="capitalize text-xs"
+                                   >
+                                       {status === 'all' ? 'All' : status.replace('_', ' ')}
+                                       <span className="ml-1 text-[10px] opacity-70">({statusCounts[status] || 0})</span>
+                                   </Button>
+                               ))}
+                           </div>
+                       </div>
+
+                       {filteredDistributors.length > 0 ? (
                            <div className="overflow-x-auto">
                                 <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Distributor Name</TableHead>
-                                        <TableHead className="hidden sm:table-cell">Contact Email</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead className="hidden md:table-cell">Created At</TableHead>
+                                        <SortableHeader field="name">Name</SortableHeader>
+                                        <TableHead className="hidden sm:table-cell">Email</TableHead>
+                                        <SortableHeader field="tier" className="hidden lg:table-cell">Tier</SortableHeader>
+                                        <SortableHeader field="status">Status</SortableHeader>
+                                        <TableHead className="hidden xl:table-cell">Payment</TableHead>
+                                        <SortableHeader field="createdAt" className="hidden md:table-cell">Created</SortableHeader>
                                         <TableHead className="text-right">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {distributors.map(distributor => (
+                                    {filteredDistributors.map(distributor => {
+                                        const tier = distributor.subscriptionTier || distributor.subscription?.tier;
+                                        const stripeOk = distributor.stripeAccountStatus === 'verified';
+                                        const paypalOk = distributor.paypalAccountStatus === 'verified';
+                                        return (
                                         <TableRow key={distributor.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/admin/distributors/${distributor.id}`)}>
-                                            <TableCell className="font-medium">{distributor.name}</TableCell>
-                                            <TableCell className="hidden sm:table-cell">{distributor.contactEmail}</TableCell>
                                             <TableCell>
-                                                <Badge variant="outline" className={`capitalize ${statusColors[distributor.status]}`}>
-                                                    {distributor.status}
+                                                <p className="font-medium">{distributor.name}</p>
+                                                {distributor.isSubscriptionExempt && <Badge variant="secondary" className="text-[10px] mt-0.5">Managed</Badge>}
+                                            </TableCell>
+                                            <TableCell className="hidden sm:table-cell text-muted-foreground text-sm">{distributor.contactEmail}</TableCell>
+                                            <TableCell className="hidden lg:table-cell">
+                                                {tier && (
+                                                    <Badge variant="outline" className={`capitalize text-[10px] ${tierColors[tier] || ''}`}>
+                                                        {tier}
+                                                    </Badge>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline" className={`capitalize text-[10px] ${statusColors[distributor.status]}`}>
+                                                    {distributor.status.replace('_', ' ')}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="hidden md:table-cell">{format(new Date(distributor.createdAt), 'dd MMM yyyy')}</TableCell>
-                                                <TableCell className="text-right">
+                                            <TableCell className="hidden xl:table-cell">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className={`inline-block w-2 h-2 rounded-full ${stripeOk ? 'bg-green-500' : distributor.stripeAccountId ? 'bg-yellow-500' : 'bg-gray-300'}`} title={`Stripe: ${distributor.stripeAccountStatus || 'not connected'}`} />
+                                                    <span className="text-[10px] text-muted-foreground">S</span>
+                                                    <span className={`inline-block w-2 h-2 rounded-full ${paypalOk ? 'bg-green-500' : distributor.paypalMerchantId ? 'bg-yellow-500' : 'bg-gray-300'}`} title={`PayPal: ${distributor.paypalAccountStatus || 'not connected'}`} />
+                                                    <span className="text-[10px] text-muted-foreground">P</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{format(new Date(distributor.createdAt), 'dd MMM yyyy')}</TableCell>
+                                            <TableCell className="text-right">
                                                 <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                                                            <DropdownMenuItem onClick={() => handleStatusUpdate(distributor.id, 'active')}>
-                                                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" /> Set Active
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => handleStatusUpdate(distributor.id, 'inactive')}>
-                                                                <XCircle className="mr-2 h-4 w-4 text-gray-500" /> Set Inactive
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => handleStatusUpdate(distributor.id, 'pending')}>
-                                                                <Hourglass className="mr-2 h-4 w-4 text-yellow-500" /> Set Pending
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => handleStatusUpdate(distributor.id, 'awaiting_approval')}>
-                                                                <Clock className="mr-2 h-4 w-4 text-amber-500" /> Set Awaiting Approval
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            <DropdownMenuItem className="text-destructive" onClick={() => { setDistributorToDelete(distributor); setIsDeleteDialogOpen(true); }}>
-                                                                <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </TableCell>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                                        <DropdownMenuItem onClick={() => handleStatusUpdate(distributor.id, 'active')}>
+                                                            <CheckCircle className="mr-2 h-4 w-4 text-green-500" /> Set Active
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleStatusUpdate(distributor.id, 'inactive')}>
+                                                            <XCircle className="mr-2 h-4 w-4 text-gray-500" /> Set Inactive
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleStatusUpdate(distributor.id, 'pending')}>
+                                                            <Hourglass className="mr-2 h-4 w-4 text-yellow-500" /> Set Pending
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={() => handleStatusUpdate(distributor.id, 'awaiting_approval')}>
+                                                            <Clock className="mr-2 h-4 w-4 text-amber-500" /> Set Awaiting Approval
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem className="text-destructive" onClick={() => { setDistributorToDelete(distributor); setIsDeleteDialogOpen(true); }}>
+                                                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
                                         </TableRow>
-                                    ))}
+                                        );
+                                    })}
                                 </TableBody>
                                 </Table>
                            </div>
                        ) : (
                            <div className="text-center py-12 text-muted-foreground">
-                                <p className="text-lg">No distributors found.</p>
-                                <p className="text-sm">Click "Add New Distributor" to get started.</p>
+                                {searchQuery || statusFilter !== 'all' ? (
+                                    <>
+                                        <p className="text-lg">No distributors match your filters.</p>
+                                        <Button variant="outline" size="sm" className="mt-2" onClick={() => { setSearchQuery(""); setStatusFilter("all"); }}>Clear Filters</Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="text-lg">No distributors found.</p>
+                                        <p className="text-sm">Click "Add New Distributor" to get started.</p>
+                                    </>
+                                )}
                            </div>
+                       )}
+                       {filteredDistributors.length > 0 && filteredDistributors.length !== distributors.length && (
+                           <p className="text-xs text-muted-foreground text-center">Showing {filteredDistributors.length} of {distributors.length} distributors</p>
                        )}
                     </CardContent>
                 </Card>
