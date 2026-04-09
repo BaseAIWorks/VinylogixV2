@@ -33,6 +33,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { formatPriceForDisplay } from "@/lib/utils";
@@ -137,6 +138,8 @@ export default function DistributorDetailPage() {
         const paidOrders = orders.filter(o => o.status === 'paid');
         const totalRevenue = paidOrders.reduce((sum, o) => sum + o.totalAmount, 0);
 
+        const recordsWithoutPrice = inventoryRecords.filter(r => !r.sellingPrice).length;
+
         return {
             recordCount: inventoryRecords.length,
             operatorCount: operators.length,
@@ -144,6 +147,7 @@ export default function DistributorDetailPage() {
             totalStockValue: formatPriceForDisplay(totalStockValue),
             totalRevenue: formatPriceForDisplay(totalRevenue),
             totalOrders: orders.length,
+            recordsWithoutPrice,
         };
     }, [records, associatedUsers, orders]);
 
@@ -251,7 +255,7 @@ export default function DistributorDetailPage() {
                 <StatCard title="Total Revenue" value={`€ ${stats.totalRevenue}`} subtext="From all paid orders" icon={DollarSign} />
                 <StatCard title="Operators" value={stats.operatorCount} subtext="Master and worker accounts" icon={UserCircle} />
                 <StatCard title="Clients" value={stats.clientCount} subtext="Total client accounts" icon={Users} />
-                <StatCard title="Est. Stock Value" value={`€ ${stats.totalStockValue}`} subtext="Based on selling price" icon={BarChart3} />
+                <StatCard title="Est. Stock Value" value={`€ ${stats.totalStockValue}`} subtext={stats.recordsWithoutPrice > 0 ? `${stats.recordsWithoutPrice} records without price` : "Based on selling price"} icon={BarChart3} />
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -293,6 +297,10 @@ export default function DistributorDetailPage() {
                                             <div className="space-y-1"><Label htmlFor="subscriptionTier">Subscription Tier</Label>
                                                 <Select value={editFormState.subscriptionTier || editFormState.subscription?.tier} onValueChange={onSubscriptionTierChange} disabled={editFormState.isSubscriptionExempt}><SelectTrigger id="subscriptionTier"><SelectValue placeholder="Select a tier" /></SelectTrigger><SelectContent>{DistributorTiers.map(tier => <SelectItem key={tier} value={tier} className="capitalize">{tier}</SelectItem>)}</SelectContent></Select>
                                             </div>
+                                            <Separator className="my-2"/>
+                                            <div className="space-y-1"><Label htmlFor="adminNotes">Admin Notes</Label>
+                                                <Textarea id="adminNotes" value={(editFormState as any).adminNotes || ''} onChange={(e) => setEditFormState(prev => ({...prev, adminNotes: e.target.value}))} placeholder="Internal notes about this distributor..." rows={3} />
+                                            </div>
                                         </div>
                                         <DialogFooter><Button onClick={handleUpdateDetails}><Save className="mr-2 h-4 w-4" />Save Changes</Button></DialogFooter>
                                     </DialogContent>
@@ -315,13 +323,19 @@ export default function DistributorDetailPage() {
                         </CardHeader>
                         <CardContent>
                            <Table>
-                               <TableHeader><TableRow><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead>Last Login</TableHead></TableRow></TableHeader>
+                               <TableHeader><TableRow><TableHead>Email</TableHead><TableHead className="hidden md:table-cell">Name</TableHead><TableHead>Role</TableHead><TableHead className="hidden lg:table-cell">Phone</TableHead><TableHead>Last Login</TableHead></TableRow></TableHeader>
                                <TableBody>
                                    {associatedUsers.length > 0 ? (
                                        associatedUsers.map(u => (
-                                           <TableRow key={u.uid}><TableCell className="font-medium">{u.email}</TableCell><TableCell><Badge variant={u.role === 'master' ? 'default' : 'secondary'} className="capitalize">{u.role}</Badge></TableCell><TableCell>{u.lastLoginAt ? format(new Date(u.lastLoginAt), 'PPp') : 'Never'}</TableCell></TableRow>
+                                           <TableRow key={u.uid}>
+                                               <TableCell className="font-medium">{u.email}</TableCell>
+                                               <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{[u.firstName, u.lastName].filter(Boolean).join(' ') || '-'}</TableCell>
+                                               <TableCell><Badge variant={u.role === 'master' ? 'default' : 'secondary'} className="capitalize">{u.role}</Badge></TableCell>
+                                               <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">{u.phoneNumber || '-'}</TableCell>
+                                               <TableCell className="text-sm text-muted-foreground">{u.lastLoginAt ? format(new Date(u.lastLoginAt), 'PPp') : 'Never'}</TableCell>
+                                           </TableRow>
                                        ))
-                                   ) : (<TableRow><TableCell colSpan={3} className="text-center text-muted-foreground">No users found.</TableCell></TableRow>)}
+                                   ) : (<TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">No users found.</TableCell></TableRow>)}
                                </TableBody>
                            </Table>
                         </CardContent>
@@ -347,13 +361,52 @@ export default function DistributorDetailPage() {
                                  <DetailItem icon={Package} label="Max Records" value={distributor.subscription?.maxRecords === -1 ? 'Unlimited' : distributor.subscription?.maxRecords} />
                                  <DetailItem icon={Users} label="Max Users" value={distributor.subscription?.maxUsers === -1 ? 'Unlimited' : distributor.subscription?.maxUsers} />
                                  <DetailItem icon={DollarSign} label="Orders Enabled" value={distributor.subscription?.allowOrders ? "Yes" : "No"} />
+                                 {distributor.subscriptionCurrentPeriodEnd && (
+                                   <DetailItem icon={TrendingUp} label="Renewal Date" value={format(new Date(distributor.subscriptionCurrentPeriodEnd), 'dd MMM yyyy')} />
+                                 )}
                                  {distributor.stripeAccountId && (
                                    <DetailItem icon={Key} label="Stripe Connect" value={<Badge variant="outline" className={`capitalize ${distributor.stripeAccountStatus === 'verified' ? 'text-green-600 border-green-500' : distributor.stripeAccountStatus === 'restricted' ? 'text-red-600 border-red-500' : 'text-yellow-600 border-yellow-500'}`}>{distributor.stripeAccountStatus || 'pending'}</Badge>} />
+                                 )}
+                                 {distributor.paypalMerchantId && (
+                                   <DetailItem icon={DollarSign} label="PayPal" value={<Badge variant="outline" className={`capitalize ${distributor.paypalAccountStatus === 'verified' ? 'text-green-600 border-green-500' : 'text-yellow-600 border-yellow-500'}`}>{distributor.paypalAccountStatus || 'pending'}</Badge>} />
+                                 )}
+                                 {/* Usage bars */}
+                                 {distributor.subscription?.maxRecords && distributor.subscription.maxRecords !== -1 && (
+                                   <div className="space-y-1 pt-2">
+                                     <div className="flex justify-between text-xs">
+                                       <span className="text-muted-foreground">Records</span>
+                                       <span className={stats.recordCount >= distributor.subscription.maxRecords ? 'text-red-600 font-medium' : 'text-muted-foreground'}>{stats.recordCount} / {distributor.subscription.maxRecords}</span>
+                                     </div>
+                                     <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                       <div className={`h-full rounded-full transition-all ${stats.recordCount >= distributor.subscription.maxRecords ? 'bg-red-500' : stats.recordCount >= distributor.subscription.maxRecords * 0.8 ? 'bg-orange-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, (stats.recordCount / distributor.subscription.maxRecords) * 100)}%` }} />
+                                     </div>
+                                   </div>
+                                 )}
+                                 {distributor.subscription?.maxUsers && distributor.subscription.maxUsers !== -1 && (
+                                   <div className="space-y-1">
+                                     <div className="flex justify-between text-xs">
+                                       <span className="text-muted-foreground">Users</span>
+                                       <span className={stats.operatorCount >= distributor.subscription.maxUsers ? 'text-red-600 font-medium' : 'text-muted-foreground'}>{stats.operatorCount} / {distributor.subscription.maxUsers}</span>
+                                     </div>
+                                     <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                       <div className={`h-full rounded-full transition-all ${stats.operatorCount >= distributor.subscription.maxUsers ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, (stats.operatorCount / distributor.subscription.maxUsers) * 100)}%` }} />
+                                     </div>
+                                   </div>
                                  )}
                                 </>
                             )}
                         </CardContent>
                     </Card>
+                    {(distributor as any).adminNotes && (
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-medium text-muted-foreground">Admin Notes</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-sm whitespace-pre-wrap">{(distributor as any).adminNotes}</p>
+                            </CardContent>
+                        </Card>
+                    )}
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5 text-primary"/>Order Number Settings</CardTitle>
@@ -381,13 +434,13 @@ export default function DistributorDetailPage() {
             </div>
 
             <Card>
-                <CardHeader><CardTitle>Recent Orders</CardTitle><CardDescription>The 5 most recent orders for this distributor.</CardDescription></CardHeader>
+                <CardHeader><CardTitle>Recent Orders</CardTitle><CardDescription>The 10 most recent orders for this distributor.</CardDescription></CardHeader>
                 <CardContent>
                     <Table>
                        <TableHeader><TableRow><TableHead>Order ID</TableHead><TableHead>Client</TableHead><TableHead>Date</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
                        <TableBody>
                            {orders.length > 0 ? (
-                               orders.slice(0,5).map(order => (
+                               orders.slice(0,10).map(order => (
                                    <TableRow key={order.id} className="cursor-pointer" onClick={() => router.push(`/orders/${order.id}`)}>
                                        <TableCell className="font-mono text-sm">{order.orderNumber || order.id.slice(0,8)}</TableCell>
                                        <TableCell>{order.viewerEmail}</TableCell>
@@ -400,7 +453,7 @@ export default function DistributorDetailPage() {
                        </TableBody>
                     </Table>
                 </CardContent>
-                {orders.length > 5 && <CardFooter><Button variant="outline" size="sm" onClick={() => router.push('/orders')}>View All Orders</Button></CardFooter>}
+                {orders.length > 10 && <CardFooter><Button variant="outline" size="sm" onClick={() => router.push(`/admin/revenue?distributor=${distributor.id}`)}>View All {orders.length} Orders</Button></CardFooter>}
             </Card>
         </div>
     );

@@ -161,7 +161,7 @@ function getTimelineEvents(order: Order, distributor: Distributor | null): Timel
       timestamp: order.paidAt || null,
       status: 'completed',
       icon: Mail,
-      details: 'Automated email triggered on payment success',
+      details: 'Automated email triggered on payment success (estimated)',
     });
   }
 
@@ -514,15 +514,39 @@ export default function AdminOrderDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {order.subtotalAmount !== undefined && order.taxAmount !== undefined && (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal excl. {order.taxLabel || 'VAT'}</span>
+                    <span className="font-medium">€ {formatPriceForDisplay(order.subtotalAmount)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{order.taxLabel || 'VAT'} {order.isReverseCharge ? '0% (RC)' : `${order.taxRate || 0}%`}</span>
+                    <span className="font-medium">€ {formatPriceForDisplay(order.taxAmount)}</span>
+                  </div>
+                </>
+              )}
+              {order.shippingCost !== undefined && order.shippingCost > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Shipping{order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}</span>
+                  <span className="font-medium">€ {formatPriceForDisplay(order.shippingCost)}</span>
+                </div>
+              )}
+              {order.freeShippingApplied && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Shipping</span>
+                  <span className="font-medium text-green-600">Free</span>
+                </div>
+              )}
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Order Total</span>
                 <span className="font-medium">€ {formatPriceForDisplay(order.totalAmount)}</span>
               </div>
+              <Separator />
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Platform Fee ({order.appliedFeePercentage || 4}%)</span>
                 <span className="font-medium text-green-600">€ {formatPriceForDisplay(platformFee)}</span>
               </div>
-              <Separator />
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Distributor Payout</span>
                 <span className="font-medium">€ {formatPriceForDisplay(distributorPayout)}</span>
@@ -614,6 +638,15 @@ export default function AdminOrderDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Stripe Dashboard Link */}
+          {order.stripePaymentIntentId && (
+            <Button variant="outline" size="sm" className="w-full" asChild>
+              <a href={`https://dashboard.stripe.com/payments/${order.stripePaymentIntentId}`} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-3.5 w-3.5 mr-1.5" />View in Stripe Dashboard
+              </a>
+            </Button>
+          )}
 
           {/* Stripe IDs */}
           {(order.stripePaymentIntentId || order.stripeCheckoutSessionId) && (
