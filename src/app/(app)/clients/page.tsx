@@ -361,9 +361,11 @@ export default function ClientsPage() {
   const inactiveCount = clientsWithStats.filter(c => c.clientStatus === 'inactive').length;
 
   const isNewClient = (client: ClientWithStats) => {
-    if (!client.invitedAt && !client.createdAt) return false;
+    // Only show "New" badge if the client has actually accepted the invite (logged in)
+    if (client.clientStatus === 'pending') return false;
     const date = client.invitedAt || client.createdAt;
-    return date ? isAfter(parseISO(date), subDays(new Date(), 14)) : false;
+    if (!date) return false;
+    return isAfter(parseISO(date), subDays(new Date(), 14));
   };
 
   if (authLoading || isLoadingData) {
