@@ -186,7 +186,7 @@ const ProfileCompletionDialog = () => {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname();
-  const router = useRouter(); 
+  const router = useRouter();
   const {
       user, logout, cartCount, clientPendingOrdersCount, operatorPendingOrdersCount, unreadNotificationsCount,
       displayBranding, activeDistributor, isImpersonating, stopImpersonating, theme, setTheme,
@@ -194,7 +194,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
       clientAccessDistributors
   } = useAuth();
   const isMobile = useIsMobile();
-  const [defaultOpen, setDefaultOpen] = React.useState(!isMobile); 
+  const [defaultOpen, setDefaultOpen] = React.useState(!isMobile);
+
+ 
 
   const companyName = displayBranding?.companyName ?? "Vinylogix";
   const hasCustomLogo = displayBranding?.logoUrl && displayBranding.logoUrl !== '/logo.png';

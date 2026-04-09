@@ -5,10 +5,17 @@ import React from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import AppLayout from './app-layout';
+import { useActivityTracker } from '@/hooks/use-activity-tracker';
 import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+}
+
+/** Wrapper that initializes the activity tracker when user is authenticated */
+function ActivityTrackerProvider({ children }: { children: React.ReactNode }) {
+  useActivityTracker();
+  return <>{children}</>;
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
@@ -30,7 +37,6 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!user) {
-    // This state should ideally be brief due to the redirect.
     return (
        <div className="flex h-screen w-screen items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -39,5 +45,11 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  return <AppLayout>{children}</AppLayout>;
+  return (
+    <AppLayout>
+      <ActivityTrackerProvider>
+        {children}
+      </ActivityTrackerProvider>
+    </AppLayout>
+  );
 }
