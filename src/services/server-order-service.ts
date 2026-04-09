@@ -588,8 +588,8 @@ export async function createOrderRequestServer(params: {
       newOrderData.taxLabel = distData.manualTaxLabel || 'VAT';
       newOrderData.isReverseCharge = taxResult.isReverseCharge;
       // Grand total = tax-adjusted product total + shipping
-      const taxAdjustedTotal = reverseCharge ? taxResult.total : productTotal;
-      newOrderData.totalAmount = taxAdjustedTotal + (newOrderData.shippingCost || 0);
+      // taxResult.total handles all cases: inclusive (unchanged), exclusive (+ tax), reverse charge (- tax)
+      newOrderData.totalAmount = taxResult.total + (newOrderData.shippingCost || 0);
     } catch (taxErr) {
       console.warn('Could not calculate tax for order request:', taxErr);
     }
