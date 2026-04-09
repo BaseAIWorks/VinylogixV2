@@ -74,7 +74,6 @@ export function useActivityTracker() {
     lastPageRef.current = pathname;
 
     // Don't track every page — only meaningful sections
-    const section = pathname.split('/')[1] || 'home';
     const isStorefront = pathname.startsWith('/storefront/');
 
     if (isStorefront) {
@@ -100,7 +99,7 @@ export function useActivityTracker() {
   useEffect(() => {
     const handleUnload = () => {
       if (pendingRef.current.length > 0 && user) {
-        // Use sendBeacon for reliable delivery on unload
+        // Best-effort flush — async writes may not complete on unload
         const items = pendingRef.current;
         pendingRef.current = [];
         items.forEach(item => {
