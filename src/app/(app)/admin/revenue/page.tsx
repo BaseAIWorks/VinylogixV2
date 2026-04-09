@@ -246,7 +246,7 @@ export default function AdminRevenuePage() {
           <StatCard
             title="Platform Fees"
             value={`€ ${formatPriceForDisplay(stats?.totalPlatformFees || 0)}`}
-            subtext="4% commission earned"
+            subtext="Commission earned (2-6% by tier)"
             icon={DollarSign}
             color="bg-green-500"
           />

@@ -123,7 +123,7 @@ function getTimelineEvents(order: Order, distributor: Distributor | null): Timel
     events.push({
       id: 'platform_fee',
       title: 'Platform Fee Collected',
-      description: `4% platform fee deducted from order`,
+      description: `${order.appliedFeePercentage || 4}% platform fee deducted from order`,
       timestamp: order.paidAt || null,
       status: 'completed',
       icon: Receipt,
@@ -137,7 +137,7 @@ function getTimelineEvents(order: Order, distributor: Distributor | null): Timel
     const payout = order.totalAmount - platformFee;
 
     // Check if distributor has Stripe Connect
-    const hasStripeConnect = distributor?.stripeConnectAccountId;
+    const hasStripeConnect = distributor?.stripeAccountId;
 
     events.push({
       id: 'distributor_payout',
@@ -519,7 +519,7 @@ export default function AdminOrderDetailPage() {
                 <span className="font-medium">€ {formatPriceForDisplay(order.totalAmount)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Platform Fee (4%)</span>
+                <span className="text-muted-foreground">Platform Fee ({order.appliedFeePercentage || 4}%)</span>
                 <span className="font-medium text-green-600">€ {formatPriceForDisplay(platformFee)}</span>
               </div>
               <Separator />
@@ -605,11 +605,11 @@ export default function AdminOrderDetailPage() {
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Stripe Connect</span>
                 <Badge variant="outline" className={
-                  distributor?.stripeConnectAccountId
+                  distributor?.stripeAccountId
                     ? 'border-green-500 text-green-500'
                     : 'border-yellow-500 text-yellow-500'
                 }>
-                  {distributor?.stripeConnectAccountId ? 'Connected' : 'Not Connected'}
+                  {distributor?.stripeAccountId ? 'Connected' : 'Not Connected'}
                 </Badge>
               </div>
             </CardContent>

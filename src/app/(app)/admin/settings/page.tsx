@@ -281,59 +281,56 @@ export default function PlatformSettingsPage() {
                 <TabsContent value="payments">
                      <Card className="mt-4">
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-3"><CreditCard className="h-5 w-5"/> Payment Settings</CardTitle>
-                            <CardDescription>Configure payment providers and platform transaction fees.</CardDescription>
+                            <CardTitle className="flex items-center gap-3"><CreditCard className="h-5 w-5"/> Payment Providers & Fees</CardTitle>
+                            <CardDescription>Overview of active payment providers and platform fee structure.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <Accordion type="single" collapsible className="w-full" defaultValue="stripe">
+                            <Accordion type="single" collapsible className="w-full" defaultValue="fees">
+                                <AccordionItem value="fees">
+                                    <AccordionTrigger>
+                                        <span className="font-semibold text-foreground">Platform Fee Structure</span>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="p-4 bg-muted/50 rounded-b-lg">
+                                        <div className="space-y-3">
+                                            <p className="text-sm text-muted-foreground">Platform fees are charged per transaction based on the distributor's subscription tier. Fees are applied to product totals only (shipping excluded).</p>
+                                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                                                {[
+                                                    { tier: 'PAYG', fee: '6%' },
+                                                    { tier: 'Essential', fee: '4%' },
+                                                    { tier: 'Growth', fee: '3%' },
+                                                    { tier: 'Scale', fee: '2%' },
+                                                    { tier: 'Collector', fee: '4%' },
+                                                ].map(({ tier, fee }) => (
+                                                    <div key={tier} className="text-center p-3 rounded-lg border bg-background">
+                                                        <p className="text-xs text-muted-foreground">{tier}</p>
+                                                        <p className="text-lg font-bold text-primary">{fee}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">Fee rates are defined in <code className="bg-muted px-1 rounded">lib/stripe-helpers.ts</code> and can be overridden via Firestore <code className="bg-muted px-1 rounded">settings/platformFees</code> document.</p>
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
                                 <AccordionItem value="stripe">
                                     <AccordionTrigger>
                                         <div className="flex items-center justify-between w-full pr-4">
                                             <span className="font-semibold text-foreground">Stripe</span>
-                                            <Switch defaultChecked/>
+                                            <span className="text-xs text-green-600 font-medium">Active</span>
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent className="p-4 bg-muted/50 rounded-b-lg">
-                                        <div className="space-y-4">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="stripe_fee_base">Base Platform Fee (%)</Label>
-                                                <Input id="stripe_fee_base" type="number" step="0.1" placeholder="e.g. 2.0" />
-                                                <p className="text-xs text-muted-foreground">The default fee for transactions via Stripe.</p>
-                                            </div>
-                                            <Separator />
-                                            <div className="space-y-2">
-                                                <Label htmlFor="stripe_fee_ideal">iDEAL Fee (%)</Label>
-                                                <Input id="stripe_fee_ideal" type="number" step="0.1" placeholder="e.g. 1.5" />
-                                                <p className="text-xs text-muted-foreground">Specific fee for iDEAL payments. Overrides base fee.</p>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="stripe_fee_cc">Credit Card Fee (%)</Label>
-                                                <Input id="stripe_fee_cc" type="number" step="0.1" placeholder="e.g. 2.9" />
-                                                <p className="text-xs text-muted-foreground">Specific fee for Credit Card payments. Overrides base fee.</p>
-                                            </div>
-                                        </div>
+                                        <p className="text-sm text-muted-foreground">Stripe Connect is active for distributor onboarding and order payments. Distributors connect their own Stripe accounts to receive payouts directly.</p>
                                     </AccordionContent>
                                 </AccordionItem>
                                 <AccordionItem value="paypal">
                                     <AccordionTrigger>
                                         <div className="flex items-center justify-between w-full pr-4">
                                             <span className="font-semibold text-foreground">PayPal</span>
-                                            <Switch disabled />
+                                            <span className="text-xs text-green-600 font-medium">Active</span>
                                         </div>
                                     </AccordionTrigger>
                                     <AccordionContent className="p-4 bg-muted/50 rounded-b-lg">
-                                        <p className="text-sm text-muted-foreground">PayPal integration is coming soon.</p>
-                                    </AccordionContent>
-                                </AccordionItem>
-                                <AccordionItem value="paynl">
-                                    <AccordionTrigger>
-                                        <div className="flex items-center justify-between w-full pr-4">
-                                            <span className="font-semibold text-foreground">Pay.nl</span>
-                                            <Switch disabled />
-                                        </div>
-                                    </AccordionTrigger>
-                                    <AccordionContent className="p-4 bg-muted/50 rounded-b-lg">
-                                        <p className="text-sm text-muted-foreground">Pay.nl integration is coming soon.</p>
+                                        <p className="text-sm text-muted-foreground">PayPal Commerce Platform is active. Distributors connect their PayPal merchant accounts to accept PayPal payments.</p>
                                     </AccordionContent>
                                 </AccordionItem>
                             </Accordion>

@@ -6,6 +6,7 @@ const DEFAULT_FEES: Record<string, number> = {
   essential: 0.04,
   growth: 0.03,
   scale: 0.02,
+  collector: 0.04,
 };
 
 // In-memory cache for platform fees (avoid Firestore read on every checkout)
