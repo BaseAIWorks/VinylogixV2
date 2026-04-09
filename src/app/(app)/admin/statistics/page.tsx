@@ -263,6 +263,10 @@ export default function AdminStatisticsPage() {
             totalClients: allUsers.filter(u => u.role === 'viewer').length,
             newClientsCount: allUsers.filter(u => {
                 if (u.role !== 'viewer' || !u.createdAt) return false;
+                // Exclude pending invites — only count clients who actually accepted (logged in)
+                const hasLoggedIn = u.lastLoginAt && u.createdAt &&
+                    Math.abs(new Date(u.lastLoginAt).getTime() - new Date(u.createdAt).getTime()) > 60000;
+                if (!hasLoggedIn && u.profileComplete === false) return false;
                 return isAfter(parseISO(u.createdAt), subDays(new Date(), 14));
             }).length,
         };
