@@ -14,6 +14,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Loader2, ArrowLeft, Package, User, Receipt, Music, CheckCircle, XCircle, Clock, Weight, Printer, Truck, PackageCheck, Hourglass, DollarSign, FileDown, ThumbsUp, ThumbsDown, Send, Building2, Mail, Phone, MapPin, ShoppingCart, AlertCircle, ExternalLink, Save, Bell, RefreshCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { auth } from "@/lib/firebase";
 import { format } from "date-fns";
@@ -66,13 +67,14 @@ export default function OrderDetailPage() {
     const [isLoadingPackingSlip, setIsLoadingPackingSlip] = useState(false);
     const [customerStats, setCustomerStats] = useState<{ totalOrders: number; totalSpent: number; openPayments: number } | null>(null);
 
-    // Item status management
+    // Item status & quantity management
     const [itemStatusChanges, setItemStatusChanges] = useState<Record<string, OrderItemStatus>>({});
+    const [itemQuantityChanges, setItemQuantityChanges] = useState<Record<string, number>>({});
     const [isSavingItemStatuses, setIsSavingItemStatuses] = useState(false);
     const [isSendingNotification, setIsSendingNotification] = useState(false);
     const [notificationSent, setNotificationSent] = useState(false);
     const [isRecalculating, setIsRecalculating] = useState(false);
-    const hasUnsavedItemChanges = Object.keys(itemStatusChanges).length > 0;
+    const hasUnsavedItemChanges = Object.keys(itemStatusChanges).length > 0 || Object.keys(itemQuantityChanges).length > 0;
     const hasItemStatusChanges = order?.items.some(item => item.itemStatus && item.itemStatus !== 'available') ?? false;
 
     const fetchOrder = useCallback(async () => {
@@ -288,18 +290,34 @@ export default function OrderDetailPage() {
         }
     };
 
+    const handleItemQuantityChange = (recordId: string, newQuantity: number) => {
+        const originalQty = order?.items.find(i => i.recordId === recordId)?.quantity || 1;
+        if (newQuantity === originalQty) {
+            setItemQuantityChanges(prev => { const next = { ...prev }; delete next[recordId]; return next; });
+        } else if (newQuantity >= 1) {
+            setItemQuantityChanges(prev => ({ ...prev, [recordId]: newQuantity }));
+        }
+    };
+
     const handleSaveItemStatuses = async () => {
         if (!order || !user || !hasUnsavedItemChanges) return;
         setIsSavingItemStatuses(true);
         try {
-            const changes = Object.entries(itemStatusChanges).map(([recordId, itemStatus]) => ({ recordId, itemStatus }));
+            // Merge status and quantity changes per item
+            const allRecordIds = new Set([...Object.keys(itemStatusChanges), ...Object.keys(itemQuantityChanges)]);
+            const changes = Array.from(allRecordIds).map(recordId => ({
+                recordId,
+                itemStatus: itemStatusChanges[recordId] || order.items.find(i => i.recordId === recordId)?.itemStatus || 'available' as OrderItemStatus,
+                quantity: itemQuantityChanges[recordId],
+            }));
             const updatedOrder = await updateOrderItemStatuses(orderId, changes, user);
             setOrder(updatedOrder);
             setItemStatusChanges({});
+            setItemQuantityChanges({});
             setNotificationSent(false);
-            toast({ title: "Item statuses updated", description: "Order totals have been recalculated." });
+            toast({ title: "Order items updated", description: "Quantities and statuses saved. Totals recalculated." });
         } catch (error) {
-            toast({ title: "Error", description: "Failed to update item statuses.", variant: "destructive" });
+            toast({ title: "Error", description: "Failed to update order items.", variant: "destructive" });
         } finally {
             setIsSavingItemStatuses(false);
         }
@@ -502,9 +520,17 @@ export default function OrderDetailPage() {
                                                 <p className={`font-medium ${excluded ? 'line-through' : ''}`}>{item.title}</p>
                                                 <p className="text-sm text-muted-foreground">{item.artist}</p>
                                             </TableCell>
-                                            <TableCell className="text-center">{item.quantity}</TableCell>
+                                            <TableCell className="text-center">
+                                                <Input
+                                                    type="number"
+                                                    min={1}
+                                                    value={itemQuantityChanges[item.recordId] ?? item.quantity}
+                                                    onChange={(e) => handleItemQuantityChange(item.recordId, parseInt(e.target.value) || 1)}
+                                                    className="w-16 h-8 text-center text-xs mx-auto"
+                                                />
+                                            </TableCell>
                                             <TableCell className={`text-right ${excluded ? 'line-through' : ''}`}>€ {formatPriceForDisplay(item.priceAtTimeOfOrder)}</TableCell>
-                                            <TableCell className={`text-right ${excluded ? 'line-through' : ''}`}>€ {formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</TableCell>
+                                            <TableCell className={`text-right ${excluded ? 'line-through' : ''}`}>€ {formatPriceForDisplay(item.priceAtTimeOfOrder * (itemQuantityChanges[item.recordId] ?? item.quantity))}</TableCell>
                                             <TableCell>
                                                 <Select value={effectiveStatus} onValueChange={(val) => handleItemStatusChange(item.recordId, val as OrderItemStatus)}>
                                                     <SelectTrigger className="w-[140px] h-8 text-xs">

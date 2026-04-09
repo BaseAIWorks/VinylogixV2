@@ -152,7 +152,7 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, ac
 
 export async function updateOrderItemStatuses(
   orderId: string,
-  changes: Array<{ recordId: string; itemStatus: OrderItemStatus }>,
+  changes: Array<{ recordId: string; itemStatus: OrderItemStatus; quantity?: number }>,
   actingUser: User
 ): Promise<Order> {
   if (!actingUser.distributorId) throw new Error("User has no distributorId.");
@@ -167,13 +167,17 @@ export async function updateOrderItemStatuses(
   const orderData = orderSnap.data() as Order;
 
   // Build a lookup for the changes
-  const changeMap = new Map(changes.map(c => [c.recordId, c.itemStatus]));
+  const changeMap = new Map(changes.map(c => [c.recordId, { itemStatus: c.itemStatus, quantity: c.quantity }]));
 
-  // Update item statuses
+  // Update item statuses and quantities
   const updatedItems = orderData.items.map(item => {
-    const newStatus = changeMap.get(item.recordId);
-    if (newStatus !== undefined) {
-      return { ...item, itemStatus: newStatus };
+    const change = changeMap.get(item.recordId);
+    if (change) {
+      return {
+        ...item,
+        itemStatus: change.itemStatus,
+        ...(change.quantity !== undefined ? { quantity: change.quantity } : {}),
+      };
     }
     return item;
   });
