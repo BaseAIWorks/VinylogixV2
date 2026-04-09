@@ -227,6 +227,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     { href: '/admin/statistics', label: 'Platform Stats', title: 'Platform Statistics', icon: BarChart3, roles: ['superadmin'], category: 'Platform' },
     { href: '/admin/revenue', label: 'Revenue & Orders', title: 'Platform Revenue & Orders', icon: DollarSign, roles: ['superadmin'], category: 'Platform' },
     { href: '/admin/settings', label: 'Platform Settings', title: 'Platform Settings', icon: Shapes, roles: ['superadmin'], category: 'Platform' },
+    { href: '/admin/system', label: 'System Health', title: 'System Health & Logs', icon: Activity, roles: ['superadmin'], category: 'Platform' },
     { href: '/admin/changelog', label: 'Manage Changelog', title: 'Changelog Management', icon: Newspaper, roles: ['superadmin'], category: 'Platform' },
 
     // All Roles - Dashboard
