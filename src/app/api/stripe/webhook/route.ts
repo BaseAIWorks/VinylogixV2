@@ -8,6 +8,7 @@ import {
 } from "@/services/server-distributor-service";
 import { createOrderFromCheckout } from "@/services/server-order-service";
 import type { SubscriptionTier, SubscriptionStatus } from "@/types";
+import { logSystemEvent } from "@/services/system-log-service";
 
 // Webhook signing secret
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
     event = stripe.webhooks.constructEvent(body, sig, endpointSecret);
   } catch (err: any) {
     console.error("❌ Webhook signature verification failed:", err.message);
+    logSystemEvent({ type: 'webhook_error', source: 'stripe_webhook', status: 'error', message: `Signature verification failed: ${err.message}` });
     return NextResponse.json(
       { error: `Webhook Error: ${err.message}` },
       { status: 400 }
@@ -369,9 +371,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    logSystemEvent({ type: 'webhook_event', source: 'stripe_webhook', status: 'success', message: `Processed: ${event.type}` });
     return NextResponse.json({ received: true });
   } catch (err: any) {
     console.error("Unhandled error in webhook handler:", err);
+    logSystemEvent({ type: 'webhook_error', source: 'stripe_webhook', status: 'error', message: `Handler error: ${err.message}`, metadata: { errorMessage: err.message } });
     return NextResponse.json(
       { error: "Webhook handler error" },
       { status: 500 }

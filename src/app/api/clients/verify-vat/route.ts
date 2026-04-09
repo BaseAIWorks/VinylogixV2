@@ -79,9 +79,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    import('@/services/system-log-service').then(m => m.logSystemEvent({ type: 'api_call', source: 'vies_api', status: result.valid ? 'success' : 'warning', message: `VAT check: ${countryCode}${cleanVat} → ${result.valid ? 'valid' : 'invalid'}` }));
     return NextResponse.json({ ...result, persisted });
   } catch (error: any) {
     console.error('VIES validation error:', error);
+    import('@/services/system-log-service').then(m => m.logSystemEvent({ type: 'api_error', source: 'vies_api', status: 'error', message: `VIES error: ${error.message}` }));
     return NextResponse.json(
       { error: 'Failed to validate VAT number. Please try again.' },
       { status: 500 }

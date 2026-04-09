@@ -192,9 +192,11 @@ export async function POST(req: NextRequest) {
         console.log(`Unhandled PayPal event type: ${event.event_type}`);
     }
 
+    import('@/services/system-log-service').then(m => m.logSystemEvent({ type: 'webhook_event', source: 'paypal_webhook', status: 'success', message: `Processed: ${event.event_type}` }));
     return NextResponse.json({ received: true });
   } catch (error: any) {
     console.error('PayPal webhook error:', error);
+    import('@/services/system-log-service').then(m => m.logSystemEvent({ type: 'webhook_error', source: 'paypal_webhook', status: 'error', message: `Handler error: ${error.message}`, metadata: { errorMessage: error.message } }));
     return NextResponse.json(
       { error: `Webhook error: ${error.message}` },
       { status: 500 }
