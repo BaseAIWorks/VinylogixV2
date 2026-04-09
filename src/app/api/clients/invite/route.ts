@@ -121,11 +121,18 @@ export async function POST(req: NextRequest) {
       }
 
       // Grant access and track invite
+      const existingData = existingUser;
       await existingUserQuery.docs[0].ref.update({
         accessibleDistributorIds: FieldValue.arrayUnion(distributorId),
         invitedAt: Timestamp.now(),
         invitedByDistributorId: distributorId,
         invitedByUid: caller.uid,
+        // Only set origin if not already set (don't overwrite original origin)
+        ...(!existingData.originType ? {
+          originType: 'invited',
+          originDistributorId: distributorId,
+          originDistributorName: distributorInfo.name,
+        } : {}),
       });
 
       try {
@@ -170,6 +177,9 @@ export async function POST(req: NextRequest) {
         invitedAt: newTimestamp,
         invitedByDistributorId: distributorId,
         invitedByUid: caller.uid,
+        originType: 'invited',
+        originDistributorId: distributorId,
+        originDistributorName: distributorInfo.name,
       };
       if (firstName) newUserFirestoreData.firstName = firstName;
       if (lastName) newUserFirestoreData.lastName = lastName;

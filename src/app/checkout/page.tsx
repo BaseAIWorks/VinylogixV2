@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { User, Distributor } from "@/types";
 import { getDistributorById } from "@/services/distributor-service";
 import { calculateShipping, findShippingZone } from "@/lib/shipping-utils";
+import { logActivity } from "@/services/activity-service";
 import { Truck, Package } from "lucide-react";
 
 const formatAddress = (user: Partial<User>, type: 'shipping' | 'billing' = 'shipping'): string => {
@@ -286,6 +287,16 @@ export default function CheckoutPage() {
             customerChamberOfCommerce: user.chamberOfCommerce,
             customerCountry: user.country,
             shippingMethod,
+        });
+        // Log order activity
+        logActivity({
+            userId: user.uid,
+            userEmail: user.email || '',
+            userRole: user.role,
+            sessionId: `checkout_${Date.now()}`,
+            action: 'order_placed',
+            details: `Placed order ${order.orderNumber || order.id} (€${formatPriceForDisplay(orderTotal)})`,
+            metadata: { orderId: order.id, distributorId },
         });
         clearCart();
         router.push(`/my-orders/${order.id}?requested=true`);

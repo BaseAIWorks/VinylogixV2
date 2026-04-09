@@ -517,6 +517,9 @@ export interface FirestoreUser {
   invitedAt?: import('firebase/firestore').Timestamp | any; // Firestore Timestamp (admin or client SDK)
   invitedByDistributorId?: string;
   invitedByUid?: string;
+  originType?: 'invited' | 'access_request' | 'self_signup' | 'admin_created';
+  originDistributorId?: string;
+  originDistributorName?: string;
 }
 
 

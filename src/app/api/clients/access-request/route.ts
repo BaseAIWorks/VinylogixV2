@@ -64,9 +64,16 @@ export async function POST(req: NextRequest) {
   const storefrontSlug = distData?.slug;
 
   if (action === 'approve') {
-    // Grant access to the requester
+    // Grant access to the requester + set origin if not already set
+    const requesterDoc = await adminDb.collection('users').doc(requesterUid).get();
+    const requesterData = requesterDoc.data();
     await adminDb.collection('users').doc(requesterUid).update({
       accessibleDistributorIds: FieldValue.arrayUnion(distributorId),
+      ...(!requesterData?.originType ? {
+        originType: 'access_request',
+        originDistributorId: distributorId,
+        originDistributorName: distributorName,
+      } : {}),
     });
 
     // Send approved email
