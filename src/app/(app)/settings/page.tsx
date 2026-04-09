@@ -26,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { UserRole, Distributor, CardDisplaySettings, ClientMenuSettings, PaymentAccount, PaymentAccountType, StorefrontSettings } from "@/types";
+import type { UserRole, Distributor, CardDisplaySettings, ClientMenuSettings, PaymentAccount, PaymentAccountType, StorefrontSettings, ShippingConfig, ShippingZone, ShippingRateTier } from "@/types";
 import { format, differenceInDays, addMonths } from 'date-fns';
 import { getAllInventoryRecords } from "@/services/record-service";
 import { formatPriceForDisplay } from "@/lib/utils";
@@ -227,6 +227,8 @@ export default function SettingsPage() {
   const [isConnectingPayPal, setIsConnectingPayPal] = useState(false);
   const [isProfileCompletionDialogOpen, setIsProfileCompletionDialogOpen] = useState(false);
   const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([]);
+  const [shippingConfig, setShippingConfig] = useState<ShippingConfig>({ enabled: false, zones: [] });
+  const [isSavingShipping, setIsSavingShipping] = useState(false);
 
   const { toast } = useToast();
   const router = useRouter();
@@ -407,6 +409,7 @@ export default function SettingsPage() {
         });
         setShelfLocations(activeDistributor.shelfLocations || []);
         setStorageLocations(activeDistributor.storageLocations || []);
+        setShippingConfig(activeDistributor.shippingConfig || { enabled: false, zones: [] });
         cardDisplayForm.reset({
             ...defaultCardSettings,
             ...(activeDistributor.cardDisplaySettings || {}),
@@ -554,6 +557,70 @@ export default function SettingsPage() {
     await updateMyDistributorSettings({ shelfLocations, storageLocations });
     setIsSavingLocations(false);
     showSaveSuccess('locations');
+  };
+
+  const handleSaveShipping = async () => {
+    setIsSavingShipping(true);
+    try {
+      await updateMyDistributorSettings({ shippingConfig });
+      showSaveSuccess('shipping');
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to save shipping settings.", variant: "destructive" });
+    } finally {
+      setIsSavingShipping(false);
+    }
+  };
+
+  const addShippingZone = (presetName?: string) => {
+    const EU_COUNTRIES = ['Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic', 'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary', 'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta', 'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia', 'Spain', 'Sweden'];
+    let newZone: ShippingZone;
+    if (presetName === 'nl') {
+      newZone = { id: `zone_${Date.now()}`, name: 'Netherlands', countries: ['Netherlands'], rateTiers: [{ id: `tier_${Date.now()}`, minWeightGrams: 0, maxWeightGrams: 2000, price: 6.95 }, { id: `tier_${Date.now()}_2`, minWeightGrams: 2000, maxWeightGrams: 5000, price: 8.50 }, { id: `tier_${Date.now()}_3`, minWeightGrams: 5000, maxWeightGrams: 10000, price: 11.50 }, { id: `tier_${Date.now()}_4`, minWeightGrams: 10000, maxWeightGrams: 31500, price: 15.00 }] };
+    } else if (presetName === 'eu') {
+      newZone = { id: `zone_${Date.now()}`, name: 'EU', countries: EU_COUNTRIES.filter(c => c !== 'Netherlands'), rateTiers: [{ id: `tier_${Date.now()}`, minWeightGrams: 0, maxWeightGrams: 2000, price: 12.50 }, { id: `tier_${Date.now()}_2`, minWeightGrams: 2000, maxWeightGrams: 5000, price: 16.00 }, { id: `tier_${Date.now()}_3`, minWeightGrams: 5000, maxWeightGrams: 10000, price: 22.00 }, { id: `tier_${Date.now()}_4`, minWeightGrams: 10000, maxWeightGrams: 31500, price: 30.00 }] };
+    } else if (presetName === 'world') {
+      newZone = { id: `zone_${Date.now()}`, name: 'World', countries: ['United Kingdom', 'United States', 'Canada', 'Australia', 'Japan', 'Switzerland', 'Norway'], rateTiers: [{ id: `tier_${Date.now()}`, minWeightGrams: 0, maxWeightGrams: 2000, price: 18.50 }, { id: `tier_${Date.now()}_2`, minWeightGrams: 2000, maxWeightGrams: 5000, price: 28.00 }] };
+    } else {
+      newZone = { id: `zone_${Date.now()}`, name: '', countries: [], rateTiers: [{ id: `tier_${Date.now()}`, minWeightGrams: 0, maxWeightGrams: 2000, price: 0 }] };
+    }
+    setShippingConfig(prev => ({ ...prev, zones: [...prev.zones, newZone] }));
+  };
+
+  const removeShippingZone = (zoneId: string) => {
+    setShippingConfig(prev => ({ ...prev, zones: prev.zones.filter(z => z.id !== zoneId) }));
+  };
+
+  const updateShippingZone = (zoneId: string, updates: Partial<ShippingZone>) => {
+    setShippingConfig(prev => ({
+      ...prev,
+      zones: prev.zones.map(z => z.id === zoneId ? { ...z, ...updates } : z),
+    }));
+  };
+
+  const addRateTier = (zoneId: string) => {
+    setShippingConfig(prev => ({
+      ...prev,
+      zones: prev.zones.map(z => {
+        if (z.id !== zoneId) return z;
+        const lastTier = z.rateTiers[z.rateTiers.length - 1];
+        const newMin = lastTier ? lastTier.maxWeightGrams : 0;
+        return { ...z, rateTiers: [...z.rateTiers, { id: `tier_${Date.now()}`, minWeightGrams: newMin, maxWeightGrams: newMin + 5000, price: 0 }] };
+      }),
+    }));
+  };
+
+  const removeRateTier = (zoneId: string, tierId: string) => {
+    setShippingConfig(prev => ({
+      ...prev,
+      zones: prev.zones.map(z => z.id === zoneId ? { ...z, rateTiers: z.rateTiers.filter(t => t.id !== tierId) } : z),
+    }));
+  };
+
+  const updateRateTier = (zoneId: string, tierId: string, updates: Partial<ShippingRateTier>) => {
+    setShippingConfig(prev => ({
+      ...prev,
+      zones: prev.zones.map(z => z.id === zoneId ? { ...z, rateTiers: z.rateTiers.map(t => t.id === tierId ? { ...t, ...updates } : t) } : z),
+    }));
   };
 
   // Save button with animation
@@ -1772,6 +1839,171 @@ export default function SettingsPage() {
                           </div>
                         </div>
                       </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Shipping Settings - Master only */}
+              {isMaster && (
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                      <Truck className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Shipping</CardTitle>
+                    </div>
+                    <CardDescription className="text-sm">Configure shipping zones and weight-based rates.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Enable Shipping Costs</Label>
+                        <p className="text-xs text-muted-foreground">Calculate shipping based on weight and destination.</p>
+                      </div>
+                      <Switch checked={shippingConfig.enabled} onCheckedChange={(checked) => setShippingConfig(prev => ({ ...prev, enabled: checked }))} />
+                    </div>
+
+                    {shippingConfig.enabled && (
+                      <>
+                        <Separator />
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Free Shipping Threshold (EUR)</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="e.g. 100"
+                              value={shippingConfig.freeShippingThreshold || ''}
+                              onChange={(e) => setShippingConfig(prev => ({ ...prev, freeShippingThreshold: e.target.value ? parseFloat(e.target.value) : undefined }))}
+                            />
+                            <p className="text-xs text-muted-foreground">Leave empty to disable. Orders above this amount get free shipping.</p>
+                          </div>
+                          <div className="flex items-center gap-3 pt-6">
+                            <Switch checked={shippingConfig.allowPickup || false} onCheckedChange={(checked) => setShippingConfig(prev => ({ ...prev, allowPickup: checked }))} />
+                            <div>
+                              <Label>Allow Pickup</Label>
+                              <p className="text-xs text-muted-foreground">Let clients choose to pick up their order (no shipping cost).</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Separator />
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-base font-semibold">Shipping Zones</Label>
+                            <div className="flex gap-2">
+                              <Button type="button" size="sm" variant="outline" onClick={() => addShippingZone('nl')} className="text-xs">+ NL</Button>
+                              <Button type="button" size="sm" variant="outline" onClick={() => addShippingZone('eu')} className="text-xs">+ EU</Button>
+                              <Button type="button" size="sm" variant="outline" onClick={() => addShippingZone('world')} className="text-xs">+ World</Button>
+                              <Button type="button" size="sm" variant="outline" onClick={() => addShippingZone()}><Plus className="h-3 w-3 mr-1" />Custom</Button>
+                            </div>
+                          </div>
+
+                          {shippingConfig.zones.length === 0 && (
+                            <p className="text-sm text-muted-foreground text-center py-4 border rounded-lg border-dashed">No shipping zones configured. Add a zone or use a preset above.</p>
+                          )}
+
+                          {shippingConfig.zones.map((zone) => (
+                            <Card key={zone.id} className="border-muted">
+                              <CardContent className="pt-4 space-y-4">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex-1 space-y-3">
+                                    <div>
+                                      <Label className="text-xs">Zone Name</Label>
+                                      <Input
+                                        value={zone.name}
+                                        onChange={(e) => updateShippingZone(zone.id, { name: e.target.value })}
+                                        placeholder="e.g. Netherlands, EU, World"
+                                        className="mt-1"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs">Countries</Label>
+                                      <div className="mt-1 flex flex-wrap gap-1.5 p-2 border rounded-md min-h-[40px] max-h-[120px] overflow-y-auto">
+                                        {zone.countries.map((country) => (
+                                          <span key={country} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full">
+                                            {country}
+                                            <button type="button" onClick={() => updateShippingZone(zone.id, { countries: zone.countries.filter(c => c !== country) })} className="hover:text-destructive">
+                                              <X className="h-3 w-3" />
+                                            </button>
+                                          </span>
+                                        ))}
+                                      </div>
+                                      <Select onValueChange={(val) => {
+                                        if (!zone.countries.includes(val)) {
+                                          updateShippingZone(zone.id, { countries: [...zone.countries, val].sort() });
+                                        }
+                                      }}>
+                                        <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Add country..." /></SelectTrigger>
+                                        <SelectContent className="max-h-[200px]">
+                                          {countries.filter(c => !zone.countries.includes(c)).map(c => (
+                                            <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+                                  <Button type="button" size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeShippingZone(zone.id)}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+
+                                <div>
+                                  <Label className="text-xs">Rate Tiers (weight-based)</Label>
+                                  <div className="mt-1 space-y-2">
+                                    <div className="grid grid-cols-[1fr_1fr_1fr_32px] gap-2 text-[10px] text-muted-foreground font-medium px-1">
+                                      <span>Min Weight (kg)</span><span>Max Weight (kg)</span><span>Price (EUR)</span><span></span>
+                                    </div>
+                                    {zone.rateTiers.map((tier) => (
+                                      <div key={tier.id} className="grid grid-cols-[1fr_1fr_1fr_32px] gap-2">
+                                        <Input
+                                          type="number"
+                                          step="0.1"
+                                          min="0"
+                                          value={tier.minWeightGrams / 1000}
+                                          onChange={(e) => updateRateTier(zone.id, tier.id, { minWeightGrams: Math.round(parseFloat(e.target.value || '0') * 1000) })}
+                                          className="h-8 text-xs"
+                                        />
+                                        <Input
+                                          type="number"
+                                          step="0.1"
+                                          min="0"
+                                          value={tier.maxWeightGrams / 1000}
+                                          onChange={(e) => updateRateTier(zone.id, tier.id, { maxWeightGrams: Math.round(parseFloat(e.target.value || '0') * 1000) })}
+                                          className="h-8 text-xs"
+                                        />
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          min="0"
+                                          value={tier.price}
+                                          onChange={(e) => updateRateTier(zone.id, tier.id, { price: parseFloat(e.target.value || '0') })}
+                                          className="h-8 text-xs"
+                                          placeholder="€"
+                                        />
+                                        <Button type="button" size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeRateTier(zone.id, tier.id)} disabled={zone.rateTiers.length <= 1}>
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => addRateTier(zone.id)}>
+                                      <Plus className="h-3 w-3 mr-1" />Add Tier
+                                    </Button>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+
+                        <div className="flex justify-end pt-2">
+                          <Button type="button" size="sm" onClick={handleSaveShipping} disabled={isSavingShipping}>
+                            {isSavingShipping ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : saveSuccess === 'shipping' ? <CheckCircle2 className="h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                            {saveSuccess === 'shipping' ? 'Saved!' : 'Save Shipping Settings'}
+                          </Button>
+                        </div>
+                      </>
                     )}
                   </CardContent>
                 </Card>

@@ -128,6 +128,27 @@ export interface WeightOption {
     isFixed: boolean; // If true, the weight is not editable on the record form
 }
 
+export interface ShippingRateTier {
+  id: string;
+  minWeightGrams: number;
+  maxWeightGrams: number;
+  price: number; // in euros
+}
+
+export interface ShippingZone {
+  id: string;
+  name: string;
+  countries: string[];
+  rateTiers: ShippingRateTier[];
+}
+
+export interface ShippingConfig {
+  enabled: boolean;
+  zones: ShippingZone[];
+  freeShippingThreshold?: number; // in euros — free shipping when product subtotal >= this
+  allowPickup?: boolean;
+}
+
 export interface StorefrontSettings {
   headline?: string;
   description?: string;
@@ -179,6 +200,9 @@ export interface Distributor {
   orderCounter?: number;
   orderIdPrefix?: string;
   allowOrderRequests?: boolean;
+
+  // Shipping configuration
+  shippingConfig?: ShippingConfig;
 
   // Tax configuration
   taxMode?: 'none' | 'manual' | 'stripe_tax';
@@ -550,6 +574,12 @@ export interface Order {
   taxLabel?: string;
   isReverseCharge?: boolean;
   taxBreakdown?: Array<{ rate: number; amount: number; jurisdiction: string }>;
+
+  // Shipping Fields
+  shippingCost?: number;
+  shippingZoneName?: string;
+  shippingMethod?: 'shipping' | 'pickup';
+  freeShippingApplied?: boolean;
 
   // Stripe Connect Payment Fields
   stripePaymentIntentId?: string;
