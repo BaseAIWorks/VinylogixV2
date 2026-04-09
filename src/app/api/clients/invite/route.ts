@@ -70,7 +70,9 @@ export async function POST(req: NextRequest) {
     }
 
     const inviterData = inviterDoc.data() as FirestoreUser;
-    if (inviterData.role !== 'master' || inviterData.distributorId !== distributorId) {
+    const isMasterOfDistributor = inviterData.role === 'master' && inviterData.distributorId === distributorId;
+    const isSuperadmin = inviterData.role === 'superadmin';
+    if (!isMasterOfDistributor && !isSuperadmin) {
       return NextResponse.json({ error: 'Insufficient permissions.' }, { status: 403 });
     }
 
