@@ -84,12 +84,12 @@ const detectChangeType = (entry: { title: string; notes: string; type?: string }
     return "other";
 };
 
-const emptyFormState: Omit<ChangelogEntry, 'id'> = {
+const getEmptyFormState = (): Omit<ChangelogEntry, 'id'> => ({
     version: "",
     title: "",
     notes: "",
     createdAt: new Date().toISOString(),
-};
+});
 
 export default function AdminChangelogPage() {
     const { user, loading: authLoading } = useAuth();
@@ -105,7 +105,7 @@ export default function AdminChangelogPage() {
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingEntry, setEditingEntry] = useState<ChangelogEntry | null>(null);
-    const [formState, setFormState] = useState(emptyFormState);
+    const [formState, setFormState] = useState(getEmptyFormState());
 
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [entryToDelete, setEntryToDelete] = useState<ChangelogEntry | null>(null);
@@ -172,7 +172,7 @@ export default function AdminChangelogPage() {
 
     const openAddDialog = () => {
         setEditingEntry(null);
-        setFormState(emptyFormState);
+        setFormState(getEmptyFormState());
         setIsDialogOpen(true);
     };
 

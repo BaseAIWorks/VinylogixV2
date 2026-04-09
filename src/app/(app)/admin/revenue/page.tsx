@@ -316,7 +316,9 @@ export default function AdminRevenuePage() {
                     <SelectItem value="shipped">Shipped</SelectItem>
                     <SelectItem value="processing">Processing</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="awaiting_approval">Awaiting Approval</SelectItem>
                     <SelectItem value="awaiting_payment">Awaiting Payment</SelectItem>
+                    <SelectItem value="on_hold">On Hold</SelectItem>
                     <SelectItem value="cancelled">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>

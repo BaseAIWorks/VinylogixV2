@@ -130,9 +130,7 @@ export default function PlatformSettingsPage() {
     };
 
     const handleAddWeightOption = () => {
-        const newLabel = "";
-        const isDuplicate = weightOptions.some(o => o.label.trim().toLowerCase() === newLabel);
-        setWeightOptions([...weightOptions, { id: `new_${weightOptionIdCounter++}`, label: "", weight: 0, isFixed: false }]);
+        setWeightOptions([...weightOptions, { id: `new_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, label: "", weight: 0, isFixed: false }]);
     };
 
     const hasDuplicateWeightLabels = useMemo(() => {
@@ -162,7 +160,11 @@ export default function PlatformSettingsPage() {
     };
 
     const handleBrandingUpdate = async (values: BrandingFormValues) => {
-      await updateMyDistributorSettings(values);
+      try {
+        await updateMyDistributorSettings(values);
+      } catch (error) {
+        toast({ title: "Error", description: "Failed to save branding settings.", variant: "destructive" });
+      }
     };
 
 

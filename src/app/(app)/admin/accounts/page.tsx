@@ -163,7 +163,7 @@ export default function AdminAccountsPage() {
             const price = a.subscription?.discountedPrice ?? a.subscription?.price ?? 0;
             const stripe = a.stripeAccountStatus || 'not connected';
             const lastLogin = a.masterLastLogin ? format(new Date(a.masterLastLogin), 'yyyy-MM-dd') : 'Never';
-            return [a.name, a.contactEmail, tier, subStatus, price.toFixed(2), stripe, lastLogin, format(new Date(a.createdAt), 'yyyy-MM-dd')].join(',');
+            return [a.name, a.contactEmail, tier, subStatus, price.toFixed(2), stripe, lastLogin, format(new Date(a.createdAt), 'yyyy-MM-dd')].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
         });
         const csv = [headers.join(','), ...rows].join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });

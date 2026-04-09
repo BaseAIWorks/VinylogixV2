@@ -135,7 +135,7 @@ export default function DistributorDetailPage() {
         const clients = associatedUsers.filter(u => u.role === 'viewer');
         const inventoryRecords = records.filter(r => r.isInventoryItem);
         const totalStockValue = inventoryRecords.reduce((sum, r) => sum + ((r.sellingPrice || 0) * ((r.stock_shelves || 0) + (r.stock_storage || 0))), 0);
-        const paidOrders = orders.filter(o => o.status === 'paid');
+        const paidOrders = orders.filter(o => o.paymentStatus === 'paid');
         const totalRevenue = paidOrders.reduce((sum, o) => sum + o.totalAmount, 0);
 
         const recordsWithoutPrice = inventoryRecords.filter(r => !r.sellingPrice).length;
@@ -441,7 +441,7 @@ export default function DistributorDetailPage() {
                        <TableBody>
                            {orders.length > 0 ? (
                                orders.slice(0,10).map(order => (
-                                   <TableRow key={order.id} className="cursor-pointer" onClick={() => router.push(`/orders/${order.id}`)}>
+                                   <TableRow key={order.id} className="cursor-pointer" onClick={() => router.push(`/admin/revenue/${order.id}`)}>
                                        <TableCell className="font-mono text-sm">{order.orderNumber || order.id.slice(0,8)}</TableCell>
                                        <TableCell>{order.viewerEmail}</TableCell>
                                        <TableCell>{format(new Date(order.createdAt), 'dd MMM yyyy')}</TableCell>
