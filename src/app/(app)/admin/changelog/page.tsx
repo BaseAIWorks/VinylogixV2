@@ -71,8 +71,13 @@ const changeTypeConfig: Record<ChangeType, { label: string; icon: React.ElementT
     other: { label: "Update", icon: Wrench, color: "text-gray-600", bgColor: "bg-gray-100 dark:bg-gray-800/50" },
 };
 
-const detectChangeType = (title: string, notes: string): ChangeType => {
-    const combined = `${title} ${notes}`.toLowerCase();
+const detectChangeType = (entry: { title: string; notes: string; type?: string }): ChangeType => {
+    // Use stored type if available
+    if (entry.type && ['feature', 'improvement', 'fix', 'other'].includes(entry.type)) {
+        return entry.type as ChangeType;
+    }
+    // Fall back to auto-detection
+    const combined = `${entry.title} ${entry.notes}`.toLowerCase();
     if (combined.includes("new feature") || combined.includes("introducing") || combined.includes("added") || combined.includes("new")) return "feature";
     if (combined.includes("fix") || combined.includes("bug") || combined.includes("resolved") || combined.includes("patch")) return "fix";
     if (combined.includes("improve") || combined.includes("enhance") || combined.includes("update") || combined.includes("better")) return "improvement";
@@ -136,7 +141,7 @@ export default function AdminChangelogPage() {
                 entry.notes.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 entry.version.toLowerCase().includes(searchQuery.toLowerCase());
 
-            const entryType = detectChangeType(entry.title, entry.notes);
+            const entryType = detectChangeType(entry);
             const matchesType = typeFilter === "all" || entryType === typeFilter;
 
             return matchesSearch && matchesType;
@@ -147,7 +152,7 @@ export default function AdminChangelogPage() {
         const total = changelogs.length;
         const latestVersion = changelogs[0]?.version || "N/A";
         const typeCounts = changelogs.reduce((acc, entry) => {
-            const type = detectChangeType(entry.title, entry.notes);
+            const type = detectChangeType(entry);
             acc[type] = (acc[type] || 0) + 1;
             return acc;
         }, {} as Record<ChangeType, number>);
@@ -185,6 +190,17 @@ export default function AdminChangelogPage() {
     const handleFormSubmit = async () => {
         if (!formState.version || !formState.title || !formState.notes) {
             toast({ title: "Validation Error", description: "All fields are required.", variant: "destructive" });
+            return;
+        }
+        // Version format validation
+        if (!/^\d+\.\d+\.\d+$/.test(formState.version)) {
+            toast({ title: "Invalid Version", description: "Version must be in semver format (e.g., 2.5.0).", variant: "destructive" });
+            return;
+        }
+        // Duplicate version check (skip when editing same entry)
+        const isDuplicate = changelogs.some(c => c.version === formState.version && c.id !== editingEntry?.id);
+        if (isDuplicate) {
+            toast({ title: "Duplicate Version", description: `Version ${formState.version} already exists.`, variant: "destructive" });
             return;
         }
         setIsSaving(true);
@@ -437,7 +453,7 @@ export default function AdminChangelogPage() {
                         {filteredChangelogs.length > 0 ? (
                             <div className="space-y-3">
                                 {filteredChangelogs.map((entry, index) => {
-                                    const changeType = detectChangeType(entry.title, entry.notes);
+                                    const changeType = detectChangeType(entry);
                                     const config = changeTypeConfig[changeType];
                                     const Icon = config.icon;
                                     const isExpanded = expandedEntries.has(entry.id);
@@ -577,6 +593,19 @@ export default function AdminChangelogPage() {
                                     </PopoverContent>
                                 </Popover>
                             </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Type</Label>
+                            <Select value={(formState as any).type || ''} onValueChange={(v) => setFormState(prev => ({ ...prev, type: v }))}>
+                                <SelectTrigger><SelectValue placeholder="Auto-detect from content" /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="feature">New Feature</SelectItem>
+                                    <SelectItem value="improvement">Improvement</SelectItem>
+                                    <SelectItem value="fix">Bug Fix</SelectItem>
+                                    <SelectItem value="other">Other / Update</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">Optional. If not set, type is auto-detected from content.</p>
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="title">Title</Label>
