@@ -12,7 +12,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { getDistributorById, updateDistributor, deleteDistributor } from "@/services/distributor-service";
-import { getUsersByDistributorId } from "@/services/user-service";
+import { getUsersByDistributorId, getClientsByDistributorId } from "@/services/user-service";
 import { getRecordsByDistributorId } from "@/services/record-service";
 import { getOrdersByDistributorId } from "@/services/order-service";
 import { getSubscriptionTiers } from "@/services/client-subscription-service";
@@ -73,6 +73,7 @@ export default function DistributorDetailPage() {
 
     const [distributor, setDistributor] = useState<Distributor | null>(null);
     const [associatedUsers, setAssociatedUsers] = useState<User[]>([]);
+    const [clients, setClients] = useState<User[]>([]);
     const [records, setRecords] = useState<VinylRecord[]>([]);
     const [orders, setOrders] = useState<Order[]>([]);
     const [subscriptionTiers, setSubscriptionTiers] = useState<Record<SubscriptionTier, SubscriptionInfo> | null>(null);
@@ -89,9 +90,10 @@ export default function DistributorDetailPage() {
         }
         setIsLoading(true);
         try {
-            const [distResult, usersResult, recordsResult, ordersResult, tiersResult] = await Promise.allSettled([
+            const [distResult, usersResult, clientsResult, recordsResult, ordersResult, tiersResult] = await Promise.allSettled([
                 getDistributorById(distributorId),
                 getUsersByDistributorId(distributorId),
+                getClientsByDistributorId(distributorId),
                 getRecordsByDistributorId(distributorId),
                 getOrdersByDistributorId(distributorId),
                 getSubscriptionTiers(),
@@ -108,7 +110,10 @@ export default function DistributorDetailPage() {
 
             if (usersResult.status === 'fulfilled') setAssociatedUsers(usersResult.value);
             else console.error("Failed to fetch associated users:", usersResult.reason);
-            
+
+            if (clientsResult.status === 'fulfilled') setClients(clientsResult.value);
+            else console.error("Failed to fetch clients:", clientsResult.reason);
+
             if (recordsResult.status === 'fulfilled') setRecords(recordsResult.value);
             else console.error("Failed to fetch records:", recordsResult.reason);
 
@@ -132,7 +137,6 @@ export default function DistributorDetailPage() {
     
     const stats = useMemo(() => {
         const operators = associatedUsers.filter(u => u.role === 'worker' || u.role === 'master');
-        const clients = associatedUsers.filter(u => u.role === 'viewer');
         const inventoryRecords = records.filter(r => r.isInventoryItem);
         const totalStockValue = inventoryRecords.reduce((sum, r) => sum + ((r.sellingPrice || 0) * ((r.stock_shelves || 0) + (r.stock_storage || 0))), 0);
         const paidOrders = orders.filter(o => o.paymentStatus === 'paid');
@@ -143,13 +147,13 @@ export default function DistributorDetailPage() {
         return {
             recordCount: inventoryRecords.length,
             operatorCount: operators.length,
-            clientCount: clients.length,
+            clientCount: clients.length, // from separate clients state
             totalStockValue: formatPriceForDisplay(totalStockValue),
             totalRevenue: formatPriceForDisplay(totalRevenue),
             totalOrders: orders.length,
             recordsWithoutPrice,
         };
-    }, [records, associatedUsers, orders]);
+    }, [records, associatedUsers, clients, orders]);
 
     const handleImpersonate = async () => {
         if (!distributor) return;
