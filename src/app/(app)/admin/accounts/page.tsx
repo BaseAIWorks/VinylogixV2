@@ -143,15 +143,15 @@ export default function AdminAccountsPage() {
                                            <TableCell className="font-medium">{account.name}</TableCell>
                                            <TableCell className="hidden sm:table-cell">{account.masterUserEmail}</TableCell>
                                            <TableCell>
-                                                {account.isSubscriptionExempt ? 
-                                                    <Badge variant="secondary">Managed</Badge> : 
-                                                    <Badge variant="outline" className="capitalize">{account.subscription?.tier || 'N/A'}</Badge>
+                                                {account.isSubscriptionExempt ?
+                                                    <Badge variant="secondary">Managed</Badge> :
+                                                    <Badge variant="outline" className="capitalize">{account.subscriptionTier || account.subscription?.tier || 'N/A'}</Badge>
                                                 }
                                            </TableCell>
                                            <TableCell>
                                                 {account.isSubscriptionExempt ? '-' : (
-                                                    <span className={`capitalize font-medium ${subscriptionStatusColors[account.subscription?.status || ''] || ''}`}>
-                                                        {account.subscription?.status?.replace('_', ' ') || 'N/A'}
+                                                    <span className={`capitalize font-medium ${subscriptionStatusColors[account.subscriptionStatus || account.subscription?.status || ''] || ''}`}>
+                                                        {(account.subscriptionStatus || account.subscription?.status || 'N/A').replace('_', ' ')}
                                                     </span>
                                                 )}
                                            </TableCell>

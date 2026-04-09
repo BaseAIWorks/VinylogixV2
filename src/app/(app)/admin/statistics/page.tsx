@@ -81,14 +81,16 @@ export default function AdminStatisticsPage() {
         const overdueAccounts: Distributor[] = [];
 
         distributors.forEach(d => {
-            if (d.subscription && !d.isSubscriptionExempt) {
-                if (tierCounts[d.subscription.tier] !== undefined) {
-                    tierCounts[d.subscription.tier]++;
+            if (!d.isSubscriptionExempt) {
+                const tier = d.subscriptionTier || d.subscription?.tier;
+                const subStatus = d.subscriptionStatus || d.subscription?.status;
+                if (tier && tierCounts[tier] !== undefined) {
+                    tierCounts[tier]++;
                 }
-                if (d.status === 'active' && d.subscription.status === 'active') {
-                    monthlyRevenue += d.subscription.discountedPrice ?? d.subscription.price ?? 0;
+                if (d.status === 'active' && subStatus === 'active') {
+                    monthlyRevenue += d.subscription?.discountedPrice ?? d.subscription?.price ?? 0;
                 }
-                if (d.subscription.status === 'past_due') {
+                if (subStatus === 'past_due') {
                     overdueAccounts.push(d);
                 }
             }
