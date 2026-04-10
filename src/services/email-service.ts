@@ -27,6 +27,10 @@ interface ExistingAccountEmailData {
   customMessage?: string;
 }
 
+// Helper to safely get the distributor display name (HTML-escaped)
+const safeDistributorName = (distributor: DistributorInfo): string =>
+  escapeHtml(distributor.companyName || distributor.name);
+
 // Renders the distributor's custom invitation message as an email block
 const createCustomMessageHtml = (customMessage: string | undefined, distributor: DistributorInfo): string => {
   if (!customMessage || !customMessage.trim()) return '';

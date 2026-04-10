@@ -271,6 +271,9 @@ export async function recalculateOrderTax(
   const rate = distributor.manualTaxRate;
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
+  // IMPORTANT: shippingCost is stored in the SAME convention as priceAtTimeOfOrder
+  // (i.e. inclusive for inclusive distributors, exclusive for exclusive distributors).
+  // This makes recalc idempotent — repeated calls produce the same result.
   // Compute products and shipping excl tax + tax + total
   // VAT applies to BOTH products and shipping (EU standard)
   let productsExcl: number;
@@ -310,7 +313,7 @@ export async function recalculateOrderTax(
     taxInclusive: taxBehavior === 'inclusive',
     taxLabel: distributor.manualTaxLabel || 'VAT',
     isReverseCharge: reverseCharge,
-    shippingCost: shippingExcl,
+    shippingCost: enteredShipping, // Store in same convention as priceAtTimeOfOrder (idempotent)
     updatedAt: Timestamp.now(),
   };
 

@@ -89,7 +89,7 @@ export default function OrderDetailPage() {
             const fetchedOrder = await getOrderById(orderId);
             if (fetchedOrder && (fetchedOrder.distributorId === user.distributorId || user.role === 'superadmin')) {
                 setOrder(fetchedOrder);
-                setShippingCostInput((fetchedOrder.shippingCost || 0).toString());
+                setShippingCostInput(fetchedOrder.shippingCost ? fetchedOrder.shippingCost.toString() : '');
             } else {
                 toast({ title: "Not Found", description: "The requested order could not be found.", variant: "destructive" });
                 router.push('/orders');
@@ -346,7 +346,7 @@ export default function OrderDetailPage() {
         try {
             const updatedOrder = await recalculateOrderTax(orderId, user);
             setOrder(updatedOrder);
-            setShippingCostInput((updatedOrder.shippingCost || 0).toString());
+            setShippingCostInput(updatedOrder.shippingCost ? updatedOrder.shippingCost.toString() : '');
             toast({ title: "Tax recalculated", description: "Order totals have been updated with current tax settings." });
         } catch (error: any) {
             toast({ title: "Error", description: error.message || "Failed to recalculate tax.", variant: "destructive" });
@@ -357,7 +357,14 @@ export default function OrderDetailPage() {
 
     const handleSaveShippingCost = async () => {
         if (!order || !user) return;
-        const newCost = parseFloat(shippingCostInput.replace(',', '.')) || 0;
+        const parsed = parseFloat(shippingCostInput.replace(',', '.'));
+        if (isNaN(parsed)) {
+            toast({ title: "Invalid amount", description: "Please enter a valid number.", variant: "destructive" });
+            // Reset input to last saved value
+            setShippingCostInput((order.shippingCost || 0).toString());
+            return;
+        }
+        const newCost = parsed;
         if (newCost < 0) {
             toast({ title: "Invalid amount", description: "Shipping cost cannot be negative.", variant: "destructive" });
             return;
@@ -366,7 +373,7 @@ export default function OrderDetailPage() {
         try {
             const updatedOrder = await recalculateOrderTax(orderId, user, newCost);
             setOrder(updatedOrder);
-            setShippingCostInput((updatedOrder.shippingCost || 0).toString());
+            setShippingCostInput(updatedOrder.shippingCost ? updatedOrder.shippingCost.toString() : '');
             toast({ title: "Shipping cost updated", description: "Order totals and tax recalculated." });
         } catch (error: any) {
             toast({ title: "Error", description: error.message || "Failed to update shipping cost.", variant: "destructive" });
@@ -375,7 +382,12 @@ export default function OrderDetailPage() {
         }
     };
 
-    const hasShippingChange = order ? parseFloat(shippingCostInput.replace(',', '.') || '0') !== (order.shippingCost || 0) : false;
+    const hasShippingChange = (() => {
+        if (!order) return false;
+        const parsed = parseFloat(shippingCostInput.replace(',', '.') || '0');
+        if (isNaN(parsed)) return false; // Don't trigger save on invalid input
+        return parsed !== (order.shippingCost || 0);
+    })();
 
     const getEffectiveItemStatus = (recordId: string): OrderItemStatus => {
         return itemStatusChanges[recordId] ?? order?.items.find(i => i.recordId === recordId)?.itemStatus ?? 'available';
@@ -613,7 +625,8 @@ export default function OrderDetailPage() {
                                     <p className="text-sm text-muted-foreground">Subtotal excl. {order.taxLabel || 'VAT'}: € {formatPriceForDisplay(order.subtotalAmount)}</p>
                                 )}
                                 {/* Editable shipping cost — shown above VAT so VAT is calculated on subtotal + shipping */}
-                                {order.status !== 'shipped' && order.status !== 'cancelled' ? (
+                                {/* Only allow editing on unpaid orders to preserve historical totals */}
+                                {order.status !== 'shipped' && order.status !== 'cancelled' && order.paymentStatus !== 'paid' ? (
                                     <div className="flex items-center justify-end gap-2 py-1">
                                         <span className="text-sm text-muted-foreground">Shipping{order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}:</span>
                                         <span className="text-sm">€</span>
@@ -650,13 +663,13 @@ export default function OrderDetailPage() {
                                 {order.isReverseCharge && <p className="text-xs text-muted-foreground italic">Reverse charge — VAT to be accounted for by the recipient.</p>}
                                 <p className="text-sm text-muted-foreground">Total Items: {order.items.reduce((sum, item) => sum + item.quantity, 0)}</p>
                                 {order.totalWeight && <p className="text-sm text-muted-foreground">Total Weight: {(order.totalWeight / 1000).toFixed(2)} kg</p>}
-                                {order.status !== 'shipped' && order.status !== 'cancelled' && (
+                                {order.status !== 'shipped' && order.status !== 'cancelled' && order.paymentStatus !== 'paid' && (
                                     <Button
                                         size="sm"
                                         variant="outline"
                                         className="mt-2"
                                         onClick={handleRecalculateTax}
-                                        disabled={isRecalculating}
+                                        disabled={isRecalculating || isSavingShipping}
                                     >
                                         {isRecalculating ? (
                                             <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />

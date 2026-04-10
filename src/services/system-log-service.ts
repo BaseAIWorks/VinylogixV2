@@ -47,8 +47,7 @@ export async function logSystemEvent(event: {
  */
 export async function getRecentSystemLogs(
   count: number = 100,
-  typeFilter?: SystemLogType,
-  sourceFilter?: SystemLogSource
+  typeFilter?: SystemLogType
 ): Promise<SystemLog[]> {
   const adminDb = getAdminDb();
   if (!adminDb) return [];
