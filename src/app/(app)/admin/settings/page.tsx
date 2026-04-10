@@ -87,7 +87,7 @@ export default function PlatformSettingsPage() {
     const handleTierInputChange = (tier: SubscriptionTier, field: keyof SubscriptionInfo, value: string | number | boolean) => {
         if (!tiers) return;
 
-        if (field === 'maxRecords' || field === 'maxUsers' || field === 'price' || field === 'yearlyPrice' || field === 'quarterlyPrice' || field === 'discountedPrice') {
+        if (field === 'maxRecords' || field === 'maxUsers' || field === 'price' || field === 'yearlyPrice' || field === 'quarterlyPrice' || field === 'discountedPrice' || field === 'transactionFeePercent') {
             const numValue = Number(value);
             if (isNaN(numValue)) {
                  if (value === "") { 
@@ -146,14 +146,31 @@ export default function PlatformSettingsPage() {
         if (!tiers || !weightOptions) return;
         setIsSaving(true);
         try {
-            await Promise.all([
+            const [tiersResult] = await Promise.all([
                 updateSubscriptionTiers(tiers),
                 updateWeightOptions(weightOptions)
             ]);
-            toast({ title: "Success", description: "Platform settings have been updated." });
+            // Surface the Stripe sync mode so admins know what actually happened.
+            const mode = tiersResult.stripeSync?.mode;
+            const actionCount = tiersResult.stripeSync?.actions?.length ?? 0;
+            let description = "Platform settings have been updated.";
+            if (mode === 'live') {
+                description = `Saved. Synced to Stripe LIVE mode (${actionCount} actions).`;
+            } else if (mode === 'test') {
+                description = `Saved. Synced to Stripe test mode (${actionCount} actions).`;
+            } else if (mode === 'skipped-no-key') {
+                description = "Saved. Stripe sync skipped (no Stripe key in this environment).";
+            } else if (mode === 'skipped-kill-switch') {
+                description = "Saved. Stripe sync is disabled via DISABLE_TIER_STRIPE_SYNC.";
+            }
+            toast({ title: "Success", description });
             await fetchSettings();
-        } catch (error) {
-            toast({ title: "Error", description: "Failed to save changes.", variant: "destructive" });
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error?.message || "Failed to save changes.",
+                variant: "destructive"
+            });
         } finally {
             setIsSaving(false);
         }
@@ -206,14 +223,34 @@ export default function PlatformSettingsPage() {
                 </TabsList>
                 <TabsContent value="tiers">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
-                        {tiers && SubscriptionTiers.map(tierKey => (
-                            <Card key={tierKey}>
-                                <CardHeader><CardTitle className="capitalize text-xl text-primary">{tierKey}</CardTitle><CardDescription>Configure the {tierKey} plan.</CardDescription></CardHeader>
+                        {tiers && SubscriptionTiers.map(tierKey => {
+                            const isPlanActive = tiers[tierKey].isActive !== false;
+                            return (
+                            <Card key={tierKey} className={!isPlanActive ? 'opacity-75 border-dashed' : undefined}>
+                                <CardHeader>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div>
+                                            <CardTitle className="capitalize text-xl text-primary">{tierKey}</CardTitle>
+                                            <CardDescription>Configure the {tierKey} plan.</CardDescription>
+                                        </div>
+                                        {!isPlanActive && (
+                                            <span className="text-xs rounded-full border border-dashed px-2 py-0.5 text-muted-foreground">Inactive</span>
+                                        )}
+                                    </div>
+                                </CardHeader>
                                 <CardContent className="space-y-4">
+                                    <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+                                        <div className="space-y-0.5">
+                                            <Label htmlFor={`isActive-${tierKey}`}>Plan Active</Label>
+                                            <p className="text-xs text-muted-foreground">When off, new customers cannot select this plan. Existing subscribers are unaffected.</p>
+                                        </div>
+                                        <Switch id={`isActive-${tierKey}`} checked={isPlanActive} onCheckedChange={checked => handleTierInputChange(tierKey, 'isActive', checked)}/>
+                                    </div>
                                     <div className="space-y-1"><Label htmlFor={`description-${tierKey}`}>Description</Label><Input id={`description-${tierKey}`} type="text" value={tiers[tierKey].description ?? ''} onChange={e => handleTierInputChange(tierKey, 'description', e.target.value)} placeholder="e.g. For small businesses"/></div>
-                                    <div className="space-y-1"><Label htmlFor={`features-${tierKey}`}>Features (one per line)</Label><Textarea id={`features-${tierKey}`} value={tiers[tierKey].features ?? ''} onChange={e => handleTierInputChange(tierKey, 'features', e.target.value)} placeholder={"Feature 1\nFeature 2\nFeature 3"} rows={4}/></div>
+                                    <div className="space-y-1"><Label htmlFor={`features-${tierKey}`}>Features (one per line)</Label><Textarea id={`features-${tierKey}`} value={tiers[tierKey].features ?? ''} onChange={e => handleTierInputChange(tierKey, 'features', e.target.value)} placeholder={"Feature 1\nFeature 2\nFeature 3"} rows={4}/><p className="text-xs text-muted-foreground">The &quot;Up to X records&quot; bullet and the fee bullet are added automatically from Max Records and Transaction Fee — don&apos;t duplicate them here.</p></div>
                                     <div className="space-y-1"><Label htmlFor={`maxRecords-${tierKey}`}>Max Records</Label><Input id={`maxRecords-${tierKey}`} type="number" value={tiers[tierKey].maxRecords} onChange={e => handleTierInputChange(tierKey, 'maxRecords', e.target.value)} placeholder="Use -1 for unlimited"/><p className="text-xs text-muted-foreground">Use -1 for unlimited records.</p></div>
                                     <div className="space-y-1"><Label htmlFor={`maxUsers-${tierKey}`}>Max Users</Label><Input id={`maxUsers-${tierKey}`} type="number" value={tiers[tierKey].maxUsers} onChange={e => handleTierInputChange(tierKey, 'maxUsers', e.target.value)} placeholder="Use -1 for unlimited"/><p className="text-xs text-muted-foreground">Use -1 for unlimited users.</p></div>
+                                    <div className="space-y-1"><Label htmlFor={`transactionFeePercent-${tierKey}`}>Transaction Fee (%)</Label><Input id={`transactionFeePercent-${tierKey}`} type="number" step="0.01" min="0" max="50" value={tiers[tierKey].transactionFeePercent ?? ''} onChange={e => handleTierInputChange(tierKey, 'transactionFeePercent', e.target.value)} placeholder="e.g. 3"/><p className="text-xs text-muted-foreground">Platform fee charged per order for distributors on this plan. Drives Stripe application fees.</p></div>
                                     <div className="space-y-1"><Label htmlFor={`price-${tierKey}`}>Monthly Price (€)</Label><Input id={`price-${tierKey}`} type="number" step="0.01" value={tiers[tierKey].price ?? ''} onChange={e => handleTierInputChange(tierKey, 'price', e.target.value)} placeholder="e.g. 29.99"/></div>
                                     <div className="space-y-1"><Label htmlFor={`quarterlyPrice-${tierKey}`}>Quarterly Price (€)</Label><Input id={`quarterlyPrice-${tierKey}`} type="number" step="0.01" value={tiers[tierKey].quarterlyPrice ?? ''} onChange={e => handleTierInputChange(tierKey, 'quarterlyPrice', e.target.value)} placeholder="e.g. 79.00"/></div>
                                     <div className="space-y-1"><Label htmlFor={`yearlyPrice-${tierKey}`}>Yearly Price (€)</Label><Input id={`yearlyPrice-${tierKey}`} type="number" step="0.01" value={tiers[tierKey].yearlyPrice ?? ''} onChange={e => handleTierInputChange(tierKey, 'yearlyPrice', e.target.value)} placeholder="e.g. 290.00"/></div>
@@ -222,7 +259,7 @@ export default function PlatformSettingsPage() {
                                     <div className="flex items-center justify-between rounded-lg border p-3"><div className="space-y-0.5"><Label htmlFor={`allowAiFeatures-${tierKey}`}>Allow AI Features</Label></div><Switch id={`allowAiFeatures-${tierKey}`} checked={tiers[tierKey].allowAiFeatures} onCheckedChange={checked => handleTierInputChange(tierKey, 'allowAiFeatures', checked)}/></div>
                                 </CardContent>
                             </Card>
-                        ))}
+                        );})}
                     </div>
                 </TabsContent>
                  <TabsContent value="weights">
@@ -311,22 +348,21 @@ export default function PlatformSettingsPage() {
                                     </AccordionTrigger>
                                     <AccordionContent className="p-4 bg-muted/50 rounded-b-lg">
                                         <div className="space-y-3">
-                                            <p className="text-sm text-muted-foreground">Platform fees are charged per transaction based on the distributor's subscription tier. Fees are applied to product totals only (shipping excluded).</p>
+                                            <p className="text-sm text-muted-foreground">Platform fees are charged per transaction based on the distributor&apos;s subscription tier. Fees are applied to product totals only (shipping excluded). Edit each plan&apos;s fee in the <strong>Subscription Tiers</strong> tab — this table reflects what will be saved.</p>
                                             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                                                {[
-                                                    { tier: 'PAYG', fee: '6%' },
-                                                    { tier: 'Essential', fee: '4%' },
-                                                    { tier: 'Growth', fee: '3%' },
-                                                    { tier: 'Scale', fee: '2%' },
-                                                    { tier: 'Collector', fee: '4%' },
-                                                ].map(({ tier, fee }) => (
-                                                    <div key={tier} className="text-center p-3 rounded-lg border bg-background">
-                                                        <p className="text-xs text-muted-foreground">{tier}</p>
-                                                        <p className="text-lg font-bold text-primary">{fee}</p>
-                                                    </div>
-                                                ))}
+                                                {tiers && SubscriptionTiers.map(tierKey => {
+                                                    const fee = tiers[tierKey]?.transactionFeePercent;
+                                                    const feeLabel = typeof fee === 'number' ? `${fee}%` : '—';
+                                                    const inactive = tiers[tierKey]?.isActive === false;
+                                                    return (
+                                                        <div key={tierKey} className={`text-center p-3 rounded-lg border bg-background ${inactive ? 'opacity-50 border-dashed' : ''}`}>
+                                                            <p className="text-xs text-muted-foreground capitalize">{tierKey}{inactive ? ' (inactive)' : ''}</p>
+                                                            <p className="text-lg font-bold text-primary">{feeLabel}</p>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
-                                            <p className="text-xs text-muted-foreground">Fee rates are defined in <code className="bg-muted px-1 rounded">lib/stripe-helpers.ts</code> and can be overridden via Firestore <code className="bg-muted px-1 rounded">settings/platformFees</code> document.</p>
+                                            <p className="text-xs text-muted-foreground">Source of truth: Firestore <code className="bg-muted px-1 rounded">settings/subscriptionTiers</code> document. Changes sync to Stripe on save.</p>
                                         </div>
                                     </AccordionContent>
                                 </AccordionItem>

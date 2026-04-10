@@ -16,12 +16,13 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Header, Footer } from "@/components/landing";
 import { Badge } from "@/components/ui/badge";
 
-// Tier display config
-const tierConfig: Record<string, { label: string; badge?: string; badgeVariant?: string; ctaLabel: string; feeLabel: string }> = {
-  payg: { label: "Pay as you go", ctaLabel: "Start Free", feeLabel: "6% per sale" },
-  essential: { label: "Essential", ctaLabel: "Start Free Trial", feeLabel: "4% per sale" },
-  growth: { label: "Growth", badge: "Most Popular", ctaLabel: "Start Free Trial", feeLabel: "3% per sale" },
-  scale: { label: "Scale", badge: "Best Value", badgeVariant: "outline", ctaLabel: "Start Free Trial", feeLabel: "2% per sale" },
+// Tier display config. Fee label is derived dynamically from the live tier
+// data on save — admin edits transactionFeePercent in /admin/settings.
+const tierConfig: Record<string, { label: string; badge?: string; badgeVariant?: string; ctaLabel: string }> = {
+  payg: { label: "Pay as you go", ctaLabel: "Start Free" },
+  essential: { label: "Essential", ctaLabel: "Start Free Trial" },
+  growth: { label: "Growth", badge: "Most Popular", ctaLabel: "Start Free Trial" },
+  scale: { label: "Scale", badge: "Best Value", badgeVariant: "outline", ctaLabel: "Start Free Trial" },
 };
 
 const PricingTierComponent = ({
@@ -37,9 +38,14 @@ const PricingTierComponent = ({
   isPopular?: boolean;
   onChoosePlan: (tier: SubscriptionTier) => void;
 }) => {
-  const config = tierConfig[tierName] || { label: tierName, ctaLabel: "Get Started", feeLabel: "" };
+  const config = tierConfig[tierName] || { label: tierName, ctaLabel: "Get Started" };
   const isPayg = tier.tier === 'payg';
   const isScale = tier.tier === 'scale';
+  // Derive fee label from live transactionFeePercent. Fallback "—" if undefined.
+  const feeLabel =
+    typeof tier.transactionFeePercent === 'number'
+      ? `${tier.transactionFeePercent}% per sale`
+      : '';
 
   let price: number | undefined;
   let priceDetails: string = '';
@@ -76,7 +82,22 @@ const PricingTierComponent = ({
     }
   }
 
-  const features = tier.features ? tier.features.split('\n') : [];
+  // Records limit is driven by tier.maxRecords (admin-editable number), not by
+  // the free-text features string. Strip any existing records-mentioning line
+  // AND any line mentioning transaction fees (e.g. "4% transaction fee") — both
+  // are now auto-derived, so we avoid duplication if old Firestore data still
+  // contains them.
+  const recordsLabel =
+    tier.maxRecords === -1
+      ? 'Unlimited records'
+      : `Up to ${tier.maxRecords.toLocaleString()} records`;
+  const rawFeatures = tier.features
+    ? tier.features.split('\n').map(f => f.trim()).filter(Boolean)
+    : [];
+  const features = [
+    recordsLabel,
+    ...rawFeatures.filter(f => !/records?/i.test(f) && !/transaction\s*fee|per\s*sale|%\s*fee/i.test(f)),
+  ];
 
   return (
     <div
@@ -141,16 +162,18 @@ const PricingTierComponent = ({
         </div>
 
         {/* Fee badge */}
-        <div className="mt-4">
-          <span className={cn(
-            "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-            isPayg
-              ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-              : "bg-muted text-muted-foreground"
-          )}>
-            {config.feeLabel}
-          </span>
-        </div>
+        {feeLabel && (
+          <div className="mt-4">
+            <span className={cn(
+              "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+              isPayg
+                ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                : "bg-muted text-muted-foreground"
+            )}>
+              {feeLabel}
+            </span>
+          </div>
+        )}
 
         {/* Description */}
         <p className="mt-4 text-sm text-muted-foreground leading-relaxed">
@@ -234,12 +257,18 @@ export default function PricingPage() {
     router.push(`/register?${params.toString()}`);
   };
 
-  // Fee comparison data (Growth tier as example)
+  // Fee comparison data (Growth tier as example).
+  // Uses the live Growth transactionFeePercent so the comparison stays in sync
+  // with admin edits. Falls back to 3% if not yet loaded.
+  const growthFeeRate =
+    typeof tiers?.growth?.transactionFeePercent === 'number'
+      ? tiers.growth.transactionFeePercent / 100
+      : 0.03;
   const salePrice = 500.00;
   const shippingCost = 15.00;
   const orderTotal = salePrice + shippingCost;
   const stripeFee = orderTotal * 0.015 + 0.25;
-  const vinylogixFee = salePrice * 0.03;
+  const vinylogixFee = salePrice * growthFeeRate;
   const vinylogixTotalFee = stripeFee + vinylogixFee;
   const otherPlatformFee = orderTotal * 0.09;
   const otherPlatformPaymentFee = orderTotal * 0.034 + 0.35;
@@ -304,7 +333,18 @@ export default function PricingPage() {
         {/* Pricing Cards */}
         <section className="py-8 sm:py-12">
           <div className="container mx-auto max-w-6xl px-4">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {(() => {
+              const activeTiers = tiers
+                ? DistributorTiers.filter(k => tiers[k] && tiers[k].isActive !== false)
+                : [];
+              const count = activeTiers.length || 4; // 4 during loading
+              const gridCols =
+                count <= 1 ? 'lg:grid-cols-1 max-w-sm mx-auto'
+                : count === 2 ? 'lg:grid-cols-2 max-w-3xl mx-auto'
+                : count === 3 ? 'lg:grid-cols-3 max-w-5xl mx-auto'
+                : 'lg:grid-cols-4';
+              return (
+            <div className={`grid grid-cols-1 gap-6 sm:grid-cols-2 ${gridCols}`}>
               {isLoading || !tiers ? (
                 [...Array(4)].map((_, i) => (
                   <div key={i} className="flex flex-col rounded-2xl border p-6 space-y-4">
@@ -320,20 +360,25 @@ export default function PricingPage() {
                   </div>
                 ))
               ) : (
-                DistributorTiers.map(tierKey => (
-                  tiers[tierKey] && (
+                DistributorTiers.map(tierKey => {
+                  const t = tiers[tierKey];
+                  // Hide tiers admin has deactivated. undefined isActive = active.
+                  if (!t || t.isActive === false) return null;
+                  return (
                     <PricingTierComponent
                       key={tierKey}
                       tierName={tierKey}
-                      tier={tiers[tierKey]}
+                      tier={t}
                       billingCycle={billingCycle}
                       isPopular={tierKey === 'growth'}
                       onChoosePlan={handleChoosePlan}
                     />
-                  )
-                ))
+                  );
+                })
               )}
             </div>
+              );
+            })()}
 
             {/* Client callout */}
             <div className="mt-8 text-center">

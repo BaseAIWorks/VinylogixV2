@@ -240,11 +240,16 @@ service cloud.firestore {
     }
 
     match /settings/{docId} {
-      // Superadmins can manage all settings.
+      // Superadmins can manage all settings. Write is locked to superadmin only.
       allow read, write: if isSuperAdmin();
-      // Branding settings are public (company name, logo) for the login page
-      // Other settings require authentication
-      allow read: if docId == 'branding' || isSignedIn();
+      // Branding settings are public (company name, logo) for the login page.
+      // subscriptionTiers is public so anonymous visitors on /pricing and / see
+      // live admin-edited plans instead of silently falling back to defaults.
+      // Tier doc contains marketing data + Stripe Product/Price IDs, no secrets.
+      // Other settings require authentication.
+      allow read: if docId == 'branding'
+                  || docId == 'subscriptionTiers'
+                  || isSignedIn();
     }
 
     match /changelog/{entryId} {

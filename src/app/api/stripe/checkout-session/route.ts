@@ -29,6 +29,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 2a) Gate: reject inactive tiers. Admin has deactivated this plan for new
+    // customers. Existing subscribers are untouched (this endpoint only runs
+    // during new-customer signup / upgrade flows). undefined isActive = active.
+    if (selectedTier.isActive === false) {
+      return NextResponse.json(
+        { error: `The '${tier}' plan is no longer available for new customers.` },
+        { status: 400 }
+      );
+    }
+
     // 3) Map tier + billing -> Stripe Price ID (Firestore with env var fallback)
     const { getStripePriceId } = await import('@/lib/stripe-helpers');
     const priceId = await getStripePriceId(tier, billing as 'monthly' | 'quarterly' | 'yearly');

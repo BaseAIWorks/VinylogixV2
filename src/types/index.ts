@@ -106,6 +106,19 @@ export interface SubscriptionInfo {
   discountedPrice?: number;
   description?: string;
   features?: string; // Newline-separated string
+  // Whether new customers can select this plan. undefined = active (backward compat).
+  // When false: hidden on /pricing, /, and register flow. Existing subscribers are unaffected.
+  isActive?: boolean;
+  // Platform transaction fee as a whole percent (e.g. 6 for 6%).
+  // Source of truth for application_fee_amount on Stripe orders.
+  // Undefined falls back to DEFAULT_FEES in stripe-helpers.
+  transactionFeePercent?: number;
+  // Stripe Product/Price IDs — source of truth for checkout after admin sync.
+  // Populated on first save via read-only bootstrap from existing Stripe state.
+  stripeProductId?: string;
+  stripePriceIdMonthly?: string;
+  stripePriceIdQuarterly?: string;
+  stripePriceIdYearly?: string;
 }
 
 export interface Supplier {
@@ -825,8 +838,8 @@ export interface UserActivity {
 // ===================================
 // System Monitoring
 // ===================================
-export type SystemLogType = 'api_call' | 'api_error' | 'webhook_event' | 'webhook_error' | 'email_error' | 'email_sent' | 'system_alert';
-export type SystemLogSource = 'stripe_webhook' | 'paypal_webhook' | 'stripe_checkout' | 'paypal_checkout' | 'email_service' | 'vies_api' | 'system';
+export type SystemLogType = 'api_call' | 'api_error' | 'webhook_event' | 'webhook_error' | 'email_error' | 'email_sent' | 'system_alert' | 'admin_action';
+export type SystemLogSource = 'stripe_webhook' | 'paypal_webhook' | 'stripe_checkout' | 'paypal_checkout' | 'email_service' | 'vies_api' | 'system' | 'subscription_tiers_sync';
 export type SystemLogStatus = 'success' | 'error' | 'warning';
 
 export interface SystemLog {
@@ -848,6 +861,10 @@ export interface SystemLog {
     distributorId?: string;
     orderId?: string;
     duration?: number;
+    // subscription_tiers_sync fields
+    mode?: string;
+    actionCount?: number;
+    tierKeys?: string[];
   };
   createdAt: string; // ISO string
   resolvedAt?: string;

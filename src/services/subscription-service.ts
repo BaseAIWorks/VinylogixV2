@@ -22,7 +22,9 @@ const defaultTiers: Record<SubscriptionTier, SubscriptionInfo> = {
     quarterlyPrice: 0,
     yearlyPrice: 0,
     description: "Start selling with no monthly fee. Pay only when you sell.",
-    features: "Up to 50 records\nOrder Management\n6% transaction fee\nNo monthly commitment",
+    features: "Order Management\nNo monthly commitment",
+    isActive: true,
+    transactionFeePercent: 6,
   },
   essential: {
     tier: 'essential',
@@ -35,7 +37,9 @@ const defaultTiers: Record<SubscriptionTier, SubscriptionInfo> = {
     quarterlyPrice: 25,
     yearlyPrice: 90,
     description: "For personal collectors and enthusiasts getting started.",
-    features: "Up to 100 records\nOrder Management\n4% transaction fee\nClient Accounts",
+    features: "Order Management\nClient Accounts",
+    isActive: true,
+    transactionFeePercent: 4,
   },
   growth: {
     tier: 'growth',
@@ -48,7 +52,9 @@ const defaultTiers: Record<SubscriptionTier, SubscriptionInfo> = {
     quarterlyPrice: 79,
     yearlyPrice: 290,
     description: "Ideal for small shops and growing businesses.",
-    features: "Up to 1,000 records\nOrder Management\n3% transaction fee\nClient Accounts\nBasic Analytics",
+    features: "Order Management\nClient Accounts\nBasic Analytics",
+    isActive: true,
+    transactionFeePercent: 3,
   },
   scale: {
     tier: 'scale',
@@ -61,7 +67,9 @@ const defaultTiers: Record<SubscriptionTier, SubscriptionInfo> = {
     quarterlyPrice: 220,
     yearlyPrice: 790,
     description: "For established distributors and power users.",
-    features: "Unlimited records\nAI-powered descriptions\n2% transaction fee\nAdvanced Analytics\nPriority Support",
+    features: "AI-powered descriptions\nAdvanced Analytics\nPriority Support",
+    isActive: true,
+    transactionFeePercent: 2,
   },
   collector: {
     tier: 'collector',
@@ -75,6 +83,8 @@ const defaultTiers: Record<SubscriptionTier, SubscriptionInfo> = {
     yearlyPrice: 49,
     description: "For serious vinyl collectors who want more.",
     features: "Unlimited collection\nDiscogs sync\nWishlist alerts\nAdvanced search",
+    isActive: true,
+    transactionFeePercent: 4,
   },
 };
 

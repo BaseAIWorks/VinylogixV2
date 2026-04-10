@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import { getSubscriptionTiers } from '@/services/client-subscription-service';
+import { DistributorTiers, type SubscriptionInfo, type SubscriptionTier } from '@/types';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Logo } from '@/components/ui/logo';
 import {
   ArrowRight,
@@ -488,37 +491,65 @@ function PlatformShowcase() {
 // PRICING SECTION - With CTA
 // ============================================================================
 
-const tiers = [
-  {
-    name: 'Free',
-    price: '$0',
-    description: 'For collectors',
-    features: ['Up to 100 records', 'Personal collection', 'Wishlist', 'Favorites'],
-    cta: 'Get Started',
-    href: '/register/client',
-  },
-  {
-    name: 'Growth',
-    price: '$29',
-    period: '/mo',
-    description: 'For small stores',
-    features: ['Up to 1,000 records', 'Discogs integration', 'Order management', '2 users'],
-    cta: 'Start Trial',
-    href: '/pricing',
-    popular: true,
-  },
-  {
-    name: 'Scale',
-    price: '$79',
-    period: '/mo',
-    description: 'For growing businesses',
-    features: ['Unlimited records', 'AI content', 'Advanced analytics', 'Unlimited users'],
-    cta: 'Start Trial',
-    href: '/pricing',
-  },
-];
+// Matches /pricing page tier labels so the two surfaces stay consistent.
+const LANDING_TIER_LABELS: Record<string, { label: string; cta: string }> = {
+  payg: { label: 'Pay as you go', cta: 'Start Free' },
+  essential: { label: 'Essential', cta: 'Start Free Trial' },
+  growth: { label: 'Growth', cta: 'Start Free Trial' },
+  scale: { label: 'Scale', cta: 'Start Free Trial' },
+};
+
+/**
+ * Derive display features for a tier card: lead with the records bullet from
+ * maxRecords, strip records/fee lines from the free-text features to avoid
+ * duplication, cap at 4 bullets for the homepage card layout.
+ */
+function deriveFeatures(tier: SubscriptionInfo): string[] {
+  const recordsLabel =
+    tier.maxRecords === -1
+      ? 'Unlimited records'
+      : `Up to ${tier.maxRecords.toLocaleString()} records`;
+  const raw = tier.features
+    ? tier.features.split('\n').map(f => f.trim()).filter(Boolean)
+    : [];
+  const filtered = raw.filter(
+    f => !/records?/i.test(f) && !/transaction\s*fee|per\s*sale|%\s*fee/i.test(f)
+  );
+  return [recordsLabel, ...filtered].slice(0, 4);
+}
 
 function PricingSection() {
+  const [tiers, setTiers] = useState<Record<SubscriptionTier, SubscriptionInfo> | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    getSubscriptionTiers()
+      .then(data => {
+        if (!cancelled) {
+          setTiers(data);
+          setIsLoading(false);
+        }
+      })
+      .catch(err => {
+        console.error('UnifiedLanding: failed to load tiers', err);
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const activeTierKeys = tiers
+    ? DistributorTiers.filter(k => tiers[k] && tiers[k].isActive !== false)
+    : [];
+  const displayCount = isLoading || !tiers ? 3 : activeTierKeys.length;
+  const gridCols =
+    displayCount <= 1 ? 'md:grid-cols-1 max-w-sm mx-auto'
+    : displayCount === 2 ? 'md:grid-cols-2 max-w-3xl mx-auto'
+    : displayCount === 3 ? 'md:grid-cols-3'
+    : 'md:grid-cols-2 lg:grid-cols-4';
+
   return (
     <section className="py-10 sm:py-14 border-t border-border/30">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
@@ -536,54 +567,88 @@ function PricingSection() {
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {tiers.map((tier, index) => (
-            <motion.div
-              key={tier.name}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: index * 0.1 }}
-              className={cn(
-                'relative p-6 rounded-2xl border',
-                tier.popular
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border/50 bg-card/30'
-              )}
-            >
-              {tier.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-medium">
-                  Most Popular
+        <div className={cn('grid grid-cols-1 gap-6', gridCols)}>
+          {isLoading || !tiers ? (
+            [...Array(3)].map((_, i) => (
+              <div key={i} className="relative p-6 rounded-2xl border border-border/50 bg-card/30 space-y-4">
+                <Skeleton className="h-5 w-1/3" />
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-8 w-1/2" />
+                <div className="space-y-2 pt-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                  <Skeleton className="h-4 w-4/6" />
                 </div>
-              )}
-
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold">{tier.name}</h3>
-                <p className="text-sm text-muted-foreground">{tier.description}</p>
+                <Skeleton className="h-10 w-full" />
               </div>
+            ))
+          ) : (
+            activeTierKeys.map((tierKey, index) => {
+              const tier = tiers[tierKey];
+              const meta = LANDING_TIER_LABELS[tierKey] || { label: tierKey, cta: 'Get Started' };
+              const isPayg = tierKey === 'payg';
+              const isPopular = tierKey === 'growth';
+              const displayPrice = isPayg ? '€0' : (typeof tier.price === 'number' ? `€${tier.price}` : '—');
+              const period = isPayg ? '' : '/mo';
+              const features = deriveFeatures(tier);
+              const href = isPayg ? '/register?tier=payg' : '/pricing';
 
-              <div className="mb-4">
-                <span className="text-3xl font-bold">{tier.price}</span>
-                {tier.period && <span className="text-muted-foreground">{tier.period}</span>}
-              </div>
+              return (
+                <motion.div
+                  key={tierKey}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.1 }}
+                  className={cn(
+                    'relative p-6 rounded-2xl border',
+                    isPopular
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border/50 bg-card/30'
+                  )}
+                >
+                  {isPopular && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-medium">
+                      Most Popular
+                    </div>
+                  )}
 
-              <ul className="space-y-2 mb-6">
-                {tier.features.map((feature, i) => (
-                  <li key={i} className="flex items-center gap-2 text-sm">
-                    <Check className="w-4 h-4 text-primary flex-shrink-0" />
-                    <span className="text-muted-foreground">{feature}</span>
-                  </li>
-                ))}
-              </ul>
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold">{meta.label}</h3>
+                    {tier.description && (
+                      <p className="text-sm text-muted-foreground">{tier.description}</p>
+                    )}
+                  </div>
 
-              <Button
-                asChild
-                className={cn('w-full', tier.popular ? '' : 'bg-secondary hover:bg-secondary/80')}
-              >
-                <Link href={tier.href}>{tier.cta}</Link>
-              </Button>
-            </motion.div>
-          ))}
+                  <div className="mb-4">
+                    <span className="text-3xl font-bold">{displayPrice}</span>
+                    {period && <span className="text-muted-foreground">{period}</span>}
+                    {typeof tier.transactionFeePercent === 'number' && (
+                      <span className="block text-xs text-muted-foreground mt-1">
+                        {tier.transactionFeePercent}% per sale
+                      </span>
+                    )}
+                  </div>
+
+                  <ul className="space-y-2 mb-6">
+                    {features.map((feature, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm">
+                        <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                        <span className="text-muted-foreground">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Button
+                    asChild
+                    className={cn('w-full', isPopular ? '' : 'bg-secondary hover:bg-secondary/80')}
+                  >
+                    <Link href={href}>{meta.cta}</Link>
+                  </Button>
+                </motion.div>
+              );
+            })
+          )}
         </div>
 
         {/* Final CTA */}
@@ -594,7 +659,7 @@ function PricingSection() {
           className="mt-12 text-center"
         >
           <p className="text-muted-foreground mb-4">
-            Questions? We're here to help.
+            Questions? We&apos;re here to help.
           </p>
           <Button asChild variant="outline">
             <Link href="/contact">Contact Sales</Link>

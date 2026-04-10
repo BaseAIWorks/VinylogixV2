@@ -1,7 +1,8 @@
 
-"use client"; 
+"use client";
 
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { db } from '@/lib/firebase';
 import type { SubscriptionInfo, SubscriptionTier, WeightOption } from '@/types';
 
@@ -21,7 +22,9 @@ const defaultTiers: Record<SubscriptionTier, SubscriptionInfo> = {
     quarterlyPrice: 0,
     yearlyPrice: 0,
     description: "Start selling with no monthly fee. Pay only when you sell.",
-    features: "Up to 50 records\nOrder Management\n6% transaction fee\nNo monthly commitment",
+    features: "Order Management\nNo monthly commitment",
+    isActive: true,
+    transactionFeePercent: 6,
   },
   essential: {
     tier: 'essential',
@@ -34,7 +37,9 @@ const defaultTiers: Record<SubscriptionTier, SubscriptionInfo> = {
     quarterlyPrice: 25,
     yearlyPrice: 90,
     description: "For personal collectors and enthusiasts getting started.",
-    features: "Up to 100 records\nOrder Management\n4% transaction fee\nClient Accounts",
+    features: "Order Management\nClient Accounts",
+    isActive: true,
+    transactionFeePercent: 4,
   },
   growth: {
     tier: 'growth',
@@ -47,7 +52,9 @@ const defaultTiers: Record<SubscriptionTier, SubscriptionInfo> = {
     quarterlyPrice: 79,
     yearlyPrice: 290,
     description: "Ideal for small shops and growing businesses.",
-    features: "Up to 1,000 records\nOrder Management\n3% transaction fee\nClient Accounts\nBasic Analytics",
+    features: "Order Management\nClient Accounts\nBasic Analytics",
+    isActive: true,
+    transactionFeePercent: 3,
   },
   scale: {
     tier: 'scale',
@@ -60,7 +67,9 @@ const defaultTiers: Record<SubscriptionTier, SubscriptionInfo> = {
     quarterlyPrice: 220,
     yearlyPrice: 790,
     description: "For established distributors and power users.",
-    features: "Unlimited records\nAI-powered descriptions\n2% transaction fee\nAdvanced Analytics\nPriority Support",
+    features: "AI-powered descriptions\nAdvanced Analytics\nPriority Support",
+    isActive: true,
+    transactionFeePercent: 2,
   },
   collector: {
     tier: 'collector',
@@ -74,6 +83,8 @@ const defaultTiers: Record<SubscriptionTier, SubscriptionInfo> = {
     yearlyPrice: 49,
     description: "For serious vinyl collectors who want more.",
     features: "Unlimited collection\nDiscogs sync\nWishlist alerts\nAdvanced search",
+    isActive: true,
+    transactionFeePercent: 4,
   },
 };
 
@@ -106,15 +117,51 @@ export async function getSubscriptionTiers(): Promise<Record<SubscriptionTier, S
     }
 }
 
-export async function updateSubscriptionTiers(tiers: Record<SubscriptionTier, SubscriptionInfo>): Promise<boolean> {
-  const docRef = doc(db, SETTINGS_COLLECTION, SUBSCRIPTION_TIERS_DOC_ID);
-  try {
-    await setDoc(docRef, tiers, { merge: true });
-    return true;
-  } catch (error) {
-    console.error("ClientSubscriptionService: Error updating subscription tiers:", error);
-    return false;
+/**
+ * Save subscription tiers. Routes through the server endpoint, which:
+ *  - validates the payload
+ *  - syncs to Stripe (Products/Prices, active flag, fee rates)
+ *  - writes the canonical Firestore doc
+ *  - dual-writes to legacy settings/platformFees as a safety net
+ *  - invalidates server-side caches
+ *
+ * Returns the server response (tiers + stripeSync summary) or throws on error
+ * so the admin UI can surface details.
+ */
+export interface UpdateTiersResult {
+  success: boolean;
+  tiers: Record<SubscriptionTier, SubscriptionInfo>;
+  stripeSync: {
+    mode: 'live' | 'test' | 'skipped-no-key' | 'skipped-kill-switch';
+    actions: Array<Record<string, unknown>>;
+  };
+}
+
+export async function updateSubscriptionTiers(
+  tiers: Record<SubscriptionTier, SubscriptionInfo>,
+): Promise<UpdateTiersResult> {
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('Not authenticated.');
   }
+  const idToken = await user.getIdToken();
+
+  const res = await fetch('/api/admin/subscription-tiers', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({ tiers }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    const msg = data?.error || `Save failed (HTTP ${res.status})`;
+    throw new Error(msg);
+  }
+  return data as UpdateTiersResult;
 }
 
 export async function getWeightOptions(): Promise<WeightOption[]> {
