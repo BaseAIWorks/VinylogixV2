@@ -74,6 +74,8 @@ export default function OrderDetailPage() {
     const [isSendingNotification, setIsSendingNotification] = useState(false);
     const [notificationSent, setNotificationSent] = useState(false);
     const [isRecalculating, setIsRecalculating] = useState(false);
+    const [shippingCostInput, setShippingCostInput] = useState<string>('');
+    const [isSavingShipping, setIsSavingShipping] = useState(false);
     const hasUnsavedItemChanges = Object.keys(itemStatusChanges).length > 0 || Object.keys(itemQuantityChanges).length > 0;
     const hasItemStatusChanges = order?.items.some(item => item.itemStatus && item.itemStatus !== 'available') ?? false;
 
@@ -87,6 +89,7 @@ export default function OrderDetailPage() {
             const fetchedOrder = await getOrderById(orderId);
             if (fetchedOrder && (fetchedOrder.distributorId === user.distributorId || user.role === 'superadmin')) {
                 setOrder(fetchedOrder);
+                setShippingCostInput((fetchedOrder.shippingCost || 0).toString());
             } else {
                 toast({ title: "Not Found", description: "The requested order could not be found.", variant: "destructive" });
                 router.push('/orders');
@@ -343,6 +346,7 @@ export default function OrderDetailPage() {
         try {
             const updatedOrder = await recalculateOrderTax(orderId, user);
             setOrder(updatedOrder);
+            setShippingCostInput((updatedOrder.shippingCost || 0).toString());
             toast({ title: "Tax recalculated", description: "Order totals have been updated with current tax settings." });
         } catch (error: any) {
             toast({ title: "Error", description: error.message || "Failed to recalculate tax.", variant: "destructive" });
@@ -350,6 +354,28 @@ export default function OrderDetailPage() {
             setIsRecalculating(false);
         }
     };
+
+    const handleSaveShippingCost = async () => {
+        if (!order || !user) return;
+        const newCost = parseFloat(shippingCostInput.replace(',', '.')) || 0;
+        if (newCost < 0) {
+            toast({ title: "Invalid amount", description: "Shipping cost cannot be negative.", variant: "destructive" });
+            return;
+        }
+        setIsSavingShipping(true);
+        try {
+            const updatedOrder = await recalculateOrderTax(orderId, user, newCost);
+            setOrder(updatedOrder);
+            setShippingCostInput((updatedOrder.shippingCost || 0).toString());
+            toast({ title: "Shipping cost updated", description: "Order totals and tax recalculated." });
+        } catch (error: any) {
+            toast({ title: "Error", description: error.message || "Failed to update shipping cost.", variant: "destructive" });
+        } finally {
+            setIsSavingShipping(false);
+        }
+    };
+
+    const hasShippingChange = order ? parseFloat(shippingCostInput.replace(',', '.') || '0') !== (order.shippingCost || 0) : false;
 
     const getEffectiveItemStatus = (recordId: string): OrderItemStatus => {
         return itemStatusChanges[recordId] ?? order?.items.find(i => i.recordId === recordId)?.itemStatus ?? 'available';
@@ -591,8 +617,28 @@ export default function OrderDetailPage() {
                                         </p>
                                     </>
                                 )}
-                                {order.shippingCost !== undefined && order.shippingCost > 0 && (
-                                    <p className="text-sm text-muted-foreground">Shipping{order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}: € {formatPriceForDisplay(order.shippingCost)}</p>
+                                {/* Editable shipping cost */}
+                                {order.status !== 'shipped' && order.status !== 'cancelled' ? (
+                                    <div className="flex items-center justify-end gap-2 py-1">
+                                        <span className="text-sm text-muted-foreground">Shipping{order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}:</span>
+                                        <span className="text-sm">€</span>
+                                        <Input
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={shippingCostInput}
+                                            onChange={(e) => setShippingCostInput(e.target.value)}
+                                            onBlur={() => { if (hasShippingChange) handleSaveShippingCost(); }}
+                                            onKeyDown={(e) => { if (e.key === 'Enter' && hasShippingChange) handleSaveShippingCost(); }}
+                                            className="w-20 h-7 text-right text-sm"
+                                            placeholder="0.00"
+                                            disabled={isSavingShipping}
+                                        />
+                                        {isSavingShipping && <Loader2 className="h-3 w-3 animate-spin" />}
+                                    </div>
+                                ) : (
+                                    order.shippingCost !== undefined && order.shippingCost > 0 && (
+                                        <p className="text-sm text-muted-foreground">Shipping{order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}: € {formatPriceForDisplay(order.shippingCost)}</p>
+                                    )
                                 )}
                                 {order.freeShippingApplied && (
                                     <p className="text-sm text-green-600">Free shipping applied</p>

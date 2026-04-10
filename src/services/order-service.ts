@@ -230,7 +230,8 @@ export async function updateOrderItemStatuses(
 
 export async function recalculateOrderTax(
   orderId: string,
-  actingUser: User
+  actingUser: User,
+  manualShippingCost?: number
 ): Promise<Order> {
   if (!actingUser.distributorId) throw new Error("User has no distributorId.");
 
@@ -264,12 +265,12 @@ export async function recalculateOrderTax(
   // Determine reverse charge from stored order data
   const reverseCharge = orderData.isReverseCharge || false;
 
-  // Recalculate tax with current distributor settings
+  // Recalculate tax with current distributor settings (on product total only)
   const { calculateTax } = await import('@/lib/tax-utils');
   const taxResult = calculateTax(itemTotal, distributor.manualTaxRate, taxBehavior, reverseCharge);
 
-  // Preserve shipping cost in the grand total
-  const shippingCost = orderData.shippingCost || 0;
+  // Use manual shipping cost if provided, otherwise preserve existing
+  const shippingCost = manualShippingCost !== undefined ? manualShippingCost : (orderData.shippingCost || 0);
 
   const updatePayload: any = {
     subtotalAmount: taxResult.subtotal,
@@ -279,6 +280,7 @@ export async function recalculateOrderTax(
     taxInclusive: taxBehavior === 'inclusive',
     taxLabel: distributor.manualTaxLabel || 'VAT',
     isReverseCharge: taxResult.isReverseCharge,
+    shippingCost,
     updatedAt: Timestamp.now(),
   };
 
