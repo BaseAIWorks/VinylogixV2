@@ -674,7 +674,7 @@ export default function ClientsPage() {
                           {isNewClient(client) && (
                             <span className="inline-flex items-center rounded-full bg-blue-500/10 border border-blue-500/30 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">New</span>
                           )}
-                          {client.originType === 'invited' && (
+                          {(client.originType === 'invited' || (!client.originType && client.invitedByDistributorId)) && (
                             <span className="inline-flex items-center rounded-full bg-indigo-500/10 border border-indigo-500/30 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600" title={client.originDistributorName ? `Invited by ${client.originDistributorName}` : 'Invited'}>Invited</span>
                           )}
                           {client.originType === 'access_request' && (
