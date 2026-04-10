@@ -835,6 +835,12 @@ export interface SystemLog {
   source: SystemLogSource;
   status: SystemLogStatus;
   message: string;
+  // User context (when available)
+  userId?: string;
+  userEmail?: string;
+  userRole?: string;
+  // Page context (for client-initiated actions)
+  page?: string;
   metadata?: {
     endpoint?: string;
     statusCode?: number;

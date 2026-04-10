@@ -31,9 +31,10 @@ interface ValidatedCartItem {
 }
 
 export async function POST(req: NextRequest) {
+  let caller: Awaited<ReturnType<typeof verifyAuth>> = null;
   try {
     // Verify authentication and extract userId from token
-    const caller = await verifyAuth(req);
+    caller = await verifyAuth(req);
     const userId = caller?.uid || '';
 
     const { distributorId, items, customerEmail, customerName, shippingAddress, billingAddress, customerCountry, shippingMethod } = await req.json();
@@ -252,11 +253,31 @@ export async function POST(req: NextRequest) {
     });
 
     const { logSystemEvent } = await import('@/services/system-log-service');
-    logSystemEvent({ type: 'api_call', source: 'stripe_checkout', status: 'success', message: `Checkout session created for ${distributorId}`, metadata: { distributorId } });
+    logSystemEvent({
+      type: 'api_call',
+      source: 'stripe_checkout',
+      status: 'success',
+      message: `Checkout session created for ${distributorId}`,
+      userId: caller?.uid,
+      userEmail: caller?.email,
+      userRole: caller?.role,
+      page: '/checkout',
+      metadata: { distributorId },
+    });
     return NextResponse.json({ sessionId: session.id, url: session.url });
   } catch (error: any) {
     console.error('Stripe Connect Checkout Error:', error);
-    import('@/services/system-log-service').then(m => m.logSystemEvent({ type: 'api_error', source: 'stripe_checkout', status: 'error', message: `Checkout failed: ${error.message}`, metadata: { errorMessage: error.message } }));
+    import('@/services/system-log-service').then(m => m.logSystemEvent({
+      type: 'api_error',
+      source: 'stripe_checkout',
+      status: 'error',
+      message: `Checkout failed: ${error.message}`,
+      userId: caller?.uid,
+      userEmail: caller?.email,
+      userRole: caller?.role,
+      page: '/checkout',
+      metadata: { errorMessage: error.message },
+    }));
     return NextResponse.json(
       { error: `Checkout failed: ${error.message}` },
       { status: 500 }

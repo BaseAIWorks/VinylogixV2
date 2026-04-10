@@ -20,22 +20,30 @@ const processLogTimestamps = (data: any): SystemLog => {
 /**
  * Log a system event (API call, webhook, error, alert).
  * Designed to be fire-and-forget — never throws.
+ *
+ * Optional user context (userId, userEmail, userRole) and page context
+ * help admins trace which user/page triggered the event.
  */
 export async function logSystemEvent(event: {
   type: SystemLogType;
   source: SystemLogSource;
   status: SystemLogStatus;
   message: string;
+  userId?: string;
+  userEmail?: string;
+  userRole?: string;
+  page?: string;
   metadata?: SystemLog['metadata'];
 }): Promise<void> {
   try {
     const adminDb = getAdminDb();
     if (!adminDb) return;
-    await adminDb.collection(SYSTEM_LOGS_COLLECTION).add({
-      ...event,
-      createdAt: Timestamp.now(),
-      isResolved: false,
+    // Strip undefined fields (Firestore doesn't accept them)
+    const cleaned: any = { createdAt: Timestamp.now(), isResolved: false };
+    Object.entries(event).forEach(([key, value]) => {
+      if (value !== undefined) cleaned[key] = value;
     });
+    await adminDb.collection(SYSTEM_LOGS_COLLECTION).add(cleaned);
   } catch (error) {
     // Silent fail — system logging should never block API routes
     console.error('Failed to log system event:', error);

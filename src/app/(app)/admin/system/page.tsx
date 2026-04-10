@@ -217,6 +217,8 @@ export default function AdminSystemPage() {
                     <TableHead>Time</TableHead>
                     <TableHead>Source</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>User</TableHead>
+                    <TableHead className="hidden md:table-cell">Page</TableHead>
                     <TableHead>Message</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -233,7 +235,20 @@ export default function AdminSystemPage() {
                       <TableCell>
                         <Badge variant="outline" className={`text-[10px] ${statusColors[log.status] || ''}`}>{log.status}</Badge>
                       </TableCell>
-                      <TableCell className="text-sm max-w-[400px] truncate">{log.message}</TableCell>
+                      <TableCell className="text-xs">
+                        {log.userEmail ? (
+                          <div className="flex flex-col">
+                            <span className="text-foreground truncate max-w-[160px]" title={log.userEmail}>{log.userEmail}</span>
+                            {log.userRole && <span className="text-muted-foreground capitalize">{log.userRole}</span>}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground italic">system</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                        {log.page ? <code className="bg-muted px-1.5 py-0.5 rounded text-[10px]">{log.page}</code> : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm max-w-[400px] truncate" title={log.message}>{log.message}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
