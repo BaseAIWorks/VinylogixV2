@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
       companyName: distributorData?.companyName || distributorData?.name,
       contactEmail: distributorData?.contactEmail || inviterData.email || 'support@vinylogix.com'
     };
+    const customMessage = distributorData?.invitationEmailCustomText || undefined;
 
     const websiteUrl = `${req.nextUrl.protocol}//${req.nextUrl.host}`;
 
@@ -136,7 +137,7 @@ export async function POST(req: NextRequest) {
       });
 
       try {
-        await sendExistingAccountInvitationEmail({ clientEmail: email, distributor: distributorInfo, websiteUrl });
+        await sendExistingAccountInvitationEmail({ clientEmail: email, distributor: distributorInfo, websiteUrl, customMessage });
       } catch (emailError) {
         console.error('Failed to send invitation email:', emailError);
       }
@@ -187,7 +188,7 @@ export async function POST(req: NextRequest) {
       await adminDb.collection('users').doc(userRecord.uid).set(newUserFirestoreData);
 
       try {
-        await sendNewAccountInvitationEmail({ clientEmail: email, temporaryPassword, distributor: distributorInfo, websiteUrl });
+        await sendNewAccountInvitationEmail({ clientEmail: email, temporaryPassword, distributor: distributorInfo, websiteUrl, customMessage });
       } catch (emailError) {
         console.error('Failed to send invitation email:', emailError);
       }

@@ -226,6 +226,9 @@ export interface Distributor {
   paypalEmail?: string; // PayPal account email
   paypalAccountStatus?: 'pending' | 'verified' | 'restricted';
 
+  // Marketing Settings
+  invitationEmailCustomText?: string; // Personal message added to client invitation emails (max 500 chars, supports markdown)
+
   // Invoice Settings
   invoicePaymentTerms?: string; // e.g., "Payment due within 14 days"
   invoiceNotes?: string; // Default notes to include on invoices

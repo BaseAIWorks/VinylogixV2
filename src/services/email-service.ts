@@ -2,6 +2,7 @@ import { resend } from '@/lib/resend';
 import { format } from 'date-fns';
 import type { Order, OrderItemStatus } from '@/types';
 import { formatPriceForDisplay } from '@/lib/utils';
+import { markdownToSafeHtml, escapeHtml } from '@/lib/markdown-utils';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
 
@@ -16,13 +17,26 @@ interface NewAccountEmailData {
   temporaryPassword: string;
   distributor: DistributorInfo;
   websiteUrl: string;
+  customMessage?: string;
 }
 
 interface ExistingAccountEmailData {
   clientEmail: string;
   distributor: DistributorInfo;
   websiteUrl: string;
+  customMessage?: string;
 }
+
+// Renders the distributor's custom invitation message as an email block
+const createCustomMessageHtml = (customMessage: string | undefined, distributor: DistributorInfo): string => {
+  if (!customMessage || !customMessage.trim()) return '';
+  return `
+    <div style="margin: 20px 0; padding: 16px; background: #f9fafb; border-left: 4px solid #d1d5db; border-radius: 4px;">
+      <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Message from ${escapeHtml(distributor.companyName || distributor.name)}</p>
+      <div style="margin: 0; font-size: 14px; color: #374151; line-height: 1.5;">${markdownToSafeHtml(customMessage)}</div>
+    </div>
+  `;
+};
 
 // Promotional footer for invitation emails — encourages shop owners to become distributors
 const createDistributorPromoHtml = () => `
@@ -74,7 +88,9 @@ const createNewAccountEmailHtml = (data: NewAccountEmailData) => `
         <p>Hello!</p>
         
         <p>You have been invited to join <strong>Vinylogix</strong> by <strong>${data.distributor.companyName || data.distributor.name}</strong>. A new client account has been created for you with access to their vinyl record catalog.</p>
-        
+
+        ${createCustomMessageHtml(data.customMessage, data.distributor)}
+
         <div class="credentials">
             <h3>🔐 Your Login Credentials</h3>
             <p><strong>Email:</strong> ${data.clientEmail}</p>
@@ -132,7 +148,9 @@ const createExistingAccountEmailHtml = (data: ExistingAccountEmailData) => `
         <p>Hello!</p>
         
         <p>Great news! <strong>${data.distributor.companyName || data.distributor.name}</strong> has granted you access to their vinyl record catalog on <strong>Vinylogix</strong>.</p>
-        
+
+        ${createCustomMessageHtml(data.customMessage, data.distributor)}
+
         <div class="highlight">
             <h3>✅ Access Granted</h3>
             <p>You can now browse and purchase from their collection using your existing Vinylogix account.</p>

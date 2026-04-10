@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users, Clock, RefreshCw, Truck, Receipt, CheckCircle2, FileText, Landmark, Bold, Italic, Underline, Strikethrough, ArrowUp, ArrowDown, Plus, Trash2, Wallet } from "lucide-react";
+import { UserCircle, Bell, DatabaseZap, Palette, LogOut, Loader2, Save, Home, KeyRound, View, Link as LinkIcon, MenuSquare, Check, AlertCircle, ExternalLink, CreditCard, FileDown, X, Building2, Package, Users, Clock, RefreshCw, Truck, Receipt, CheckCircle2, FileText, Landmark, Bold, Italic, Underline, Strikethrough, ArrowUp, ArrowDown, Plus, Trash2, Wallet, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useState, useEffect, useCallback } from "react";
@@ -142,6 +142,13 @@ type NotificationsFormValues = z.infer<typeof notificationsFormSchema>;
 type CardDisplayFormValues = z.infer<typeof cardDisplayFormSchema>;
 type ClientMenuFormValues = z.infer<typeof clientMenuFormSchema>;
 type InvoiceSettingsFormValues = z.infer<typeof invoiceSettingsFormSchema>;
+
+const marketingFormSchema = z.object({
+  invitationEmailCustomText: z.string()
+    .max(500, "Custom message can be at most 500 characters.")
+    .optional(),
+});
+type MarketingFormValues = z.infer<typeof marketingFormSchema>;
 
 
 const roleDisplayNames: Record<UserRole, string> = {
@@ -344,6 +351,13 @@ export default function SettingsPage() {
       },
   });
 
+  const marketingForm = useForm<MarketingFormValues>({
+      resolver: zodResolver(marketingFormSchema),
+      defaultValues: {
+          invitationEmailCustomText: "",
+      },
+  });
+
   useEffect(() => {
     if (user) {
         profileForm.reset({
@@ -427,6 +441,9 @@ export default function SettingsPage() {
             iban: activeDistributor.iban || "",
             bic: activeDistributor.bic || "",
             bankName: activeDistributor.bankName || "",
+        });
+        marketingForm.reset({
+            invitationEmailCustomText: activeDistributor.invitationEmailCustomText || "",
         });
 
         // Load payment accounts (migrate legacy bank details if no accounts exist)
@@ -525,6 +542,15 @@ export default function SettingsPage() {
       await updateMyDistributorSettings({ ...values, paymentAccounts: validAccounts });
       setPaymentAccounts(validAccounts);
       showSaveSuccess('invoiceSettings');
+  };
+
+  const handleMarketingUpdate = async (values: MarketingFormValues) => {
+      try {
+          await updateMyDistributorSettings(values);
+          showSaveSuccess('marketing');
+      } catch (error) {
+          toast({ title: "Error", description: "Failed to save marketing settings.", variant: "destructive" });
+      }
   };
 
   // Payment accounts management (max 5)
@@ -995,7 +1021,7 @@ export default function SettingsPage() {
         )}
 
         <Tabs defaultValue={tabParam || (isMaster || isSuperAdmin ? "business" : "account")} className="w-full">
-          <TabsList className={`grid w-full mb-6 ${isMaster ? 'grid-cols-5' : isSuperAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <TabsList className={`grid w-full mb-6 ${isMaster ? 'grid-cols-6' : isSuperAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
             {(isMaster || isSuperAdmin) && (
               <TabsTrigger value="business" className="gap-2">
                 <Building2 className="h-4 w-4" />
@@ -1018,6 +1044,12 @@ export default function SettingsPage() {
               <TabsTrigger value="storefront" className="gap-2">
                 <ExternalLink className="h-4 w-4" />
                 <span className="hidden sm:inline">Storefront</span>
+              </TabsTrigger>
+            )}
+            {isMaster && (
+              <TabsTrigger value="marketing" className="gap-2">
+                <Megaphone className="h-4 w-4" />
+                <span className="hidden sm:inline">Marketing</span>
               </TabsTrigger>
             )}
             <TabsTrigger value="account" className="gap-2">
@@ -2325,6 +2357,78 @@ export default function SettingsPage() {
                       }
                     }}
                   />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {/* ==================== MARKETING TAB ==================== */}
+          {isMaster && (
+            <TabsContent value="marketing" className="space-y-6">
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-3">
+                    <Megaphone className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-lg">Client Invitation Email</CardTitle>
+                  </div>
+                  <CardDescription className="text-sm">Add a personal message that will be included in all client invitation emails.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Form {...marketingForm}>
+                    <form onSubmit={marketingForm.handleSubmit(handleMarketingUpdate)} className="space-y-4">
+                      <FormField control={marketingForm.control} name="invitationEmailCustomText" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm">Custom Message</FormLabel>
+                          <FormControl>
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-1 p-1 border rounded-md bg-muted/30 w-fit">
+                                <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Bold: wrap text with **text**"
+                                  onClick={() => { const ta = document.getElementById('marketingCustomText') as HTMLTextAreaElement; if(ta) { const start = ta.selectionStart; const end = ta.selectionEnd; const text = field.value || ''; const selected = text.substring(start, end); const newText = text.substring(0, start) + '**' + selected + '**' + text.substring(end); field.onChange(newText); } }}>
+                                  <Bold className="h-4 w-4" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Italic: wrap text with *text*"
+                                  onClick={() => { const ta = document.getElementById('marketingCustomText') as HTMLTextAreaElement; if(ta) { const start = ta.selectionStart; const end = ta.selectionEnd; const text = field.value || ''; const selected = text.substring(start, end); const newText = text.substring(0, start) + '*' + selected + '*' + text.substring(end); field.onChange(newText); } }}>
+                                  <Italic className="h-4 w-4" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Underline: wrap text with __text__"
+                                  onClick={() => { const ta = document.getElementById('marketingCustomText') as HTMLTextAreaElement; if(ta) { const start = ta.selectionStart; const end = ta.selectionEnd; const text = field.value || ''; const selected = text.substring(start, end); const newText = text.substring(0, start) + '__' + selected + '__' + text.substring(end); field.onChange(newText); } }}>
+                                  <Underline className="h-4 w-4" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" title="Insert link"
+                                  onClick={() => {
+                                    const ta = document.getElementById('marketingCustomText') as HTMLTextAreaElement;
+                                    if(!ta) return;
+                                    const url = window.prompt("Enter URL (must start with http:// or https://):");
+                                    if (!url || !/^https?:\/\//.test(url)) return;
+                                    const start = ta.selectionStart;
+                                    const end = ta.selectionEnd;
+                                    const text = field.value || '';
+                                    const selected = text.substring(start, end) || 'link text';
+                                    const newText = text.substring(0, start) + '[' + selected + '](' + url + ')' + text.substring(end);
+                                    field.onChange(newText);
+                                  }}>
+                                  <LinkIcon className="h-4 w-4" />
+                                </Button>
+                              </div>
+                              <Textarea
+                                id="marketingCustomText"
+                                placeholder="e.g., Welcome to our store! We're excited to have you on board.&#10;&#10;Use **bold**, *italic*, __underline__, or [link text](https://example.com) for formatting."
+                                rows={6}
+                                maxLength={500}
+                                className="min-h-[140px]"
+                                {...field}
+                              />
+                            </div>
+                          </FormControl>
+                          <FormDescription className="text-xs">
+                            {(field.value?.length || 0)}/500 characters · This message appears in all client invitation emails as a "Message from {activeDistributor?.companyName || activeDistributor?.name || '[Your Company]'}" section.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <SaveButton formName="marketing" isSubmitting={marketingForm.formState.isSubmitting} />
+                    </form>
+                  </Form>
                 </CardContent>
               </Card>
             </TabsContent>

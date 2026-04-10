@@ -41,6 +41,7 @@ import { DataTableToolbar } from "@/components/ui/data-table-toolbar";
 import { BulkActionsBar, type BulkAction } from "@/components/ui/bulk-actions-bar";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatPriceForDisplay } from "@/lib/utils";
+import { markdownToSafeHtml } from "@/lib/markdown-utils";
 
 type ClientStatus = 'pending' | 'active' | 'registered' | 'inactive';
 
@@ -54,7 +55,8 @@ interface ClientWithStats extends User {
 }
 
 export default function ClientsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, activeDistributor, loading: authLoading } = useAuth();
+  const customInviteText = activeDistributor?.invitationEmailCustomText;
   const router = useRouter();
   const { toast } = useToast();
 
@@ -575,6 +577,35 @@ export default function ClientsPage() {
                       onChange={(e) => setInviteName(e.target.value)}
                     />
                   </div>
+                  {customInviteText ? (
+                    <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Custom message included
+                        </p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => router.push('/settings?tab=marketing')}
+                        >
+                          <Edit className="h-3 w-3 mr-1" /> Edit
+                        </Button>
+                      </div>
+                      <div
+                        className="text-xs text-muted-foreground line-clamp-4"
+                        dangerouslySetInnerHTML={{ __html: markdownToSafeHtml(customInviteText) }}
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Want to add a personal message to invitation emails?{' '}
+                      <Link href="/settings?tab=marketing" className="text-primary underline">
+                        Set it up
+                      </Link>
+                    </p>
+                  )}
                 </div>
                 <DialogFooter>
                   <DialogClose asChild><Button type="button" variant="ghost">Cancel</Button></DialogClose>
