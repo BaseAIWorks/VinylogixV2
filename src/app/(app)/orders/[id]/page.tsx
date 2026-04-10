@@ -609,15 +609,10 @@ export default function OrderDetailPage() {
                                 {order.originalTotalAmount && order.originalTotalAmount !== order.totalAmount && (
                                     <p className="text-sm text-muted-foreground">Original total: <span className="line-through">€ {formatPriceForDisplay(order.originalTotalAmount)}</span></p>
                                 )}
-                                {order.subtotalAmount !== undefined && order.taxAmount !== undefined && (
-                                    <>
-                                        <p className="text-sm text-muted-foreground">Subtotal excl. {order.taxLabel || 'VAT'}: € {formatPriceForDisplay(order.subtotalAmount)}</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            {order.taxLabel || 'VAT'} {order.isReverseCharge ? '0% (Reverse charge)' : `${order.taxRate || 0}%`}: € {formatPriceForDisplay(order.taxAmount)}
-                                        </p>
-                                    </>
+                                {order.subtotalAmount !== undefined && (
+                                    <p className="text-sm text-muted-foreground">Subtotal excl. {order.taxLabel || 'VAT'}: € {formatPriceForDisplay(order.subtotalAmount)}</p>
                                 )}
-                                {/* Editable shipping cost */}
+                                {/* Editable shipping cost — shown above VAT so VAT is calculated on subtotal + shipping */}
                                 {order.status !== 'shipped' && order.status !== 'cancelled' ? (
                                     <div className="flex items-center justify-end gap-2 py-1">
                                         <span className="text-sm text-muted-foreground">Shipping{order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}:</span>
@@ -645,6 +640,11 @@ export default function OrderDetailPage() {
                                 )}
                                 {order.shippingMethod === 'pickup' && (
                                     <p className="text-sm text-muted-foreground">Pickup (no shipping)</p>
+                                )}
+                                {order.taxAmount !== undefined && (
+                                    <p className="text-sm text-muted-foreground">
+                                        {order.taxLabel || 'VAT'} {order.isReverseCharge ? '0% (Reverse charge)' : `${order.taxRate || 0}%`}: € {formatPriceForDisplay(order.taxAmount)}
+                                    </p>
                                 )}
                                 <p className="font-semibold text-lg">Total: € {formatPriceForDisplay(order.totalAmount)}</p>
                                 {order.isReverseCharge && <p className="text-xs text-muted-foreground italic">Reverse charge — VAT to be accounted for by the recipient.</p>}

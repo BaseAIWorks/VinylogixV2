@@ -507,6 +507,25 @@ export async function generateInvoicePdf(
     doc.text(`\u20AC ${formatPriceForDisplay(order.subtotalAmount)}`, pageWidth - margin, currentY, { align: 'right' });
     currentY += 4;
 
+    // Shipping line — shown above VAT so VAT is calculated on subtotal + shipping
+    if (order.shippingCost !== undefined && order.shippingCost > 0) {
+      doc.setTextColor(...COLORS.secondary);
+      doc.text(`Shipping${order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}:`, totalsX, currentY);
+      doc.setTextColor(...COLORS.text);
+      doc.text(`\u20AC ${formatPriceForDisplay(order.shippingCost)}`, pageWidth - margin, currentY, { align: 'right' });
+      currentY += 4;
+    } else if (order.freeShippingApplied) {
+      doc.setTextColor(...COLORS.secondary);
+      doc.text('Shipping:', totalsX, currentY);
+      doc.setTextColor(...COLORS.text);
+      doc.text('Free', pageWidth - margin, currentY, { align: 'right' });
+      currentY += 4;
+    } else if (order.shippingMethod === 'pickup') {
+      doc.setTextColor(...COLORS.secondary);
+      doc.text('Pickup (no shipping)', totalsX, currentY);
+      currentY += 4;
+    }
+
     // Tax line(s)
     if (order.taxBreakdown && order.taxBreakdown.length > 0) {
       for (const tax of order.taxBreakdown) {
@@ -536,31 +555,6 @@ export async function generateInvoicePdf(
     doc.setLineWidth(0.3);
     doc.line(totalsX - 5, currentY, pageWidth - margin, currentY);
     currentY += 5;
-  }
-
-  // Shipping line
-  if (order.shippingCost !== undefined && order.shippingCost > 0) {
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...COLORS.secondary);
-    doc.text(`Shipping${order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}:`, totalsX, currentY);
-    doc.setTextColor(...COLORS.text);
-    doc.text(`\u20AC ${formatPriceForDisplay(order.shippingCost)}`, pageWidth - margin, currentY, { align: 'right' });
-    currentY += 4;
-  } else if (order.freeShippingApplied) {
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...COLORS.secondary);
-    doc.text('Shipping:', totalsX, currentY);
-    doc.setTextColor(...COLORS.text);
-    doc.text('Free', pageWidth - margin, currentY, { align: 'right' });
-    currentY += 4;
-  } else if (order.shippingMethod === 'pickup') {
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...COLORS.secondary);
-    doc.text('Pickup (no shipping)', totalsX, currentY);
-    currentY += 4;
   }
 
   // Total

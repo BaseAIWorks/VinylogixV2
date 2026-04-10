@@ -262,25 +262,55 @@ export async function recalculateOrderTax(
   });
   const itemTotal = activeItems.reduce((sum, item) => sum + (item.priceAtTimeOfOrder * item.quantity), 0);
 
+  // Use manual shipping cost if provided, otherwise preserve existing
+  const enteredShipping = manualShippingCost !== undefined ? manualShippingCost : (orderData.shippingCost || 0);
+
   // Determine reverse charge from stored order data
   const reverseCharge = orderData.isReverseCharge || false;
 
-  // Recalculate tax with current distributor settings (on product total only)
-  const { calculateTax } = await import('@/lib/tax-utils');
-  const taxResult = calculateTax(itemTotal, distributor.manualTaxRate, taxBehavior, reverseCharge);
+  const rate = distributor.manualTaxRate;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
 
-  // Use manual shipping cost if provided, otherwise preserve existing
-  const shippingCost = manualShippingCost !== undefined ? manualShippingCost : (orderData.shippingCost || 0);
+  // Compute products and shipping excl tax + tax + total
+  // VAT applies to BOTH products and shipping (EU standard)
+  let productsExcl: number;
+  let shippingExcl: number;
+  let taxAmount: number;
+  let totalAmount: number;
+
+  if (taxBehavior === 'inclusive') {
+    // Both itemTotal and enteredShipping are inclusive of tax
+    productsExcl = round2(itemTotal / (1 + rate / 100));
+    shippingExcl = round2(enteredShipping / (1 + rate / 100));
+    if (reverseCharge) {
+      taxAmount = 0;
+      totalAmount = round2(productsExcl + shippingExcl);
+    } else {
+      taxAmount = round2((itemTotal + enteredShipping) - (productsExcl + shippingExcl));
+      totalAmount = round2(itemTotal + enteredShipping);
+    }
+  } else {
+    // exclusive — itemTotal and enteredShipping are excl tax
+    productsExcl = itemTotal;
+    shippingExcl = enteredShipping;
+    if (reverseCharge) {
+      taxAmount = 0;
+      totalAmount = round2(productsExcl + shippingExcl);
+    } else {
+      taxAmount = round2((productsExcl + shippingExcl) * (rate / 100));
+      totalAmount = round2(productsExcl + shippingExcl + taxAmount);
+    }
+  }
 
   const updatePayload: any = {
-    subtotalAmount: taxResult.subtotal,
-    taxAmount: taxResult.taxAmount,
-    totalAmount: taxResult.total + shippingCost,
-    taxRate: taxResult.taxRate,
+    subtotalAmount: productsExcl,
+    taxAmount,
+    totalAmount,
+    taxRate: reverseCharge ? 0 : rate,
     taxInclusive: taxBehavior === 'inclusive',
     taxLabel: distributor.manualTaxLabel || 'VAT',
-    isReverseCharge: taxResult.isReverseCharge,
-    shippingCost,
+    isReverseCharge: reverseCharge,
+    shippingCost: shippingExcl,
     updatedAt: Timestamp.now(),
   };
 
