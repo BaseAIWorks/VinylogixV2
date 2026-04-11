@@ -76,18 +76,11 @@ const navItems: NavItem[] = [
   },
   { name: 'Pricing', href: '/pricing' },
   {
-    name: 'Resources',
-    children: [
-      { name: 'Help Center', href: '/help', description: 'Guides and FAQs' },
-      { name: 'Contact', href: '/contact', description: 'Talk to our team' },
-      { name: 'Status', href: '/status', description: 'Live system status' },
-    ],
-  },
-  {
     name: 'Company',
     children: [
       { name: 'About', href: '/about', description: 'Who we are' },
       { name: 'Careers', href: '/careers', description: 'Join the team' },
+      { name: 'Contact', href: '/contact', description: 'Talk to our team' },
     ],
   },
 ];

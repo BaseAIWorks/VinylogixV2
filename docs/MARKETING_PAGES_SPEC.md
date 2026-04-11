@@ -63,11 +63,10 @@ Implemented in `src/components/landing/Header.tsx`.
 
 | # | Item       | Type     | Contents                                                                                   |
 |---|------------|----------|--------------------------------------------------------------------------------------------|
-| 1 | Product    | dropdown | Features → `/features` · Integrations → `/integrations` · Discogs Sync → `/discogs` · Security → `/security` |
+| 1 | Product    | dropdown | Features → `/features` · Integrations → `/integrations` · Discogs Sync → `/discogs-sync` · Security → `/security` |
 | 2 | Solutions  | dropdown | For Distributors → `/for-distributors` · For Collectors → `/for-collectors` · All Solutions → `/solutions` |
 | 3 | Pricing    | link     | → `/pricing`                                                                               |
-| 4 | Resources  | dropdown | Help Center → `/help` · Contact → `/contact` · Status → `/status`                          |
-| 5 | Company    | dropdown | About → `/about` · Careers → `/careers`                                                    |
+| 4 | Company    | dropdown | About → `/about` · Careers → `/careers` · Contact → `/contact`                             |
 
 **Right side (unauthenticated):**
 - `Log in` (ghost button) → `/login`
@@ -76,7 +75,12 @@ Implemented in `src/components/landing/Header.tsx`.
 **Right side (authenticated):** unchanged — existing avatar dropdown with
 Dashboard / Settings / Log out.
 
-**Mobile:** slide-in drawer (Sheet component). Shows all five top-level items
+**Resources removed from top nav** by product decision. Help Center, Contact,
+and Status still live in the **footer** under the Resources column. Contact
+was moved into the Company dropdown so it remains reachable from the top nav
+without a dedicated Resources menu.
+
+**Mobile:** slide-in drawer (Sheet component). Shows all four top-level items
 as accordion sections with their sub-items. Must include the Log in + Get
 Started CTAs at the bottom. Do not just hide the nav on mobile.
 
