@@ -1514,7 +1514,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (loading || isImpersonating) return;
 
-    const publicRoutes = ['/', '/login', '/get-started', '/register/client', '/register', '/features', '/pricing', '/help', '/contact', '/solutions'];
+    // Public routes that unauthenticated visitors can reach without being
+    // redirected to /login. Keep in sync with the marketing site — every new
+    // page under src/app/(marketing)/ must be added here.
+    // See docs/MARKETING_PAGES_SPEC.md.
+    const publicRoutes = [
+      '/',
+      // auth
+      '/login', '/get-started', '/register/client', '/register',
+      // marketing
+      '/features', '/pricing', '/help', '/contact', '/solutions',
+      '/about', '/careers', '/security', '/integrations', '/discogs-sync',
+      '/status', '/for-distributors', '/for-collectors',
+      // legal
+      '/privacy', '/terms', '/cookies', '/gdpr',
+    ];
     const isPublicRoute =
       publicRoutes.includes(pathname) ||
       pathname.startsWith('/register') ||
