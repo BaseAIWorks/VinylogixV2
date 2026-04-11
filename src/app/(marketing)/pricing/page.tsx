@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Check, Flame, Calculator, ScanLine, BarChart3, Users, Building, Gift, Clock, Minus, Zap, Shield, Disc3 } from "lucide-react";
+import { ArrowRight, Check, Flame, Calculator, ScanLine, BarChart3, Users, Building, Gift, Clock, Minus, Zap, Shield, Disc3, Heart, Store, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -13,7 +13,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import { formatPriceForDisplay } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Header, Footer } from "@/components/landing";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
@@ -290,11 +289,8 @@ export default function PricingPage() {
   const savings = otherPlatformTotalFee - vinylogixTotalFee;
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <Header />
-
-      <main className="flex-grow">
-        {/* Hero */}
+    <>
+      {/* Hero */}
         <section className="relative overflow-hidden pt-28 pb-8 md:pt-36 md:pb-12">
           <div className="absolute inset-0 z-0">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.08),transparent_70%)]" />
@@ -394,14 +390,144 @@ export default function PricingPage() {
               );
             })()}
 
-            {/* Client callout */}
-            <div className="mt-8 text-center">
-              <p className="text-sm text-muted-foreground">
-                Looking to browse and collect?{' '}
-                <Link href="/get-started?role=collector" className="font-medium text-primary hover:underline">
-                  Create a free collector account
-                </Link>
+          </div>
+        </section>
+
+        {/* Account comparison — collector vs shop/distributor */}
+        <section className="py-16 sm:py-20 border-t">
+          <div className="container mx-auto max-w-6xl px-4">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                Which account is right for you?
+              </h2>
+              <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
+                Vinylogix serves two audiences. Pick the one that fits — you can always upgrade later.
               </p>
+            </div>
+
+            <div className="mt-12 grid gap-6 lg:grid-cols-2">
+              {/* Collector account */}
+              <div className="relative flex flex-col rounded-2xl border bg-card p-6 sm:p-8 transition-all hover:border-primary/30 hover:shadow-lg">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-primary/10 p-2.5">
+                      <Heart className="h-5 w-5 text-primary" />
+                    </div>
+                    <h3 className="text-xl font-semibold">Collector account</h3>
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-3 py-1 text-xs font-semibold text-green-700 dark:text-green-400">
+                    <Sparkles className="h-3 w-3" />
+                    Free forever
+                  </span>
+                </div>
+
+                <div className="mt-4 flex items-baseline gap-1">
+                  <span className="text-4xl font-bold tracking-tight">€0</span>
+                  <span className="text-sm text-muted-foreground">/month · no credit card</span>
+                </div>
+
+                <div className="mt-5 rounded-lg bg-muted/50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Best for</p>
+                  <p className="mt-1 text-sm text-foreground/90">
+                    Vinyl enthusiasts and personal collectors who want to track their own collection, build a wishlist, and buy from distributors and record shops.
+                  </p>
+                </div>
+
+                <ul className="mt-6 space-y-2.5">
+                  {[
+                    'Unlimited personal collection — add as many records as you want',
+                    'Wishlist, favorites and advanced search across your library',
+                    'Import and sync your collection from Discogs',
+                    'Barcode scanning to add records in seconds',
+                    'Browse catalogs from distributors and record shops',
+                    'Request access to any shop to see prices and place orders',
+                    'Full order history and shipment tracking',
+                    'Personal profile with shipping addresses',
+                  ].map((feature) => (
+                    <li key={feature} className="flex items-start gap-2.5">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <span className="text-sm text-foreground/80">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-6 rounded-lg border border-dashed border-muted-foreground/20 p-3 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground/90">Note:</span> collector accounts don&apos;t sell records. To list inventory and accept orders, choose a Shop &amp; Distributor plan.
+                </div>
+
+                <Button
+                  asChild
+                  size="lg"
+                  variant="outline"
+                  className="mt-8 w-full bg-foreground text-background hover:bg-foreground/90"
+                >
+                  <Link href="/get-started?role=collector">
+                    Create free collector account
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+
+              {/* Shop / distributor account */}
+              <div className="relative flex flex-col rounded-2xl border border-primary/30 bg-primary/[0.03] p-6 sm:p-8 shadow-xl shadow-primary/10 ring-1 ring-primary/20 transition-all">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-primary/10 p-2.5">
+                      <Store className="h-5 w-5 text-primary" />
+                    </div>
+                    <h3 className="text-xl font-semibold">Shop &amp; Distributor account</h3>
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                    <Gift className="h-3 w-3" />
+                    7-day free trial
+                  </span>
+                </div>
+
+                <div className="mt-4 flex items-baseline gap-1">
+                  <span className="text-4xl font-bold tracking-tight">
+                    From €0
+                  </span>
+                  <span className="text-sm text-muted-foreground">/month · pay-as-you-go available</span>
+                </div>
+
+                <div className="mt-5 rounded-lg bg-muted/50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Best for</p>
+                  <p className="mt-1 text-sm text-foreground/90">
+                    Record stores, distributors, wholesalers and independent sellers who want to manage inventory, run a branded storefront, and sell to collectors and other shops.
+                  </p>
+                </div>
+
+                <ul className="mt-6 space-y-2.5">
+                  {[
+                    'Full inventory management with locations, stock and supplier tracking',
+                    'Custom branded storefront with your logo and public catalog',
+                    'Barcode scanning + AI-powered product descriptions (Scale)',
+                    'Client CRM — invite buyers, control access, manage wishlists',
+                    'Order fulfillment, shipping zones, rates and tax configuration',
+                    'Built-in payments via Stripe Connect (cards, SEPA, more)',
+                    'Sales analytics, inventory value and customer insights',
+                    'Multi-staff roles (Master / Worker) with custom permissions',
+                  ].map((feature) => (
+                    <li key={feature} className="flex items-start gap-2.5">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <span className="text-sm text-foreground/80">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-6 rounded-lg border border-dashed border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground/90">Record limits scale with your plan:</span> from 50 records on Pay-as-you-go up to unlimited on Scale. See the plans above.
+                </div>
+
+                <Button
+                  size="lg"
+                  className="mt-8 w-full"
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                >
+                  Compare shop plans
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </section>
@@ -537,9 +663,6 @@ export default function PricingPage() {
             </div>
           </div>
         </section>
-      </main>
-
-      <Footer />
-    </div>
+    </>
   );
 }

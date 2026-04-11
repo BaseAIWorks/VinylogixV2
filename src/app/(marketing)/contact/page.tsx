@@ -7,13 +7,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, MessageSquare, Clock, Loader2, CheckCircle } from "lucide-react";
-import { Header, Footer } from "@/components/landing";
+
+const TOPIC_OPTIONS = [
+  "General question",
+  "Sales inquiry",
+  "Technical support",
+  "Billing",
+  "Press / partnerships",
+  "Other",
+] as const;
 
 export default function ContactPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [topic, setTopic] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -32,10 +48,13 @@ export default function ContactPage() {
     setIsSubmitting(true);
 
     try {
+      const subjectWithTopic = topic
+        ? `[${topic}] ${formData.subject}`
+        : formData.subject;
       const response = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, subject: subjectWithTopic }),
       });
 
       const data = await response.json();
@@ -61,10 +80,7 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-
-      <main className="container mx-auto px-4 pt-28 pb-12 max-w-4xl">
+    <div className="container mx-auto px-4 pt-28 pb-12 max-w-4xl">
         {/* Hero */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold tracking-tight text-primary mb-4">Contact Us</h1>
@@ -84,8 +100,8 @@ export default function ContactPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <a href="mailto:contact@vinylogix.com" className="text-primary hover:underline">
-                  contact@vinylogix.com
+                <a href="mailto:support@vinylogix.com" className="text-primary hover:underline">
+                  support@vinylogix.com
                 </a>
               </CardContent>
             </Card>
@@ -142,6 +158,7 @@ export default function ContactPage() {
                     variant="outline"
                     onClick={() => {
                       setIsSubmitted(false);
+                      setTopic("");
                       setFormData({ name: "", email: "", subject: "", message: "" });
                     }}
                   >
@@ -174,6 +191,22 @@ export default function ContactPage() {
                         required
                       />
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="topic">Topic</Label>
+                    <Select value={topic} onValueChange={setTopic}>
+                      <SelectTrigger id="topic">
+                        <SelectValue placeholder="Select a topic" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TOPIC_OPTIONS.map((opt) => (
+                          <SelectItem key={opt} value={opt}>
+                            {opt}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-2">
@@ -214,14 +247,20 @@ export default function ContactPage() {
                       </>
                     )}
                   </Button>
+
+                  <p className="text-xs text-muted-foreground text-center pt-1">
+                    We typically reply within 24–48 hours on business days. For urgent
+                    billing or order issues, email{" "}
+                    <a href="mailto:support@vinylogix.com" className="text-primary hover:underline">
+                      support@vinylogix.com
+                    </a>{" "}
+                    directly.
+                  </p>
                 </form>
               )}
             </CardContent>
           </Card>
         </div>
-      </main>
-
-      <Footer />
     </div>
   );
 }

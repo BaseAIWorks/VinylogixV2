@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
 import { Search, HelpCircle, Disc3, Users, CreditCard, ShieldCheck, Mail, MessageCircle } from "lucide-react";
-import { Header, Footer } from "@/components/landing";
 
 const faqCategories = [
   {
@@ -158,10 +157,7 @@ export default function HelpPage() {
   })).filter(category => category.questions.length > 0);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-
-      <main className="container mx-auto px-4 pt-28 pb-12 max-w-5xl">
+    <div className="container mx-auto px-4 pt-28 pb-12 max-w-5xl">
         {/* Hero */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold tracking-tight text-primary mb-4">Help Center</h1>
@@ -245,9 +241,6 @@ export default function HelpPage() {
             ))}
           </div>
         </div>
-      </main>
-
-      <Footer />
     </div>
   );
 }

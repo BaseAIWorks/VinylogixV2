@@ -1,12 +1,17 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { getSubscriptionTiers } from '@/services/client-subscription-service';
 import { DistributorTiers, type SubscriptionInfo, type SubscriptionTier } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Logo } from '@/components/ui/logo';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import {
   ArrowRight,
   Gift,
@@ -21,8 +26,6 @@ import {
   Check,
   Sparkles,
   Store,
-  Instagram,
-  Facebook,
   Scan,
   Wand2,
   PackageSearch,
@@ -37,22 +40,22 @@ import {
   HardHat,
   CreditCard,
   Users,
+  ScanLine,
+  Globe,
+  Truck,
+  HelpCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AnimatedGroup } from '@/components/ui/animated-group';
 import { cn } from '@/lib/utils';
-import { Header } from './Header';
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
 export function UnifiedLanding() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll();
-
   return (
-    <div ref={containerRef} className="relative min-h-screen">
+    <>
       {/* Global flowing background */}
       <div className="fixed inset-0 -z-50">
         <div className="absolute inset-0 bg-background" />
@@ -68,14 +71,15 @@ export function UnifiedLanding() {
         />
       </div>
 
-      <Header />
-
-      <main className="relative">
+      <div className="relative">
         {/* Hero Section */}
         <HeroSection />
 
         {/* Stats Bar - inline social proof */}
         <StatsBar />
+
+        {/* How It Works */}
+        <HowItWorksSection />
 
         {/* Features Section */}
         <FeaturesSection />
@@ -83,15 +87,19 @@ export function UnifiedLanding() {
         {/* Platform Showcase - Distributors & Collectors */}
         <PlatformShowcase />
 
+        {/* Integrations Strip */}
+        <IntegrationsStrip />
+
         {/* Pricing + CTA Combined */}
         <PricingSection />
 
+        {/* FAQ */}
+        <FAQSection />
+
         {/* Final CTA */}
         <FinalCTASection />
-      </main>
-
-      <Footer />
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -687,6 +695,217 @@ function PricingSection() {
 }
 
 // ============================================================================
+// HOW IT WORKS SECTION
+// ============================================================================
+
+const howItWorksSteps = [
+  {
+    step: '01',
+    icon: ScanLine,
+    title: 'Set up your catalog',
+    body: 'Scan barcodes with your phone camera or a hardware scanner. Import from Discogs to pull in artist names, covers, tracklists and format details automatically.',
+  },
+  {
+    step: '02',
+    icon: Globe,
+    title: 'Open your branded storefront',
+    body: 'Publish a custom-branded catalog with your name and logo. Set it to open, private, or invite-only so you control exactly who sees your prices.',
+  },
+  {
+    step: '03',
+    icon: Truck,
+    title: 'Get paid and ship',
+    body: 'Buyers check out through your storefront via Stripe Connect or PayPal. Invoices generate automatically, and carrier tracking links keep everyone informed.',
+  },
+];
+
+function HowItWorksSection() {
+  return (
+    <section className="py-10 sm:py-14 border-t border-border/30">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-10"
+        >
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
+            Up and running in three steps
+          </h2>
+          <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+            From first login to first sale — no development work required.
+          </p>
+        </motion.div>
+
+        <div className="grid gap-6 sm:grid-cols-3">
+          {howItWorksSteps.map((item, index) => {
+            const Icon = item.icon;
+            return (
+              <motion.div
+                key={item.step}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: index * 0.1 }}
+                className={cn(
+                  'relative flex flex-col p-6 rounded-2xl border',
+                  'border-border/40 bg-card/30 backdrop-blur-sm',
+                  'hover:bg-card/60 hover:border-primary/30 hover:shadow-md transition-all duration-200'
+                )}
+              >
+                <span className="text-5xl font-bold text-muted-foreground/20 absolute top-4 right-5 select-none leading-none">
+                  {item.step}
+                </span>
+                <div className="rounded-lg bg-primary/10 p-2.5 w-fit mb-4">
+                  <Icon className="h-5 w-5 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground leading-tight mb-2">{item.title}</h3>
+                <p className="text-sm text-muted-foreground leading-snug">{item.body}</p>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ============================================================================
+// INTEGRATIONS STRIP
+// ============================================================================
+
+const integrationItems = [
+  { icon: Disc3, name: 'Discogs', desc: 'Catalog data & sync' },
+  { icon: CreditCard, name: 'Stripe', desc: 'Payments & payouts' },
+  { icon: Wallet, name: 'PayPal', desc: 'Alternative checkout' },
+  { icon: Receipt, name: 'Stripe Tax', desc: 'Automated tax' },
+];
+
+function IntegrationsStrip() {
+  return (
+    <section className="py-8 sm:py-10 border-t border-border/30">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-10"
+        >
+          <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+            Works with
+          </span>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            {integrationItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.name}
+                  className="flex items-center gap-2.5 rounded-xl border border-border/40 bg-card/30 px-4 py-2.5"
+                >
+                  <Icon className="h-4 w-4 text-primary" />
+                  <div>
+                    <p className="text-sm font-medium leading-none">{item.name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <Link
+            href="/integrations"
+            className="text-sm font-medium text-primary hover:underline whitespace-nowrap"
+          >
+            All integrations →
+          </Link>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// ============================================================================
+// FAQ SECTION
+// ============================================================================
+
+const faqItems = [
+  {
+    q: 'Is there really a free tier?',
+    a: 'Yes. The Pay-as-you-go plan is €0/month with no monthly commitment. It supports up to 50 records and charges a 6% transaction fee per sale. Collector accounts are also free forever for personal cataloging and buying.',
+  },
+  {
+    q: 'Can I use this alongside Discogs?',
+    a: "Vinylogix uses the Discogs API for barcode lookups, catalog data (artist, title, cover, tracklist, year, label, format) and collector collection sync. It's not a bidirectional marketplace sync — your Vinylogix storefront is separate from your Discogs listings.",
+  },
+  {
+    q: 'How long does setup take?',
+    a: 'Most shops have their storefront live within a day. Barcode scanning lets you add records quickly, and the Discogs import handles metadata automatically. No development work is required.',
+  },
+  {
+    q: 'What are the transaction fees?',
+    a: 'Fees range from 6% (Pay-as-you-go) down to 2% (Scale plan). On top of the platform fee, Stripe charges 1.5%–3.25% + €0.25 per transaction for payment processing — that rate is set by Stripe, not Vinylogix. See /pricing for the full breakdown.',
+  },
+  {
+    q: 'Can I cancel anytime?',
+    a: 'Yes. There are no lock-in contracts. Cancel your subscription from your account settings and you revert to the free Pay-as-you-go tier. Your data remains accessible.',
+  },
+  {
+    q: 'Is my data safe?',
+    a: 'Payment card data never touches Vinylogix servers — Stripe and PayPal handle all PCI compliance. The platform runs on Firebase / Google Cloud. You can export all your data as CSV at any time.',
+  },
+];
+
+function FAQSection() {
+  return (
+    <section className="py-10 sm:py-14 border-t border-border/30">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-10"
+        >
+          <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 p-2 mb-4">
+            <HelpCircle className="h-5 w-5 text-primary" />
+          </div>
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
+            Frequently asked questions
+          </h2>
+          <p className="mt-4 text-muted-foreground">
+            Anything else?{' '}
+            <Link href="/contact" className="text-primary hover:underline">
+              Ask us directly.
+            </Link>
+          </p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+        >
+          <Accordion type="single" collapsible className="w-full space-y-2">
+            {faqItems.map((item, index) => (
+              <AccordionItem
+                key={index}
+                value={`faq-${index}`}
+                className="rounded-xl border border-border/40 bg-card/30 px-5 data-[state=open]:bg-card/60"
+              >
+                <AccordionTrigger className="text-left font-medium hover:no-underline">
+                  {item.q}
+                </AccordionTrigger>
+                <AccordionContent className="text-sm text-muted-foreground leading-relaxed">
+                  {item.a}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// ============================================================================
 // FINAL CTA SECTION
 // ============================================================================
 
@@ -749,84 +968,5 @@ function FinalCTASection() {
   );
 }
 
-// ============================================================================
-// FOOTER
-// ============================================================================
-
-const footerLinks = {
-  Product: [
-    { href: '/pricing', text: 'Pricing' },
-    { href: '/solutions', text: 'Solutions' },
-    { href: '/#distributors', text: 'For Distributors' },
-    { href: '/#collectors', text: 'For Collectors' },
-  ],
-  Resources: [
-    { href: '/help', text: 'Help Center' },
-    { href: '/contact', text: 'Contact' },
-  ],
-};
-
-function Footer() {
-  return (
-    <footer className="border-t border-border/30 py-12">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          {/* Brand */}
-          <div className="col-span-2 md:col-span-1">
-            <Logo width={120} height={28} className="mb-4" />
-            <p className="text-sm text-muted-foreground mb-4">
-              The complete platform for vinyl record management.
-            </p>
-            <div className="flex gap-3">
-              <a
-                href="https://www.instagram.com/vinylogix/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Instagram className="w-5 h-5" />
-              </a>
-              <a
-                href="https://www.facebook.com/vinylogix"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Facebook className="w-5 h-5" />
-              </a>
-            </div>
-          </div>
-
-          {/* Links */}
-          {Object.entries(footerLinks).map(([title, links]) => (
-            <div key={title}>
-              <h4 className="font-semibold mb-3">{title}</h4>
-              <ul className="space-y-2">
-                {links.map((link) => (
-                  <li key={link.text}>
-                    <Link
-                      href={link.href}
-                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {link.text}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-8 pt-8 border-t border-border/30 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} Vinylogix. All rights reserved.
-          </p>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="w-2 h-2 rounded-full bg-green-500" />
-            All systems operational
-          </div>
-        </div>
-      </div>
-    </footer>
-  );
-}
+// Footer is provided by src/app/(marketing)/layout.tsx via the shared
+// Footer component in src/components/landing/Footer.tsx.

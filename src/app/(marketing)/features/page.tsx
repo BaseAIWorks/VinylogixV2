@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Check, Disc3, BarChart3, ScanLine, ShoppingCart, HardHat, Package, Users, Bot, Building, KeyRound, Palette, Settings, Warehouse, Keyboard, Laptop, Tablet, Smartphone } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { Header, Footer } from "@/components/landing";
 
 // New component for a single feature highlight with an icon
 const FeatureListItem = ({ icon: Icon, title, description }: { icon: React.ElementType, title: string, description: string }) => (
@@ -80,10 +79,7 @@ export default function FeaturesPage() {
 
 
     return (
-      <div className="flex flex-col min-h-screen bg-background text-foreground">
-        <Header />
-
-        <main className="flex-grow">
+      <>
             {/* Hero Section */}
             <section className="relative overflow-hidden pt-32 pb-16 md:pt-40 md:pb-24">
                 <div className="container mx-auto px-4 text-center">
@@ -146,9 +142,6 @@ export default function FeaturesPage() {
                     </div>
                 </div>
             </section>
-        </main>
-
-        <Footer />
-      </div>
+      </>
     );
 }

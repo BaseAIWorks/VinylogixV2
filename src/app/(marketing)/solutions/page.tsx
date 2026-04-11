@@ -29,10 +29,18 @@ import {
   Palette,
   Check,
   Sparkles,
+  Heart,
+  Store,
+  HelpCircle,
 } from 'lucide-react';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Header, Footer } from '@/components/landing';
 
 // ============================================================================
 // MAIN COMPONENT
@@ -40,7 +48,7 @@ import { Header, Footer } from '@/components/landing';
 
 export default function SolutionsPage() {
   return (
-    <div className="relative min-h-screen">
+    <>
       {/* Global flowing background */}
       <div className="fixed inset-0 -z-50">
         <div className="absolute inset-0 bg-background" />
@@ -56,20 +64,18 @@ export default function SolutionsPage() {
         />
       </div>
 
-      <Header />
-
-      <main className="relative">
+      <div className="relative">
         <SolutionsHero />
         <OrderManagementSection />
         <ECommerceSection />
         <PaymentsSection />
         <AnalyticsSection />
         <AdditionalFeaturesSection />
+        <AudienceLinksSection />
+        <SolutionsFAQSection />
         <FinalCTASection />
-      </main>
-
-      <Footer />
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -618,6 +624,166 @@ function AdditionalFeaturesSection() {
               </motion.div>
             );
           })}
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// ============================================================================
+// AUDIENCE LINKS SECTION
+// ============================================================================
+
+function AudienceLinksSection() {
+  return (
+    <section className="py-10 sm:py-14 border-t border-border/30">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-10"
+        >
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
+            Who is this for?
+          </h2>
+          <p className="mt-4 text-muted-foreground max-w-xl mx-auto">
+            Vinylogix serves two distinct audiences. Explore the page that fits your situation.
+          </p>
+        </motion.div>
+
+        <div className="grid gap-6 sm:grid-cols-2 max-w-3xl mx-auto">
+          {/* Distributors card */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            className="group rounded-2xl border border-border/50 bg-card/30 p-6 hover:border-primary/30 hover:shadow-md transition-all duration-200"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="rounded-full bg-primary/10 p-2.5">
+                <Store className="h-5 w-5 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold">Distributors &amp; Record Stores</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
+              Manage inventory, run a wholesale storefront, and process orders with integrated payments. Plans start at €0/month.
+            </p>
+            <Link
+              href="/for-distributors"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+            >
+              Explore distributor features
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </motion.div>
+
+          {/* Collectors card */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            className="group rounded-2xl border border-border/50 bg-card/30 p-6 hover:border-primary/30 hover:shadow-md transition-all duration-200"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="rounded-full bg-primary/10 p-2.5">
+                <Heart className="h-5 w-5 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold">Collectors</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
+              Catalog your collection, sync from Discogs, and buy from shops on the platform. Free forever — no credit card needed.
+            </p>
+            <Link
+              href="/for-collectors"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+            >
+              Explore collector features
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ============================================================================
+// SOLUTIONS FAQ SECTION
+// ============================================================================
+
+const solutionsFaqItems = [
+  {
+    q: 'What does Vinylogix actually replace?',
+    a: 'For most record stores and distributors it replaces: spreadsheet-based inventory, manual invoicing, email order tracking, and a patchwork of payment tools. The storefront replaces the need for a separate e-commerce site for your trade catalog.',
+  },
+  {
+    q: 'Which plan covers multiple staff members?',
+    a: 'Essential supports 2 users, Growth supports 10, and Scale supports unlimited users. Each staff account is a "Worker" role — the owner (Master) sets granular permissions for what each person can view, create or edit.',
+  },
+  {
+    q: 'How does the Discogs integration work?',
+    a: "Vinylogix uses the Discogs API for barcode lookups and to pull in catalog data — artist, title, cover art, tracklist, year, label and format. It's not a bidirectional marketplace sync. Your Vinylogix storefront and your Discogs profile stay independent.",
+  },
+  {
+    q: 'What transaction fees apply?',
+    a: 'Platform fees range from 6% (Pay-as-you-go) down to 2% (Scale). Payment processing via Stripe Connect adds 1.5%–3.25% + €0.25 per transaction, depending on card type and region — that rate is set by Stripe. PayPal is also supported as an alternative.',
+  },
+  {
+    q: 'How does access control for my storefront work?',
+    a: "You can set your storefront to open (anyone can browse), private (hidden from public search), or invite-only (buyers must request access and you approve them). This lets you keep wholesale pricing invisible to consumers.",
+  },
+  {
+    q: 'Does setup require development work?',
+    a: 'No. Everything is configured in your account dashboard. Barcode scanning, Discogs import, branded storefront, shipping zones, Stripe Connect onboarding — all are guided flows with no code required.',
+  },
+];
+
+function SolutionsFAQSection() {
+  return (
+    <section className="py-10 sm:py-14 border-t border-border/30">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-10"
+        >
+          <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 p-2 mb-4">
+            <HelpCircle className="h-5 w-5 text-primary" />
+          </div>
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
+            Common questions
+          </h2>
+          <p className="mt-4 text-muted-foreground">
+            More to ask?{' '}
+            <Link href="/contact" className="text-primary hover:underline">
+              We&apos;re happy to help.
+            </Link>
+          </p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+        >
+          <Accordion type="single" collapsible className="w-full space-y-2">
+            {solutionsFaqItems.map((item, index) => (
+              <AccordionItem
+                key={index}
+                value={`sfaq-${index}`}
+                className="rounded-xl border border-border/40 bg-card/30 px-5 data-[state=open]:bg-card/60"
+              >
+                <AccordionTrigger className="text-left font-medium hover:no-underline">
+                  {item.q}
+                </AccordionTrigger>
+                <AccordionContent className="text-sm text-muted-foreground leading-relaxed">
+                  {item.a}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         </motion.div>
       </div>
     </section>
