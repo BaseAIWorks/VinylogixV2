@@ -63,10 +63,10 @@ Implemented in `src/components/landing/Header.tsx`.
 
 | # | Item       | Type     | Contents                                                                                   |
 |---|------------|----------|--------------------------------------------------------------------------------------------|
-| 1 | Product    | dropdown | Features → `/features` · Integrations → `/integrations` · Discogs Sync → `/discogs-sync` · Security → `/security` |
-| 2 | Solutions  | dropdown | For Distributors → `/for-distributors` · For Collectors → `/for-collectors` · All Solutions → `/solutions` |
-| 3 | Pricing    | link     | → `/pricing`                                                                               |
-| 4 | Company    | dropdown | About → `/about` · Careers → `/careers` · Contact → `/contact`                             |
+| 1 | Features   | link     | → `/features`                                                                              |
+| 2 | Product    | dropdown | Integrations → `/integrations` · Discogs Sync → `/discogs-sync` · Security → `/security`   |
+| 3 | Solutions  | dropdown | For Distributors → `/for-distributors` · For Collectors → `/for-collectors` · All Solutions → `/solutions` |
+| 4 | Pricing    | link     | → `/pricing`                                                                               |
 
 **Right side (unauthenticated):**
 - `Log in` (ghost button) → `/login`
@@ -75,10 +75,16 @@ Implemented in `src/components/landing/Header.tsx`.
 **Right side (authenticated):** unchanged — existing avatar dropdown with
 Dashboard / Settings / Log out.
 
-**Resources removed from top nav** by product decision. Help Center, Contact,
-and Status still live in the **footer** under the Resources column. Contact
-was moved into the Company dropdown so it remains reachable from the top nav
-without a dedicated Resources menu.
+**Removed from top nav** by product decision:
+- **Resources** dropdown — Help Center, Contact, and Status still live in the
+  footer under the Resources column.
+- **Company** dropdown — About, Careers, Contact still live in the footer
+  under the Company column.
+
+The top nav is deliberately lean: only the four items a prospective buyer
+actually clicks through (what it does → how it connects → who it's for →
+what it costs). Support / legal / team info stays discoverable via the
+footer.
 
 **Mobile:** slide-in drawer (Sheet component). Shows all four top-level items
 as accordion sections with their sub-items. Must include the Log in + Get

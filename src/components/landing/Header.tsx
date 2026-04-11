@@ -57,10 +57,10 @@ type NavItem =
   | { name: string; children: NavLeaf[] };
 
 const navItems: NavItem[] = [
+  { name: 'Features', href: '/features' },
   {
     name: 'Product',
     children: [
-      { name: 'Features', href: '/features', description: 'Every tool in the platform' },
       { name: 'Integrations', href: '/integrations', description: 'Discogs, Stripe, PayPal & more' },
       { name: 'Discogs Sync', href: '/discogs-sync', description: 'How Discogs works with Vinylogix' },
       { name: 'Security', href: '/security', description: 'How we protect your data' },
@@ -75,14 +75,6 @@ const navItems: NavItem[] = [
     ],
   },
   { name: 'Pricing', href: '/pricing' },
-  {
-    name: 'Company',
-    children: [
-      { name: 'About', href: '/about', description: 'Who we are' },
-      { name: 'Careers', href: '/careers', description: 'Join the team' },
-      { name: 'Contact', href: '/contact', description: 'Talk to our team' },
-    ],
-  },
 ];
 
 function isLeaf(item: NavItem): item is { name: string; href: string } {
