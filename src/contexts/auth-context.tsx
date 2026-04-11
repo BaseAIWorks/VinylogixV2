@@ -1514,12 +1514,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (loading || isImpersonating) return;
 
-    const publicRoutes = ['/', '/login', '/register/client', '/register', '/features', '/pricing', '/help', '/contact', '/solutions'];
+    const publicRoutes = ['/', '/login', '/get-started', '/register/client', '/register', '/features', '/pricing', '/help', '/contact', '/solutions'];
     const isPublicRoute =
-      publicRoutes.includes(pathname) || pathname.startsWith('/register') || pathname.startsWith('/storefront');
+      publicRoutes.includes(pathname) ||
+      pathname.startsWith('/register') ||
+      pathname.startsWith('/get-started') ||
+      pathname.startsWith('/storefront');
     const isAuthRoute =
-      ['/login', '/register/client', '/register'].includes(pathname) ||
-      pathname.startsWith('/register');
+      ['/login', '/get-started', '/register/client', '/register'].includes(pathname) ||
+      pathname.startsWith('/register') ||
+      pathname.startsWith('/get-started');
 
     if (user) {
       if (user.status === 'on_hold') {
@@ -1758,6 +1762,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         // 8) Clean up & log the user in
         localStorage.removeItem("onboarding_data");
+        // Also clear the stepper's sessionStorage draft so a back-navigation
+        // to /register after a successful signup doesn't restore stale data.
+        try {
+          sessionStorage.removeItem("vinylogix_register_draft");
+        } catch {
+          // sessionStorage can throw in private-mode Safari; ignore.
+        }
 
         await login(onboardingData.email, onboardingData.password);
         toast({

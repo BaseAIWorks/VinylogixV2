@@ -15,6 +15,7 @@ import { formatPriceForDisplay } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Header, Footer } from "@/components/landing";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 
 // Tier display config. Fee label is derived dynamically from the live tier
 // data on save — admin edits transactionFeePercent in /admin/settings.
@@ -227,6 +228,7 @@ const PricingTierComponent = ({
 
 export default function PricingPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
   const [tiers, setTiers] = useState<Record<SubscriptionTier, SubscriptionInfo> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -247,6 +249,18 @@ export default function PricingPage() {
   }, []);
 
   const handleChoosePlan = (tier: SubscriptionTier) => {
+    // Defensive gate: inactive tiers are already filtered from display, but a
+    // racing admin deactivation after page-load could still leak through.
+    // Surface a toast rather than funnelling the user into a dead-end flow.
+    if (tiers && tiers[tier] && tiers[tier].isActive === false) {
+      toast({
+        title: 'Plan unavailable',
+        description: 'This plan is no longer accepting new customers. Please choose another.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (tier === 'payg') {
       router.push('/register?tier=payg');
       return;
@@ -384,8 +398,8 @@ export default function PricingPage() {
             <div className="mt-8 text-center">
               <p className="text-sm text-muted-foreground">
                 Looking to browse and collect?{' '}
-                <Link href="/register/client" className="font-medium text-primary hover:underline">
-                  Create a free client account
+                <Link href="/get-started?role=collector" className="font-medium text-primary hover:underline">
+                  Create a free collector account
                 </Link>
               </p>
             </div>

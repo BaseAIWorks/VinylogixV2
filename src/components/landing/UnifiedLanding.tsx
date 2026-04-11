@@ -150,8 +150,8 @@ function HeroSection() {
             className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3"
           >
             <Button asChild size="lg" className="h-12 px-6 rounded-xl shadow-lg shadow-primary/20">
-              <Link href="/register/client">
-                Start Free Trial
+              <Link href="/get-started">
+                Get Started
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
@@ -168,7 +168,7 @@ function HeroSection() {
             className="mt-4 text-sm text-muted-foreground flex items-center justify-center gap-2"
           >
             <Gift className="h-4 w-4 text-primary" />
-            7-day free trial with all features
+            Free for collectors · 7-day trial for stores
           </motion.p>
         </div>
 
@@ -591,7 +591,12 @@ function PricingSection() {
               const displayPrice = isPayg ? '€0' : (typeof tier.price === 'number' ? `€${tier.price}` : '—');
               const period = isPayg ? '' : '/mo';
               const features = deriveFeatures(tier);
-              const href = isPayg ? '/register?tier=payg' : '/pricing';
+              // Direct to register with tier + monthly billing pre-selected.
+              // Users who want to compare quarterly/yearly click "See all billing
+              // options" beneath the grid to visit /pricing.
+              const href = isPayg
+                ? '/register?tier=payg'
+                : `/register?tier=${tierKey}&billing=monthly`;
 
               return (
                 <motion.div
@@ -649,6 +654,17 @@ function PricingSection() {
               );
             })
           )}
+        </div>
+
+        {/* Secondary link to full pricing page for visitors who want to compare
+            billing cycles (quarterly/yearly) before committing. */}
+        <div className="mt-6 text-center">
+          <Link
+            href="/pricing"
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            See all billing options &rarr;
+          </Link>
         </div>
 
         {/* Final CTA */}

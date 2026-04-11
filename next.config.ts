@@ -9,6 +9,20 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Legacy URL redirects. Keep forever — external links and bookmarks rely on them.
+  async redirects() {
+    return [
+      {
+        // /register/client was renamed to /get-started. The old URL was a role
+        // picker that defaulted collectors-only in its name, which confused
+        // distributors who hit it from the generic "Get Started" CTA. The new
+        // name reflects what the page actually does (role gateway for both).
+        source: '/register/client',
+        destination: '/get-started',
+        permanent: true,
+      },
+    ];
+  },
   // Security headers for production
   async headers() {
     return [
