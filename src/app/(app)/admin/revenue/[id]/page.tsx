@@ -145,7 +145,7 @@ function getTimelineEvents(order: Order, distributor: Distributor | null): Timel
       description: hasStripeConnect
         ? `Payout transferred to ${distributor?.name || 'distributor'} via Stripe Connect`
         : `Payout pending - Distributor needs to connect Stripe`,
-      timestamp: hasStripeConnect ? order.paidAt : null,
+      timestamp: hasStripeConnect ? (order.paidAt ?? null) : null,
       status: hasStripeConnect ? 'completed' : 'awaiting',
       icon: Banknote,
       details: `Payout Amount: €${formatPriceForDisplay(payout)}`,

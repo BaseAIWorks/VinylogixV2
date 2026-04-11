@@ -205,9 +205,18 @@ export default function ImportPage() {
         for (let i = 0; i < previews.length; i++) {
             const preview = previews[i];
             try {
-                const recordData = {
+                // Merge the Discogs details and CSV data, then enforce required fields
+                // with sane fallbacks so addRecord's strict Omit<VinylRecord, ...> type holds.
+                const merged = {
                     ...preview.discogsDetails,
                     ...preview.csvData,
+                } as any;
+                const recordData = {
+                    ...merged,
+                    title: merged.title || 'Untitled',
+                    artist: merged.artist || 'Unknown Artist',
+                    media_condition: merged.media_condition || 'Very Good (VG)',
+                    sleeve_condition: merged.sleeve_condition || 'Very Good (VG)',
                 };
                 await addRecord(recordData, user);
                 successCount++;

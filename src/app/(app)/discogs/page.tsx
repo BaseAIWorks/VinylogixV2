@@ -99,7 +99,9 @@ const DiscogsDataView = ({ fetchFunction, username, dataType, distributorId }: {
             }));
         }
         if (dataType === 'inventory' && data.listings) {
-            const grouped = data.listings.reduce((acc: Record<string, UnifiedDisplayItem>, l: DiscogsListing) => {
+            // Type parameter on .reduce pins the return type so Object.values
+            // yields UnifiedDisplayItem[] rather than unknown[].
+            const grouped = (data.listings as DiscogsListing[]).reduce<Record<string, UnifiedDisplayItem>>((acc, l) => {
                 const releaseId = l.release.id.toString();
                 if (acc[releaseId]) {
                     acc[releaseId].quantity = (acc[releaseId].quantity || 1) + 1;

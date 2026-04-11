@@ -21,7 +21,7 @@ const processUserTimestamps = (userData: any): User => {
   }
 
   if (processed.loginHistory && Array.isArray(processed.loginHistory)) {
-    processed.loginHistory = processed.loginHistory.map(ts =>
+    processed.loginHistory = processed.loginHistory.map((ts: any) =>
         (ts && typeof ts.toDate === 'function') ? ts.toDate().toISOString() :
         (ts && ts._seconds) ? new Date(ts._seconds * 1000).toISOString() : ts
     );

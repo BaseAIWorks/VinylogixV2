@@ -495,7 +495,7 @@ export default function OrderDetailPage() {
                                                 })}
                                             </TableBody>
                                         </Table>
-                                        {order.totalWeight > 0 && (
+                                        {order.totalWeight !== undefined && order.totalWeight > 0 && (
                                             <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t text-sm">
                                                 <Weight className="h-4 w-4 text-muted-foreground" />
                                                 <span className="text-muted-foreground">Total weight:</span>

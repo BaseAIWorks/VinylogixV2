@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import type { VinylRecord, Order, OrderStatus, Distributor, User } from "@/types";
-import { getAllInventoryRecords, getLatestRecordsFromDistributors } from "@/services/record-service";
+import { getAllInventoryRecords, getLatestRecordsFromDistributors, getRecordsByOwner, getWishlistedRecords } from "@/services/record-service";
 import { getOrders } from "@/services/order-service";
 import { getDistributorById } from "@/services/distributor-service";
 import { getClientsByDistributorId } from "@/services/user-service";
@@ -121,6 +121,11 @@ export default function DashboardPage() {
     const [dateRange, setDateRange] = useState<DateRangePreset>("30days");
     const [distributor, setDistributor] = useState<Distributor | null>(null);
     const [clientUsers, setClientUsers] = useState<User[]>([]);
+    // Viewer-only stats: personal collection and wishlist counts, fetched on mount.
+    // Previously these were read from user.collection?.length / user.wishlist?.length
+    // which are fields that don't exist on User — so the cards always showed 0.
+    const [viewerCollectionCount, setViewerCollectionCount] = useState<number>(0);
+    const [viewerWishlistCount, setViewerWishlistCount] = useState<number>(0);
 
      const fetchMasterStatsData = useCallback(async () => {
         if (!user || user.role !== 'master' || !user.distributorId) {
@@ -153,8 +158,19 @@ export default function DashboardPage() {
       }
       setIsLoadingStats(true);
       try {
-        const fetchedLatest = await getLatestRecordsFromDistributors(user.accessibleDistributorIds, 10);
-        setLatestRecords(fetchedLatest);
+        // Fire all three queries in parallel. Personal collection + wishlist
+        // failures are non-fatal so we wrap them individually and default to 0.
+        const [fetchedLatest, ownedResult, wishlistResult] = await Promise.allSettled([
+          getLatestRecordsFromDistributors(user.accessibleDistributorIds, 10),
+          getRecordsByOwner(user.uid),
+          getWishlistedRecords(user),
+        ]);
+        if (fetchedLatest.status === 'fulfilled') setLatestRecords(fetchedLatest.value);
+        if (ownedResult.status === 'fulfilled') {
+          const personalRecords = ownedResult.value.filter(r => !r.isInventoryItem && !r.isWishlist);
+          setViewerCollectionCount(personalRecords.length);
+        }
+        if (wishlistResult.status === 'fulfilled') setViewerWishlistCount(wishlistResult.value.length);
       } catch (error) {
         toast({ title: "Error", description: `Could not load latest records.`, variant: "destructive" });
       } finally {
@@ -352,7 +368,7 @@ export default function DashboardPage() {
               />
               <StatCard
                 title="My Collection"
-                value={user.collection?.length || 0}
+                value={viewerCollectionCount}
                 subtext="Records you own"
                 icon={Library}
                 href="/collection"
@@ -366,7 +382,7 @@ export default function DashboardPage() {
               />
               <StatCard
                 title="Wishlist"
-                value={user.wishlist?.length || 0}
+                value={viewerWishlistCount}
                 subtext="Records you want"
                 icon={Package}
                 href="/wishlist"

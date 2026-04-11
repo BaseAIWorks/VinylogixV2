@@ -343,9 +343,21 @@ export type User = {
   originDistributorName?: string;
 };
 
-export type MediaCondition = "Mint (M)" | "Near Mint (NM)" | "Very Good Plus (VG+)" | "Very Good (VG)" | "Good Plus (G+)" | "Good (G)" | "Fair (F)" | "Poor (P)";
+// Readonly tuple so `z.enum(MediaConditions)` and other consumers get the
+// full literal union at type-level. MediaCondition is derived from the tuple
+// so the list and the type can't drift apart.
+export const MediaConditions = [
+  "Mint (M)",
+  "Near Mint (NM)",
+  "Very Good Plus (VG+)",
+  "Very Good (VG)",
+  "Good Plus (G+)",
+  "Good (G)",
+  "Fair (F)",
+  "Poor (P)",
+] as const;
 
-export const MediaConditions: MediaCondition[] = ["Mint (M)", "Near Mint (NM)", "Very Good Plus (VG+)", "Very Good (VG)", "Good Plus (G+)", "Good (G)", "Fair (F)", "Poor (P)"];
+export type MediaCondition = typeof MediaConditions[number];
 
 export interface Track {
   position: string;

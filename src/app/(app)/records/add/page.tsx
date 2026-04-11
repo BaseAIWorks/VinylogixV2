@@ -264,9 +264,35 @@ export default function AddRecordPage() {
     }
     setIsSubmitting(true);
 
+    // Normalize fields that can arrive as either `string` (from Discogs API)
+    // or `string[]` (from the transformed form values) to always be arrays,
+    // matching the VinylRecord type.
+    const normalizeToArray = (v: string | string[] | undefined): string[] | undefined => {
+      if (v === undefined) return undefined;
+      if (Array.isArray(v)) return v;
+      return v.split(',').map(s => s.trim()).filter(Boolean);
+    };
+    // year/weight/prices can arrive as string (Discogs pre-fill / free text
+    // initialData) or number (form output after Zod transform). VinylRecord
+    // requires numbers, so normalize anything numeric here.
+    const normalizeNumber = (v: string | number | undefined | null): number | undefined => {
+      if (v === undefined || v === null || v === '') return undefined;
+      const n = typeof v === 'number' ? v : parseFloat(String(v));
+      return Number.isFinite(n) ? n : undefined;
+    };
     const recordData = {
       ...initialData,
       ...values,
+      style: normalizeToArray(values.style ?? initialData.style),
+      genre: normalizeToArray(values.genre ?? initialData.genre),
+      shelf_locations: normalizeToArray(values.shelf_locations ?? initialData.shelf_locations),
+      storage_locations: normalizeToArray(values.storage_locations ?? initialData.storage_locations),
+      year: normalizeNumber(values.year ?? initialData.year),
+      weight: normalizeNumber(values.weight ?? initialData.weight),
+      purchasingPrice: normalizeNumber(values.purchasingPrice ?? initialData.purchasingPrice),
+      sellingPrice: normalizeNumber(values.sellingPrice ?? initialData.sellingPrice),
+      stock_shelves: normalizeNumber(values.stock_shelves ?? initialData.stock_shelves),
+      stock_storage: normalizeNumber(values.stock_storage ?? initialData.stock_storage),
       discogs_id: initialData.discogs_id,
       barcode: initialData.barcode,
       dataAiHint: initialData.dataAiHint,

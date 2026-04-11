@@ -557,7 +557,7 @@ function RegisterPageInner() {
                 <CardContent>
                     <Stepper activeStep={activeStep}>
                         {steps.map((step, index) => (
-                            <Step key={step.label} index={index} label={step.label}>
+                            <Step key={step.label} index={index}>
                                 <StepIndicator>
                                     <StepStatus
                                         complete={<StepIcon as={Check} />}

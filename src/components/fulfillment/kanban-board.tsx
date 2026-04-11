@@ -184,7 +184,12 @@ export function KanbanBoard({
   showCheckboxes = false,
 }: KanbanBoardProps) {
   const ordersByStatus = React.useMemo(() => {
+    // Every OrderStatus gets an empty array so the type is satisfied. The
+    // kanban board only renders columns defined in `columns` above (fulfillment
+    // only — paid/processing/shipped), so awaiting_approval, pending, etc. are
+    // intentionally invisible here.
     const grouped: Record<OrderStatus, Order[]> = {
+      awaiting_approval: [],
       pending: [],
       awaiting_payment: [],
       paid: [],

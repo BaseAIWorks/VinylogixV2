@@ -116,7 +116,7 @@ export default function SuppliersPage() {
   // Compute supplier stats from records
   const suppliersWithStats: SupplierWithStats[] = useMemo(() => {
     return suppliers.map(supplier => {
-      const supplierRecords = records.filter(r => r.supplier_id === supplier.id);
+      const supplierRecords = records.filter(r => r.supplierId === supplier.id);
       const sortedByDate = [...supplierRecords].sort((a, b) => {
         const dateA = a.added_at ? new Date(a.added_at).getTime() : 0;
         const dateB = b.added_at ? new Date(b.added_at).getTime() : 0;

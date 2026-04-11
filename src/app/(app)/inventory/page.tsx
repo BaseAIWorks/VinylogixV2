@@ -714,15 +714,17 @@ export default function InventoryPage() {
         {/* Bulk Actions Bar */}
         <BulkActionsBar
           selectedCount={selectedRecords.size}
-          onClear={handleClearSelection}
+          onClearSelection={handleClearSelection}
           actions={[
             {
+              id: "batch-edit",
               label: "Batch Edit",
               icon: Edit3,
               onClick: () => router.push('/inventory/batch-edit'),
               variant: "default",
             },
             {
+              id: "delete",
               label: "Delete",
               icon: Trash2,
               onClick: handleBulkDelete,

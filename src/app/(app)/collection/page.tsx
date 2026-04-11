@@ -4,7 +4,7 @@ import RecordCard from "@/components/records/record-card";
 import RecordFilters from "@/components/records/record-filters";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import type { VinylRecord } from "@/types";
+import type { VinylRecord, SortOption } from "@/types";
 import { PlusCircle, Search, Music2, LayoutGrid, List, Edit3, Loader2, Library, Heart, AlertTriangle, ArrowLeft, Check, Disc3, Calendar, X } from "lucide-react";
 import Link from "next/link";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
@@ -26,7 +26,10 @@ export default function CollectionPage() {
   const [isLoadingRecords, setIsLoadingRecords] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState<{ location?: string; artist?: string; year?: string; genre?: string; condition?: string }>({});
-  const [sortOption, setSortOption] = useState("recently_added");
+  // Was `"recently_added"` previously — a string that didn't exist in SortOption,
+  // so the RecordFilters sort dropdown silently did nothing. Now matches the
+  // dropdown's actual emitted values.
+  const [sortOption, setSortOption] = useState<SortOption>("added_at_desc");
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const router = useRouter();
   const { toast } = useToast();
@@ -125,7 +128,8 @@ export default function CollectionPage() {
         artists: sortAndReturn(artists),
         years: Array.from(years).sort((a, b) => parseInt(b, 10) - parseInt(a, 10)),
         genres: sortAndReturn(genres),
-        conditions: sortAndReturn(conditions)
+        conditions: sortAndReturn(conditions),
+        formats: [] as string[], // collection doesn't surface format filtering yet
     };
   }, [records]);
 
@@ -147,12 +151,27 @@ export default function CollectionPage() {
     if (filters.genre) currentRecords = currentRecords.filter(r => Array.isArray(r.genre) && r.genre.some(g => g.toLowerCase() === filters.genre!.toLowerCase()));
     if (filters.condition) currentRecords = currentRecords.filter(r => r.media_condition === filters.condition);
 
-    if (sortOption === 'alphabetically') {
-      currentRecords.sort((a, b) => a.title.localeCompare(b.title));
-    } else if (sortOption === 'recently_added') {
-      currentRecords.sort((a, b) => new Date(b.added_at).getTime() - new Date(a.added_at).getTime());
+    // Sort values match the shared SortOption type emitted by RecordFilters'
+    // sort dropdown (previously mismatched, so sorting was a no-op).
+    switch (sortOption) {
+      case 'title_asc':
+        currentRecords.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case 'title_desc':
+        currentRecords.sort((a, b) => b.title.localeCompare(a.title));
+        break;
+      case 'stock_shelves_desc':
+        currentRecords.sort((a, b) => (Number(b.stock_shelves) || 0) - (Number(a.stock_shelves) || 0));
+        break;
+      case 'stock_storage_desc':
+        currentRecords.sort((a, b) => (Number(b.stock_storage) || 0) - (Number(a.stock_storage) || 0));
+        break;
+      case 'added_at_desc':
+      default:
+        currentRecords.sort((a, b) => new Date(b.added_at).getTime() - new Date(a.added_at).getTime());
+        break;
     }
-    
+
     return currentRecords;
   }, [records, searchTerm, filters, sortOption]);
 

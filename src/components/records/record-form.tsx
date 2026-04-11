@@ -5,7 +5,7 @@ import { useForm, Controller } from "react-hook-form";
 import * as z from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
-import type { User, UserRole, Supplier, Track, WeightOption, MediaCondition } from "@/types";
+import type { User, UserRole, Supplier, Track, WeightOption, MediaCondition, WorkerPermissions } from "@/types";
 import { MediaConditions } from "@/types";
 import React, { useEffect, useState, useCallback } from "react";
 import { formatPriceForDisplay, parsePriceFromUserInput } from "@/lib/utils";
@@ -32,8 +32,8 @@ const formSchema = z.object({
   style: z.string().optional().transform(v => v ? v.split(',').map(s => s.trim()).filter(Boolean) : undefined),
   country: z.string().optional(),
   formatDetails: z.string().optional(),
-  media_condition: z.enum(MediaConditions, { required_error: "Media condition is required" }) as z.ZodType<MediaCondition>,
-  sleeve_condition: z.enum(MediaConditions, { required_error: "Sleeve condition is required" }) as z.ZodType<MediaCondition>,
+  media_condition: z.enum(MediaConditions, { required_error: "Media condition is required" }),
+  sleeve_condition: z.enum(MediaConditions, { required_error: "Sleeve condition is required" }),
   notes: z.string().optional(),
   weight: z.string().optional().refine(val => val === "" || val === undefined || /^\d*$/.test(val), { message: "Weight must be a number or empty" }).transform(val => (val && val.trim() !== "" ? Number(val) : undefined)),
   weightOptionId: z.string().optional(),
@@ -336,7 +336,7 @@ export default function RecordForm({ initialData, onSubmitForm, onSubmitAndScanN
   const isWorker = user.role === 'worker';
   const isOperator = isMaster || isWorker;
 
-  const perms = user.permissions || {};
+  const perms: Partial<WorkerPermissions> = user.permissions || {};
   const canEditPurchasing = isMaster || (isWorker && !!perms.canEditPurchasingPrice);
   const canViewPurchasing = isMaster || (isWorker && (!!perms.canViewPurchasingPrice || !!perms.canEditPurchasingPrice));
   const canEditSelling = isMaster || (isWorker && !!perms.canEditSellingPrice);
@@ -466,7 +466,11 @@ export default function RecordForm({ initialData, onSubmitForm, onSubmitAndScanN
                                       selectField.onChange(value === "custom" ? undefined : value);
                                       const selectedOption = weightOptions.find(opt => opt.id === value);
                                       if (selectedOption) {
-                                          setValue('weight', selectedOption.weight.toString(), { shouldValidate: true });
+                                          // Schema output type is `number | undefined` but the form's
+                                          // internal state holds the raw string input the Zod resolver
+                                          // later transforms. Cast is safe — at runtime the Input
+                                          // component expects a string and the resolver re-parses on submit.
+                                          setValue('weight', selectedOption.weight.toString() as any, { shouldValidate: true });
                                       }
                                     }}
                                   >
@@ -501,10 +505,10 @@ export default function RecordForm({ initialData, onSubmitForm, onSubmitAndScanN
             <SectionHeader icon={Euro} title="Pricing & Sourcing" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {canViewPurchasing && (
-                <FormField control={control} name="purchasingPrice" render={({ field }) => (<FormItem><FormLabel>Purchasing Price (€)</FormLabel><FormControl><Input {...field} placeholder="e.g. 15,50" disabled={!canEditPurchasing} onBlur={(e) => { const value = e.target.value; if (value) { const parsed = parsePriceFromUserInput(value); if (parsed !== undefined) { setValue("purchasingPrice", formatPriceForDisplay(parsed), { shouldValidate: true });}}}} /></FormControl><FormMessage/></FormItem>)} />
+                <FormField control={control} name="purchasingPrice" render={({ field }) => (<FormItem><FormLabel>Purchasing Price (€)</FormLabel><FormControl><Input {...field} placeholder="e.g. 15,50" disabled={!canEditPurchasing} onBlur={(e) => { const value = e.target.value; if (value) { const parsed = parsePriceFromUserInput(value); if (parsed !== undefined) { setValue("purchasingPrice", formatPriceForDisplay(parsed) as any, { shouldValidate: true });}}}} /></FormControl><FormMessage/></FormItem>)} />
               )}
                {canViewSelling && (
-                <FormField control={control} name="sellingPrice" render={({ field }) => (<FormItem><FormLabel>Selling Price (€)</FormLabel><FormControl><Input {...field} placeholder="e.g. 29,99" disabled={!canEditSelling} onBlur={(e) => { const value = e.target.value; if (value) { const parsed = parsePriceFromUserInput(value); if (parsed !== undefined) { setValue("sellingPrice", formatPriceForDisplay(parsed), { shouldValidate: true });}}}} /></FormControl><FormMessage/></FormItem>)} />
+                <FormField control={control} name="sellingPrice" render={({ field }) => (<FormItem><FormLabel>Selling Price (€)</FormLabel><FormControl><Input {...field} placeholder="e.g. 29,99" disabled={!canEditSelling} onBlur={(e) => { const value = e.target.value; if (value) { const parsed = parsePriceFromUserInput(value); if (parsed !== undefined) { setValue("sellingPrice", formatPriceForDisplay(parsed) as any, { shouldValidate: true });}}}} /></FormControl><FormMessage/></FormItem>)} />
               )}
             </div>
             {canEditSuppliers && suppliers && suppliers.length > 0 && (

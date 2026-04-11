@@ -113,6 +113,7 @@ export default function OrdersPage() {
   const statusCounts = useMemo(() => {
     const counts: Record<OrderStatus | "all", number> = {
       all: orders.length,
+      awaiting_approval: 0,
       pending: 0,
       awaiting_payment: 0,
       paid: 0,
@@ -166,6 +167,7 @@ export default function OrdersPage() {
   // Status tabs
   const statusTabs: StatusTab<OrderStatus>[] = [
     { value: "all", label: "All", count: statusCounts.all },
+    { value: "awaiting_approval", label: "Awaiting Approval", count: statusCounts.awaiting_approval },
     { value: "pending", label: "Pending", count: statusCounts.pending },
     { value: "awaiting_payment", label: "Awaiting Payment", count: statusCounts.awaiting_payment },
     { value: "paid", label: "Paid", count: statusCounts.paid },

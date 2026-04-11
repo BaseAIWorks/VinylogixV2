@@ -5,16 +5,25 @@ import { cn } from "@/lib/utils";
 import { Package, ShoppingCart, Users, Bell, HardHat, Briefcase, FileText, type LucideIcon } from "lucide-react";
 import { Button } from "./button";
 
+// action accepts either a ReactNode (callers render their own button/JSX,
+// e.g. a ternary switching between "Clear Filters" and "Add New") or the
+// simple object shape for single-CTA cases.
+type EmptyStateAction = {
+  label: string;
+  onClick?: () => void;
+  href?: string;
+};
+
 interface EmptyStateProps {
   icon?: LucideIcon;
   title: string;
   description?: string;
-  action?: {
-    label: string;
-    onClick?: () => void;
-    href?: string;
-  };
+  action?: React.ReactNode | EmptyStateAction;
   className?: string;
+}
+
+function isActionObject(a: unknown): a is EmptyStateAction {
+  return typeof a === 'object' && a !== null && 'label' in a && typeof (a as any).label === 'string';
 }
 
 const defaultIcons: Record<string, LucideIcon> = {
@@ -51,12 +60,16 @@ export function EmptyState({
         </p>
       )}
       {action && (
-        action.href ? (
-          <Button asChild>
-            <a href={action.href}>{action.label}</a>
-          </Button>
+        isActionObject(action) ? (
+          action.href ? (
+            <Button asChild>
+              <a href={action.href}>{action.label}</a>
+            </Button>
+          ) : (
+            <Button onClick={action.onClick}>{action.label}</Button>
+          )
         ) : (
-          <Button onClick={action.onClick}>{action.label}</Button>
+          action
         )
       )}
     </div>

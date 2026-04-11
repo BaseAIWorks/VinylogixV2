@@ -49,7 +49,9 @@ interface GroupedNotifications {
 }
 
 function NotificationsPageContent() {
-  const { user, notifications, markNotificationRead, refreshNotifications } = useAuth();
+  // AuthContext already refreshes notifications via its Firestore listener, so
+  // no explicit refresh call is needed after local actions.
+  const { user, notifications, markNotificationRead } = useAuth();
   const { toast } = useToast();
 
   const [categoryFilter, setCategoryFilter] = useState<NotificationCategory>("all");
@@ -101,7 +103,6 @@ function NotificationsPageContent() {
     try {
       await markAllNotificationsAsRead(user);
       toast({ title: "Done", description: "All notifications marked as read." });
-      refreshNotifications?.();
     } catch (error) {
       toast({ title: "Error", description: "Could not mark all as read.", variant: "destructive" });
     } finally {
@@ -113,7 +114,6 @@ function NotificationsPageContent() {
     try {
       await deleteNotification(notificationId);
       toast({ title: "Deleted", description: "Notification removed." });
-      refreshNotifications?.();
     } catch (error) {
       toast({ title: "Error", description: "Could not delete notification.", variant: "destructive" });
     }
