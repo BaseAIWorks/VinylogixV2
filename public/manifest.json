@@ -4,8 +4,8 @@
   "description": "The ultimate platform for vinyl record stores and collectors to manage their inventory and passion.",
   "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#26222B",
-  "theme_color": "#673AB7",
+  "background_color": "#E86A33",
+  "theme_color": "#E86A33",
   "icons": [
     {
       "src": "/icon-192x192.png",
