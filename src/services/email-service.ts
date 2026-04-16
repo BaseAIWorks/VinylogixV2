@@ -86,11 +86,21 @@ const renderOrderSummary = (order: Order, distributor?: RenderableDistributor | 
         <td style="padding: 4px 12px; text-align: right; color: #111827; font-size: 13px; white-space: nowrap;">€ ${formatPriceForDisplay(shipping)}</td>
       </tr>
     `);
-  } else if (order.freeShippingApplied) {
+  } else if (order.freeShippingApplied === true) {
+    // Only shown when the distributor's shipping calc actually marked this
+    // order as free (e.g. subtotal exceeded the free-shipping threshold).
+    // Not a default — most orders will hit the paid-shipping row above.
     totalsRows.push(`
       <tr>
         <td style="padding: 4px 12px; text-align: right; color: #6b7280; font-size: 13px;">Shipping</td>
         <td style="padding: 4px 12px; text-align: right; color: #16a34a; font-size: 13px; font-weight: 600;">Free</td>
+      </tr>
+    `);
+  } else if (order.shippingMethod === 'pickup') {
+    totalsRows.push(`
+      <tr>
+        <td style="padding: 4px 12px; text-align: right; color: #6b7280; font-size: 13px;">Shipping</td>
+        <td style="padding: 4px 12px; text-align: right; color: #6b7280; font-size: 13px; font-style: italic;">Pickup — no shipping</td>
       </tr>
     `);
   }
