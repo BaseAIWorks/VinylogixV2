@@ -72,13 +72,24 @@ export async function POST(req: NextRequest) {
     if (notifyCustomer) {
       try {
         const { sendUpdatedPaymentLinkEmail } = await import('@/services/email-service');
+        const { getInvoicePdfBase64 } = await import('@/lib/invoice-utils');
         const order = hydrateTimestamps(orderData, [
           'createdAt', 'updatedAt', 'paidAt', 'shippedAt', 'approvedAt',
           'paymentLinkCreatedAt', 'paymentLinkExpiresAt',
           'itemChangesNotifiedAt', 'invoiceEmailedAt',
         ]) as Order;
-        const distributorName = distributor.companyName || distributor.name || 'Your distributor';
-        await sendUpdatedPaymentLinkEmail(order, result.sessionUrl, distributorName);
+        const hydratedDistributor = hydrateTimestamps(distributor as any, ['createdAt', 'updatedAt']) as any;
+
+        // Attach the up-to-date invoice PDF so the customer has a copy of
+        // what the new link charges for — matches the approve+pay email.
+        let invoicePdf: { base64: string; filename: string } | undefined;
+        try {
+          invoicePdf = await getInvoicePdfBase64(order, hydratedDistributor);
+        } catch (pdfErr) {
+          console.error('[regenerate] Invoice PDF generation failed (sending email without attachment):', pdfErr);
+        }
+
+        await sendUpdatedPaymentLinkEmail(order, result.sessionUrl, hydratedDistributor, invoicePdf);
       } catch (err) {
         // Email failure shouldn't invalidate the regeneration — link is already created/stored.
         console.error('Failed to send updated payment link email:', err);

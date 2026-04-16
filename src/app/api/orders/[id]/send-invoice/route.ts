@@ -52,10 +52,11 @@ export async function POST(
 
     const { base64, filename } = await getInvoicePdfBase64(order, distributor);
 
-    const distributorName = distributor.companyName || distributor.name || 'Your distributor';
     const replyToEmail = (distData.contactEmail as string | undefined) || undefined;
 
-    await sendInvoiceToCustomerEmail(order, distributorName, base64, filename, replyToEmail);
+    // Pass full distributor object so the email renderer can use branding,
+    // contact footer, and — when the order isn't paid yet — payment details.
+    await sendInvoiceToCustomerEmail(order, distributor, base64, filename, replyToEmail);
 
     await orderRef.update({
       invoiceEmailedAt: Timestamp.now(),

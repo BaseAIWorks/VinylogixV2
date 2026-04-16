@@ -1426,50 +1426,48 @@ View your order: ${siteUrl}/my-orders/${order.id}
  */
 export async function sendOrderPaidConfirmation(
   order: Order,
-  distributorName: string,
+  distributorOrName: string | RenderableDistributor,
   paymentMethodLabel: string
 ): Promise<void> {
-  const billable = getBillableItems(order);
-  const safeDistributor = escapeHtml(distributorName);
+  const distributor: RenderableDistributor | null =
+    typeof distributorOrName === 'object' && distributorOrName !== null
+      ? distributorOrName
+      : null;
+  const distributorName = distributor ? distributorDisplayName(distributor) : (distributorOrName as string);
   const orderRef = order.orderNumber || order.id.slice(0, 8);
+  const effectiveReplyTo = distributor?.contactEmail || undefined;
+
+  const methodBadge = `
+    <div style="padding: 0 24px 12px 24px; background: white;">
+      <div style="display: inline-block; padding: 6px 12px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 999px; font-size: 13px; color: #065f46;">
+        ✓ Paid via <strong>${escapeHtml(paymentMethodLabel)}</strong>
+      </div>
+    </div>
+  `;
+  const summary = renderOrderSummary(order, distributor);
+  const cta = `
+    <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
+      <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #111827; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-size: 14px;">View Order Details</a>
+      <p style="margin: 14px 0 0 0; color: #6b7280; font-size: 12px;">Your order is now being processed — you'll receive another email when it ships.</p>
+    </div>
+  `;
+  const bodyHtml = methodBadge + summary + cta;
+
+  const html = renderEmailShell({
+    distributor,
+    title: 'Payment received',
+    intro: `<strong>${escapeHtml(distributorName)}</strong> has confirmed receipt of your payment for this order. Thank you!`,
+    accentColor: '#16a34a',
+    bodyHtml,
+  });
 
   try {
     await resend.emails.send({
       from: 'Vinylogix Orders <orders@vinylogix.com>',
       to: [order.viewerEmail],
+      ...(effectiveReplyTo ? { replyTo: effectiveReplyTo } : {}),
       subject: `Payment Received — Order #${orderRef}`,
-      html: `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: #16a34a; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-    <h1 style="margin: 0; font-size: 20px;">✓ Payment Received</h1>
-  </div>
-  <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
-    <p>Hello ${escapeHtml(order.customerName || '')},</p>
-    <p><strong>${safeDistributor}</strong> has confirmed receipt of your payment for order <strong>#${escapeHtml(orderRef)}</strong>. Thank you!</p>
-
-    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 16px 0;">
-      <p style="margin: 0 0 8px 0; font-size: 13px; color: #6b7280;">Payment method: <strong style="color: #1f2937;">${escapeHtml(paymentMethodLabel)}</strong></p>
-      ${billable.map(item => `
-        <div style="padding: 6px 0; border-bottom: 1px solid #f3f4f6;">
-          <p style="margin: 0; font-size: 14px;">${escapeHtml(item.artist)} – ${escapeHtml(item.title)} <span style="color: #6b7280;">× ${item.quantity}</span></p>
-        </div>
-      `).join('')}
-      <p style="margin: 12px 0 0 0; font-size: 16px; font-weight: 700;">Total paid: € ${formatPriceForDisplay(order.totalAmount)}</p>
-    </div>
-
-    <p>Your order is now being processed. You'll receive another email when it ships.</p>
-
-    <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 0;">View Order Details</a>
-  </div>
-  <div style="text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px;">
-    <p>This email was sent from Vinylogix on behalf of ${safeDistributor}</p>
-  </div>
-</body>
-</html>
-      `,
+      html,
       text: `Payment Received — Order #${orderRef}
 
 Hello ${order.customerName || ''},
@@ -1499,52 +1497,50 @@ View your order: ${siteUrl}/my-orders/${order.id}
 export async function sendUpdatedPaymentLinkEmail(
   order: Order,
   paymentLink: string,
-  distributorName: string
+  distributorOrName: string | RenderableDistributor,
+  invoicePdf?: { base64: string; filename: string }
 ): Promise<void> {
-  const billable = getBillableItems(order);
-  const safeDistributor = escapeHtml(distributorName);
+  const distributor: RenderableDistributor | null =
+    typeof distributorOrName === 'object' && distributorOrName !== null
+      ? distributorOrName
+      : null;
+  const distributorName = distributor ? distributorDisplayName(distributor) : (distributorOrName as string);
   const orderRef = order.orderNumber || order.id.slice(0, 8);
+  const effectiveReplyTo = distributor?.contactEmail || undefined;
+
+  const warning = `
+    <div style="margin: 0 24px 16px 24px; padding: 12px 14px; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 4px; font-size: 13px; color: #78350f;">
+      <strong>Use this new link</strong> — any earlier payment link for this order is no longer valid.
+    </div>
+  `;
+  const summary = renderOrderSummary(order, distributor);
+  const payButton = `
+    <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
+      <a href="${escapeHtml(paymentLink)}" style="display: inline-block; background: #16a34a; color: white; padding: 14px 44px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; box-shadow: 0 2px 4px rgba(22,163,74,0.25);">Pay Securely</a>
+      <p style="margin: 10px 0 0 0; color: #6b7280; font-size: 12px;">This payment link expires in 24 hours.</p>
+      <p style="margin: 14px 0 0 0; color: #6b7280; font-size: 12px;"><a href="${siteUrl}/my-orders/${order.id}" style="color: #6b7280;">View order details on Vinylogix</a></p>
+      ${invoicePdf ? '<p style="margin: 10px 0 0 0; color: #6b7280; font-size: 12px;">📎 The updated invoice is attached as a PDF.</p>' : ''}
+    </div>
+  `;
+
+  const bodyHtml = warning + summary + payButton;
+
+  const html = renderEmailShell({
+    distributor,
+    title: 'Updated payment link',
+    intro: `<strong>${escapeHtml(distributorName)}</strong> has updated your order and sent a fresh payment link. You'll be charged exactly the total shown here.`,
+    accentColor: '#d97706',
+    bodyHtml,
+  });
 
   try {
     await resend.emails.send({
       from: 'Vinylogix Orders <orders@vinylogix.com>',
       to: [order.viewerEmail],
+      ...(effectiveReplyTo ? { replyTo: effectiveReplyTo } : {}),
       subject: `Updated Payment Link — Order #${orderRef}`,
-      html: `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: #1f2937; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-    <h1 style="margin: 0; font-size: 20px;">Updated Payment Link</h1>
-  </div>
-  <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
-    <p>Hello ${escapeHtml(order.customerName || '')},</p>
-    <p><strong>${safeDistributor}</strong> has updated your order <strong>#${escapeHtml(orderRef)}</strong> and sent a new payment link. <strong>Please use this link — any earlier payment link for this order is no longer valid.</strong></p>
-
-    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 16px 0;">
-      ${billable.map(item => `
-        <div style="padding: 8px 0; border-bottom: 1px solid #f3f4f6;">
-          <p style="margin: 0; font-weight: 600;">${escapeHtml(item.artist)} – ${escapeHtml(item.title)}</p>
-          <p style="margin: 0; color: #6b7280; font-size: 13px;">Qty: ${item.quantity} · € ${formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</p>
-        </div>
-      `).join('')}
-      <p style="margin: 12px 0 0 0; font-size: 16px; font-weight: 700;">Total: € ${formatPriceForDisplay(order.totalAmount)}</p>
-    </div>
-
-    <div style="text-align: center; margin: 24px 0;">
-      <a href="${paymentLink}" style="display: inline-block; background: #16a34a; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600;">Pay Now</a>
-    </div>
-    <p style="text-align: center; color: #6b7280; font-size: 12px;">This link expires in 24 hours.</p>
-
-    <p style="margin-top: 20px;">If you have any questions about this update, please contact <strong>${safeDistributor}</strong> directly.</p>
-  </div>
-  <div style="text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px;">
-    <p>This email was sent from Vinylogix on behalf of ${safeDistributor}</p>
-  </div>
-</body>
-</html>
-      `,
+      ...(invoicePdf ? { attachments: [{ filename: invoicePdf.filename, content: invoicePdf.base64 }] } : {}),
+      html,
       text: `Updated Payment Link — Order #${orderRef}
 
 Hello ${order.customerName || ''},
@@ -1556,6 +1552,7 @@ New total: € ${formatPriceForDisplay(order.totalAmount)}
 
 Pay now: ${paymentLink}
 This link expires in 24 hours.
+${invoicePdf ? '\nThe updated invoice is attached as a PDF.' : ''}
 `,
     });
     console.log(`Updated payment link email sent to ${order.viewerEmail} for order ${orderRef}`);
@@ -1572,57 +1569,61 @@ This link expires in 24 hours.
  */
 export async function sendInvoiceToCustomerEmail(
   order: Order,
-  distributorName: string,
+  distributorOrName: string | RenderableDistributor,
   pdfBase64: string,
   filename: string,
   replyToEmail?: string
 ): Promise<void> {
-  const billable = getBillableItems(order);
-  const itemCount = billable.reduce((sum, i) => sum + (i.quantity || 0), 0);
-  const safeDistributor = escapeHtml(distributorName);
+  const distributor: RenderableDistributor | null =
+    typeof distributorOrName === 'object' && distributorOrName !== null
+      ? distributorOrName
+      : null;
+  const distributorName = distributor ? distributorDisplayName(distributor) : (distributorOrName as string);
   const orderRef = order.orderNumber || order.id.slice(0, 8);
+  const effectiveReplyTo = replyToEmail || distributor?.contactEmail || undefined;
+
+  // When the order is still awaiting payment, include the payment details
+  // so the customer can act on the invoice right away (matches the
+  // invoice-only approval email). For paid/shipped orders, no payment
+  // details — it's just a receipt-style update.
+  const showPaymentDetails =
+    order.paymentStatus !== 'paid' &&
+    order.status !== 'cancelled' &&
+    !order.paymentLink; // skip when there's already an active Stripe link
+
+  const summary = renderOrderSummary(order, distributor);
+  const paymentSection = showPaymentDetails ? renderPaymentDetailsSection(distributor, orderRef) : '';
+  const cta = `
+    <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
+      <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #111827; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-size: 14px;">View Order Details</a>
+      <p style="margin: 10px 0 0 0; color: #6b7280; font-size: 12px;">📎 The updated invoice is attached as a PDF.</p>
+    </div>
+  `;
+  const bodyHtml = summary + paymentSection + cta;
+
+  const html = renderEmailShell({
+    distributor,
+    title: 'Updated invoice',
+    intro: `<strong>${escapeHtml(distributorName)}</strong> has sent you an updated invoice reflecting the current order list. The PDF is attached to this email${showPaymentDetails ? '; payment details are below' : ''}.`,
+    accentColor: '#2563eb',
+    bodyHtml,
+  });
 
   try {
     await resend.emails.send({
       from: 'Vinylogix Orders <orders@vinylogix.com>',
       to: [order.viewerEmail],
-      ...(replyToEmail ? { replyTo: replyToEmail } : {}),
+      ...(effectiveReplyTo ? { replyTo: effectiveReplyTo } : {}),
       subject: `Updated Invoice — Order #${orderRef}`,
-      attachments: [
-        {
-          filename,
-          content: pdfBase64,
-        },
-      ],
-      html: `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: #1f2937; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-    <h1 style="margin: 0; font-size: 20px;">Updated Invoice</h1>
-  </div>
-  <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
-    <p>Hello ${escapeHtml(order.customerName || '')},</p>
-    <p><strong>${safeDistributor}</strong> has sent you an updated invoice for order <strong>#${escapeHtml(orderRef)}</strong>.</p>
-    <p>The updated invoice reflects the current order list (${itemCount} item${itemCount === 1 ? '' : 's'}) and is attached to this email as a PDF.</p>
-    <p style="margin: 20px 0;"><strong>Order total:</strong> € ${formatPriceForDisplay(order.totalAmount)}</p>
-    <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 0;">View Order Details</a>
-    <p style="margin-top: 20px;">If you have any questions about this invoice, please contact <strong>${safeDistributor}</strong> directly.</p>
-  </div>
-  <div style="text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px;">
-    <p>This email was sent from Vinylogix on behalf of ${safeDistributor}</p>
-  </div>
-</body>
-</html>
-      `,
+      attachments: [{ filename, content: pdfBase64 }],
+      html,
       text: `Updated Invoice — Order #${orderRef}
 
 Hello ${order.customerName || ''},
 
 ${distributorName} has sent you an updated invoice for order #${orderRef}.
-The updated invoice (${itemCount} item${itemCount === 1 ? '' : 's'}, total € ${formatPriceForDisplay(order.totalAmount)}) is attached as a PDF.
-
+Total: € ${formatPriceForDisplay(order.totalAmount)}
+${showPaymentDetails ? `\nPlease transfer the total using the payment details on the attached invoice and include #${orderRef} as reference.\n` : ''}
 View your order: ${siteUrl}/my-orders/${order.id}
 `,
     });

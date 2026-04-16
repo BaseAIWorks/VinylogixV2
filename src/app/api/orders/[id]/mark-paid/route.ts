@@ -192,12 +192,12 @@ export async function POST(
         const { sendOrderPaidConfirmation } = await import('@/services/email-service');
         const distSnap = await adminDb.collection('distributors').doc(orderData.distributorId).get();
         const distData = distSnap.exists ? distSnap.data() as any : {};
-        const distributorName = distData.companyName || distData.name || 'Your distributor';
+        const distributor = hydrateTimestamps(distData, ['createdAt', 'updatedAt']) as any;
         const order = hydrateTimestamps(orderData, [
           'createdAt', 'updatedAt', 'paidAt', 'shippedAt', 'approvedAt',
           'paymentLinkCreatedAt', 'itemChangesNotifiedAt', 'invoiceEmailedAt',
         ]) as Order;
-        await sendOrderPaidConfirmation(order, distributorName, METHOD_LABELS[paymentMethod]);
+        await sendOrderPaidConfirmation(order, distributor, METHOD_LABELS[paymentMethod]);
       } catch (err) {
         console.error('Failed to send payment confirmation email:', err);
       }
