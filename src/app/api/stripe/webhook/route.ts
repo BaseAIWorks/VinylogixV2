@@ -198,15 +198,56 @@ export async function POST(req: NextRequest) {
           try {
             // Check if this is a payment for an existing order (Request Order flow)
             if (session.metadata?.isOrderPayment === 'true' && session.metadata?.orderId) {
+              const orderId = session.metadata.orderId;
               const { updateOrderPaymentStatus } = await import('@/services/server-order-service');
               await updateOrderPaymentStatus(
-                session.metadata.orderId,
+                orderId,
                 'paid',
                 session.payment_intent as string
               );
               console.log(
-                `Updated existing order ${session.metadata.orderId} to paid`
+                `Updated existing order ${orderId} to paid`
               );
+
+              // Defense-in-depth: compare Stripe's captured amount against the
+              // current order.totalAmount. If the customer paid via a stale link
+              // (e.g. distributor adjusted items after the link was sent), flag
+              // the order so a human can reconcile. Money is already captured by
+              // Stripe at this point — we only record the discrepancy.
+              try {
+                const { getAdminDb } = await import('@/lib/firebase-admin');
+                const { Timestamp } = await import('firebase-admin/firestore');
+                const adminDb = getAdminDb();
+                if (adminDb) {
+                  const orderSnap = await adminDb.collection('orders').doc(orderId).get();
+                  if (orderSnap.exists) {
+                    const orderData = orderSnap.data() as any;
+                    const expectedCents = Math.round((orderData.totalAmount || 0) * 100);
+                    const actualCents = session.amount_total ?? 0;
+                    // Allow 2 cents tolerance for rounding quirks between our tax math and Stripe's
+                    if (Math.abs(actualCents - expectedCents) > 2) {
+                      await orderSnap.ref.update({
+                        status: 'on_hold',
+                        paymentAmountMismatch: {
+                          sessionAmountCents: actualCents,
+                          expectedAmountCents: expectedCents,
+                          currency: session.currency || 'eur',
+                          stripeSessionId: session.id,
+                          detectedAt: Timestamp.now(),
+                        },
+                        updatedAt: Timestamp.now(),
+                      });
+                      console.warn(
+                        `[webhook] Payment amount mismatch on order ${orderId}: ` +
+                        `Stripe charged ${actualCents}c, order expected ${expectedCents}c. ` +
+                        `Order moved to on_hold for reconciliation.`
+                      );
+                    }
+                  }
+                }
+              } catch (mismatchErr) {
+                console.error(`[webhook] Failed mismatch check for order ${orderId}:`, mismatchErr);
+              }
             } else {
               // New order from direct checkout
               const order = await createOrderFromCheckout(session);

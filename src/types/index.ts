@@ -626,9 +626,22 @@ export interface Order {
   // Order Request Fields
   paymentLink?: string;
   paymentLinkExpiresAt?: string;
+  paymentLinkCreatedAt?: string; // ISO — set on every (re)create so UI can detect a stale link
   approvedAt?: string;
   approvedBy?: string;
   rejectionReason?: string;
+
+  // Populated if the webhook detects that the customer paid via a Stripe session
+  // whose amount_total does not match the current order.totalAmount (e.g. they
+  // paid a stale link after items were adjusted). The order is moved to on_hold
+  // so a human can reconcile (partial refund / credit note / etc.).
+  paymentAmountMismatch?: {
+    sessionAmountCents: number;
+    expectedAmountCents: number;
+    currency: string;
+    stripeSessionId: string;
+    detectedAt: string; // ISO
+  };
 
   // Item status adjustment
   originalTotalAmount?: number; // Preserved when items are marked unavailable

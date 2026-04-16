@@ -12,7 +12,13 @@ const ORDERS_COLLECTION = 'orders';
 
 const processOrderTimestamps = (orderData: any): Order => {
   const processed = { ...orderData };
-  const tsFields = ['createdAt', 'updatedAt', 'itemChangesNotifiedAt', 'invoiceEmailedAt'] as const;
+  const tsFields = [
+    'createdAt',
+    'updatedAt',
+    'itemChangesNotifiedAt',
+    'invoiceEmailedAt',
+    'paymentLinkCreatedAt',
+  ] as const;
   for (const field of tsFields) {
     if (processed[field] && processed[field] instanceof Timestamp) {
       processed[field] = processed[field].toDate().toISOString();

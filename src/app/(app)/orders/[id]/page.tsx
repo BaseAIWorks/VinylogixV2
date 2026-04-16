@@ -72,6 +72,7 @@ export default function OrderDetailPage() {
     const [isSavingItemStatuses, setIsSavingItemStatuses] = useState(false);
     const [isSendingNotification, setIsSendingNotification] = useState(false);
     const [isEmailingInvoice, setIsEmailingInvoice] = useState(false);
+    const [isRegeneratingPaymentLink, setIsRegeneratingPaymentLink] = useState(false);
     const [isRecalculating, setIsRecalculating] = useState(false);
     const [shippingCostInput, setShippingCostInput] = useState<string>('');
     const [isSavingShipping, setIsSavingShipping] = useState(false);
@@ -79,6 +80,17 @@ export default function OrderDetailPage() {
     const hasItemStatusChanges = order?.items.some(item => item.itemStatus && item.itemStatus !== 'available') ?? false;
     const itemChangesNotifiedAt = order?.itemChangesNotifiedAt;
     const invoiceEmailedAt = order?.invoiceEmailedAt;
+
+    // Payment link state — a link is "active" if we have a URL, the order isn't paid,
+    // and Stripe's 24h expiry hasn't passed. Stale means the order was modified after
+    // the link was created (i.e. items / totals may no longer match the link).
+    const paymentLinkExpiresAt = order?.paymentLinkExpiresAt;
+    const paymentLinkCreatedAt = order?.paymentLinkCreatedAt;
+    const hasPaymentLink = !!order?.paymentLink;
+    const paymentLinkExpired = paymentLinkExpiresAt ? new Date(paymentLinkExpiresAt) < new Date() : false;
+    const hasActivePaymentLink = hasPaymentLink && !paymentLinkExpired && order?.paymentStatus !== 'paid';
+    const isPaymentLinkStale = hasActivePaymentLink && paymentLinkCreatedAt && order?.updatedAt
+      && new Date(order.updatedAt).getTime() - new Date(paymentLinkCreatedAt).getTime() > 5_000; // >5s diff
     // "Needs (re-)notification" when the order was modified AFTER the last notification,
     // or when no notification was sent yet.
     const needsItemChangesNotification = hasItemStatusChanges && (
@@ -339,6 +351,15 @@ export default function OrderDetailPage() {
 
     const handleSaveItemStatuses = async () => {
         if (!order || !user || !hasUnsavedItemChanges) return;
+        // Warn the distributor that an active Stripe payment link will no longer
+        // match the order after saving. Link isn't auto-invalidated here — they
+        // must click "Regenerate Payment Link" afterwards (the button appears).
+        if (hasActivePaymentLink) {
+            const ok = window.confirm(
+                'This order has an active Stripe payment link. Saving these changes will make that link out-of-date (it still charges the old total). After saving, click "Regenerate Payment Link" to invalidate the old link and send the customer a new one. Continue?'
+            );
+            if (!ok) return;
+        }
         setIsSavingItemStatuses(true);
         try {
             // Merge status and quantity changes per item
@@ -383,6 +404,45 @@ export default function OrderDetailPage() {
             toast({ title: "Error", description: error?.message || "Failed to send notification email.", variant: "destructive" });
         } finally {
             setIsSendingNotification(false);
+        }
+    };
+
+    const handleRegeneratePaymentLink = async () => {
+        if (!order) return;
+        const notify = window.confirm(
+            'Regenerate the Stripe payment link? This will invalidate the current link so the customer can only pay the up-to-date total.\n\nClick OK to also email the new link to the customer, or Cancel to only generate it (you can share it manually).'
+        );
+        setIsRegeneratingPaymentLink(true);
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            const res = await fetch('/api/stripe/payment-link/regenerate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ orderId: order.id, notifyCustomer: notify }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(data?.error || 'Request failed');
+            }
+            toast({
+                title: 'Payment link regenerated',
+                description: notify
+                    ? `New link created, old link invalidated, and emailed to ${order.viewerEmail}.`
+                    : 'New link created, old link invalidated. Share it with the customer manually.',
+            });
+            fetchOrder();
+        } catch (error: any) {
+            console.error('Failed to regenerate payment link:', error);
+            toast({
+                title: 'Error',
+                description: error?.message || 'Failed to regenerate payment link.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsRegeneratingPaymentLink(false);
         }
     };
 
@@ -578,6 +638,69 @@ export default function OrderDetailPage() {
 
             <div className="grid md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 space-y-6">
+                    {/* Payment amount mismatch — shown when the webhook detected the customer paid a stale link */}
+                    {order.paymentAmountMismatch && canManageOrder && (
+                        <Card className="border-red-300 bg-red-50 dark:bg-red-950/20">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-3 text-red-700 dark:text-red-400">
+                                    <AlertCircle className="h-5 w-5" /> Payment Amount Mismatch
+                                </CardTitle>
+                                <CardDescription className="text-red-700/80 dark:text-red-400/80">
+                                    Stripe captured a different amount than the current order total. Order has been put on hold for review.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="text-sm text-red-800 dark:text-red-300 space-y-1">
+                                <p><strong>Stripe charged:</strong> € {(order.paymentAmountMismatch.sessionAmountCents / 100).toFixed(2)}</p>
+                                <p><strong>Expected (current total):</strong> € {(order.paymentAmountMismatch.expectedAmountCents / 100).toFixed(2)}</p>
+                                <p><strong>Difference:</strong> € {((order.paymentAmountMismatch.sessionAmountCents - order.paymentAmountMismatch.expectedAmountCents) / 100).toFixed(2)}</p>
+                                <p className="pt-2 text-xs">Reconcile via Stripe Dashboard (partial refund or credit note) and then manually update the order status.</p>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Payment link status — active / stale / expired */}
+                    {canManageOrder && hasPaymentLink && order.paymentStatus !== 'paid' && (
+                        <Card className={isPaymentLinkStale ? 'border-amber-300 bg-amber-50 dark:bg-amber-950/20' : paymentLinkExpired ? 'border-muted' : 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20'}>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-3">
+                                    <DollarSign className={`h-5 w-5 ${isPaymentLinkStale ? 'text-amber-600' : paymentLinkExpired ? 'text-muted-foreground' : 'text-emerald-600'}`} />
+                                    Payment Link
+                                    {paymentLinkExpired
+                                        ? <Badge variant="outline">Expired</Badge>
+                                        : isPaymentLinkStale
+                                            ? <Badge className="bg-amber-500/20 text-amber-700 border-amber-500/30">Out of date</Badge>
+                                            : <Badge className="bg-emerald-500/20 text-emerald-700 border-emerald-500/30">Active</Badge>}
+                                </CardTitle>
+                                <CardDescription>
+                                    {paymentLinkExpired
+                                        ? 'The 24-hour payment window has passed. Regenerate to send a new link.'
+                                        : isPaymentLinkStale
+                                            ? 'This order was modified after the current payment link was created. The link still charges the old total and items — regenerate to sync it with the current order.'
+                                            : `Valid until ${paymentLinkExpiresAt ? format(new Date(paymentLinkExpiresAt), 'dd MMM yyyy HH:mm') : 'unknown'}.`}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {order.paymentLink && (
+                                    <div className="flex items-center gap-2">
+                                        <Input readOnly value={order.paymentLink} className="text-xs font-mono" onClick={(e) => (e.target as HTMLInputElement).select()} />
+                                        <Button variant="outline" size="sm" onClick={() => { navigator.clipboard?.writeText(order.paymentLink!); toast({ title: 'Copied', description: 'Payment link copied to clipboard.' }); }}>Copy</Button>
+                                    </div>
+                                )}
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button onClick={handleRegeneratePaymentLink} disabled={isRegeneratingPaymentLink} size="sm" variant={isPaymentLinkStale ? 'default' : 'outline'}>
+                                        {isRegeneratingPaymentLink ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                                        Regenerate Payment Link
+                                    </Button>
+                                    {paymentLinkCreatedAt && (
+                                        <span className="text-xs text-muted-foreground">
+                                            Created {format(new Date(paymentLinkCreatedAt), 'dd MMM HH:mm')}
+                                        </span>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-3"><Music className="h-6 w-6 text-primary" />Items in this Order</CardTitle>

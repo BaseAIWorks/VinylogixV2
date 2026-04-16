@@ -1094,6 +1094,81 @@ View your order: ${siteUrl}/my-orders/${order.id}
 }
 
 /**
+ * Sends the customer a new payment link after the distributor regenerated it —
+ * typically because items were adjusted and the old link no longer matched
+ * the current order total. Uses getBillableItems so the line list and total
+ * match what Stripe will charge.
+ */
+export async function sendUpdatedPaymentLinkEmail(
+  order: Order,
+  paymentLink: string,
+  distributorName: string
+): Promise<void> {
+  const billable = getBillableItems(order);
+  const safeDistributor = escapeHtml(distributorName);
+  const orderRef = order.orderNumber || order.id.slice(0, 8);
+
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      to: [order.viewerEmail],
+      subject: `Updated Payment Link — Order #${orderRef}`,
+      html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: #1f2937; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+    <h1 style="margin: 0; font-size: 20px;">Updated Payment Link</h1>
+  </div>
+  <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+    <p>Hello ${escapeHtml(order.customerName || '')},</p>
+    <p><strong>${safeDistributor}</strong> has updated your order <strong>#${escapeHtml(orderRef)}</strong> and sent a new payment link. <strong>Please use this link — any earlier payment link for this order is no longer valid.</strong></p>
+
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+      ${billable.map(item => `
+        <div style="padding: 8px 0; border-bottom: 1px solid #f3f4f6;">
+          <p style="margin: 0; font-weight: 600;">${escapeHtml(item.artist)} – ${escapeHtml(item.title)}</p>
+          <p style="margin: 0; color: #6b7280; font-size: 13px;">Qty: ${item.quantity} · € ${formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</p>
+        </div>
+      `).join('')}
+      <p style="margin: 12px 0 0 0; font-size: 16px; font-weight: 700;">Total: € ${formatPriceForDisplay(order.totalAmount)}</p>
+    </div>
+
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="${paymentLink}" style="display: inline-block; background: #16a34a; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600;">Pay Now</a>
+    </div>
+    <p style="text-align: center; color: #6b7280; font-size: 12px;">This link expires in 24 hours.</p>
+
+    <p style="margin-top: 20px;">If you have any questions about this update, please contact <strong>${safeDistributor}</strong> directly.</p>
+  </div>
+  <div style="text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px;">
+    <p>This email was sent from Vinylogix on behalf of ${safeDistributor}</p>
+  </div>
+</body>
+</html>
+      `,
+      text: `Updated Payment Link — Order #${orderRef}
+
+Hello ${order.customerName || ''},
+
+${distributorName} has updated your order #${orderRef} and sent a new payment link.
+IMPORTANT: any earlier payment link for this order is no longer valid.
+
+New total: € ${formatPriceForDisplay(order.totalAmount)}
+
+Pay now: ${paymentLink}
+This link expires in 24 hours.
+`,
+    });
+    console.log(`Updated payment link email sent to ${order.viewerEmail} for order ${orderRef}`);
+  } catch (error) {
+    console.error('Failed to send updated payment link email:', error);
+    throw error;
+  }
+}
+
+/**
  * Sends the distributor's invoice PDF to the customer as an email attachment.
  * Used after a distributor adjusts items on an already-approved order so the
  * customer receives an up-to-date invoice reflecting the current order list.
