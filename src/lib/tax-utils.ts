@@ -73,15 +73,25 @@ export function isEuCountry(country: string): boolean {
 /**
  * Determine if reverse charge applies.
  * Reverse charge = B2B intra-EU: customer has VAT number + different EU country than seller.
+ *
+ * When `validated` is supplied and `requireValidated` is true, the result only
+ * returns true if the VAT number has been VIES-verified. Use this form on
+ * order-creation paths where we need legal certainty before shifting the tax
+ * liability to the buyer. UI previews (cart, checkout preview) can leave
+ * `requireValidated` unset to give immediate feedback based on the entered
+ * VAT number, and show a "verify to apply" hint alongside.
  */
 export function isReverseChargeApplicable(
   customerVatNumber: string | undefined,
   customerCountry: string | undefined,
-  distributorCountry: string | undefined
+  distributorCountry: string | undefined,
+  opts?: { validated?: boolean; requireValidated?: boolean }
 ): boolean {
   if (!customerVatNumber || !customerCountry || !distributorCountry) return false;
   if (customerCountry.toLowerCase() === distributorCountry.toLowerCase()) return false;
-  return isEuCountry(customerCountry) && isEuCountry(distributorCountry);
+  if (!isEuCountry(customerCountry) || !isEuCountry(distributorCountry)) return false;
+  if (opts?.requireValidated && !opts.validated) return false;
+  return true;
 }
 
 function round2(n: number): number {

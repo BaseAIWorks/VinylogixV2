@@ -340,8 +340,12 @@ export async function createOrderFromCheckout(session: Stripe.Checkout.Session):
     } else if (distributor.taxMode === 'manual' && distributor.manualTaxRate) {
       // Manual tax: calculate from total
       const { calculateTax, isReverseChargeApplicable } = await import('@/lib/tax-utils');
+      // Legal reverse charge only applies when the customer's VAT number is
+      // VIES-verified — mere presence of a VAT number is not enough to shift
+      // the liability to the buyer.
       const reverseCharge = isReverseChargeApplicable(
-        clientUser?.vatNumber, clientUser?.country, distributor.country
+        clientUser?.vatNumber, clientUser?.country, distributor.country,
+        { validated: clientUser?.vatValidated === true, requireValidated: true }
       );
       const taxResult = calculateTax(totalAmount, distributor.manualTaxRate, distributor.taxBehavior || 'inclusive', reverseCharge);
       newOrderData.subtotalAmount = taxResult.subtotal;
@@ -668,6 +672,7 @@ export async function createOrderRequestServer(params: {
   phoneNumber?: string;
   customerCompanyName?: string;
   customerVatNumber?: string;
+  customerVatValidated?: boolean; // VIES-verified flag from user profile
   customerEoriNumber?: string;
   customerChamberOfCommerce?: string;
   customerCountry?: string;
@@ -779,8 +784,11 @@ export async function createOrderRequestServer(params: {
   if (distData?.taxMode === 'manual' && distData.manualTaxRate) {
     try {
       const { calculateTax, isReverseChargeApplicable } = await import('@/lib/tax-utils');
+      // Reverse charge only applies when the customer's VAT number is
+      // VIES-verified — unverified numbers cannot legally shift VAT liability.
       const reverseCharge = isReverseChargeApplicable(
-        params.customerVatNumber, params.customerCountry, distData.country
+        params.customerVatNumber, params.customerCountry, distData.country,
+        { validated: params.customerVatValidated === true, requireValidated: true }
       );
       const taxResult = calculateTax(productTotal, distData.manualTaxRate, distData.taxBehavior || 'inclusive', reverseCharge);
       newOrderData.subtotalAmount = taxResult.subtotal;

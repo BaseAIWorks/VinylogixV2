@@ -283,6 +283,7 @@ export default function CheckoutPage() {
             phoneNumber: user.phoneNumber,
             customerCompanyName: user.companyName,
             customerVatNumber: user.vatNumber,
+            customerVatValidated: user.vatValidated === true,
             customerEoriNumber: user.eoriNumber,
             customerChamberOfCommerce: user.chamberOfCommerce,
             customerCountry: user.country,

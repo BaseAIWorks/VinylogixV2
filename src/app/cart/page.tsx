@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Image from "next/image";
-import { Minus, Plus, Trash2, ShoppingCart, ArrowRight, Download, FileDown } from "lucide-react";
+import { Minus, Plus, Trash2, ShoppingCart, ArrowRight, Download, FileDown, Info } from "lucide-react";
 import { formatPriceForDisplay } from "@/lib/utils";
+import { isReverseChargeApplicable, calculateTax } from "@/lib/tax-utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
@@ -15,8 +16,36 @@ import "jspdf-autotable";
 import Papa from "papaparse";
 
 export default function CartPage() {
-    const { cart, removeFromCart, updateCartQuantity, cartTotal, clearCart, activeDistributor } = useAuth();
+    const { user, cart, removeFromCart, updateCartQuantity, cartTotal, clearCart, activeDistributor } = useAuth();
     const router = useRouter();
+
+    // Derive the tax breakdown the customer should see BEFORE checkout:
+    //  - respects the distributor's taxMode (manual / stripe_tax / none)
+    //  - respects inclusive vs exclusive pricing
+    //  - applies reverse charge when the customer has an EU VAT number in a
+    //    different EU country than the distributor (preview: based on
+    //    presence of VAT number; the actual order uses VIES-verified state)
+    const taxMode = activeDistributor?.taxMode || 'none';
+    const taxBehavior = activeDistributor?.taxBehavior || 'inclusive';
+    const taxRate = activeDistributor?.manualTaxRate || 0;
+    const taxLabel = activeDistributor?.manualTaxLabel || 'VAT';
+
+    const reverseChargePreview = isReverseChargeApplicable(
+        user?.vatNumber,
+        user?.country,
+        activeDistributor?.country
+    );
+    const vatUnverifiedHint = !!user?.vatNumber && !user?.vatValidated && reverseChargePreview;
+
+    let previewSubtotalExcl = cartTotal;
+    let previewTax = 0;
+    let previewTotal = cartTotal;
+    if (taxMode === 'manual' && taxRate > 0) {
+        const result = calculateTax(cartTotal, taxRate, taxBehavior, reverseChargePreview);
+        previewSubtotalExcl = result.subtotal;
+        previewTax = result.taxAmount;
+        previewTotal = result.total;
+    }
 
     const cartDistributorName = activeDistributor?.name;
 
@@ -175,19 +204,61 @@ export default function CartPage() {
                                <Button variant="outline" onClick={handleDownloadPdf}><Download className="mr-2 h-4 w-4"/> Download as PDF</Button>
                                <Button variant="outline" onClick={handleDownloadCsv}><FileDown className="mr-2 h-4 w-4"/> Download as CSV</Button>
                             </div>
-                            <div className="flex flex-col sm:flex-row items-center gap-4">
-                                <div className="text-xl font-semibold">
-                                    Total: <span className="text-primary">€ {formatPriceForDisplay(cartTotal)}</span>
-                                    {activeDistributor?.taxMode === 'manual' && activeDistributor.manualTaxRate && (
-                                        <span className="text-sm font-normal text-muted-foreground ml-2">
-                                            {activeDistributor.taxBehavior === 'exclusive'
-                                                ? `+ ${activeDistributor.manualTaxLabel || 'VAT'} ${activeDistributor.manualTaxRate}%`
-                                                : `(incl. ${activeDistributor.manualTaxLabel || 'VAT'} ${activeDistributor.manualTaxRate}%)`
-                                            }
-                                        </span>
-                                    )}
-                                    {activeDistributor?.taxMode === 'stripe_tax' && (
-                                        <span className="text-sm font-normal text-muted-foreground ml-2">(VAT calculated at checkout)</span>
+                            <div className="flex flex-col sm:flex-row items-start gap-4 w-full sm:w-auto">
+                                <div className="text-sm min-w-[220px] w-full sm:w-auto">
+                                    {taxMode === 'manual' && taxRate > 0 ? (
+                                        <>
+                                            <div className="flex justify-between text-muted-foreground">
+                                                <span>Subtotal excl. {taxLabel}</span>
+                                                <span>€ {formatPriceForDisplay(previewSubtotalExcl)}</span>
+                                            </div>
+                                            <div className="flex justify-between text-muted-foreground mt-1">
+                                                <span>
+                                                    {reverseChargePreview
+                                                        ? `${taxLabel} (Reverse charge)`
+                                                        : `${taxLabel} ${taxRate}%`}
+                                                </span>
+                                                <span>€ {formatPriceForDisplay(previewTax)}</span>
+                                            </div>
+                                            <div className="flex justify-between text-xl font-semibold mt-2 pt-2 border-t">
+                                                <span>Total</span>
+                                                <span className="text-primary">€ {formatPriceForDisplay(previewTotal)}</span>
+                                            </div>
+                                            {reverseChargePreview && (
+                                                <p className="text-xs text-muted-foreground italic mt-2 flex items-start gap-1">
+                                                    <Info className="h-3 w-3 mt-0.5 shrink-0" />
+                                                    <span>{taxLabel} to be accounted for by the recipient (intra-EU reverse charge).</span>
+                                                </p>
+                                            )}
+                                            {vatUnverifiedHint && (
+                                                <p className="text-xs text-amber-600 dark:text-amber-500 italic mt-1">
+                                                    Your VAT number isn't VIES-verified yet. Verify it in your profile so reverse charge is applied on the final invoice.
+                                                </p>
+                                            )}
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                Shipping calculated at checkout based on your address.
+                                            </p>
+                                        </>
+                                    ) : taxMode === 'stripe_tax' ? (
+                                        <>
+                                            <div className="flex justify-between text-xl font-semibold">
+                                                <span>Subtotal</span>
+                                                <span className="text-primary">€ {formatPriceForDisplay(cartTotal)}</span>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground mt-2">
+                                                VAT and shipping are calculated at checkout based on your delivery address.
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="flex justify-between text-xl font-semibold">
+                                                <span>Total</span>
+                                                <span className="text-primary">€ {formatPriceForDisplay(cartTotal)}</span>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground mt-2">
+                                                Shipping calculated at checkout.
+                                            </p>
+                                        </>
                                     )}
                                 </div>
                                 <Button size="lg" onClick={() => router.push('/checkout')}>
