@@ -948,7 +948,7 @@ export default function SettingsPage() {
   const isSuperAdmin = user?.role === 'superadmin';
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-6xl mx-auto">
         {/* Business Profile Completion Dialog */}
         {isMaster && (
           <Dialog open={isProfileCompletionDialogOpen}>
@@ -1021,11 +1021,17 @@ export default function SettingsPage() {
         )}
 
         <Tabs defaultValue={tabParam || (isMaster || isSuperAdmin ? "business" : "account")} className="w-full">
-          <TabsList className={`grid w-full mb-6 ${isMaster ? 'grid-cols-6' : isSuperAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <TabsList className={`grid w-full mb-6 ${isMaster ? 'grid-cols-7' : isSuperAdmin ? 'grid-cols-2' : 'grid-cols-1'}`}>
             {(isMaster || isSuperAdmin) && (
               <TabsTrigger value="business" className="gap-2">
                 <Building2 className="h-4 w-4" />
                 <span className="hidden sm:inline">Business</span>
+              </TabsTrigger>
+            )}
+            {isMaster && (
+              <TabsTrigger value="payment" className="gap-2">
+                <CreditCard className="h-4 w-4" />
+                <span className="hidden sm:inline">Payment</span>
               </TabsTrigger>
             )}
             {isMaster && (
@@ -1396,53 +1402,23 @@ export default function SettingsPage() {
 
                     <Separator />
 
-                    {/* PayPal Section */}
-                    <div className="space-y-3">
+                    {/* PayPal Section — greyed out, integration not active yet */}
+                    <div className="space-y-3 opacity-60">
                       <div className="flex items-center gap-2">
                         <div className="h-8 w-8 bg-[#003087] rounded flex items-center justify-center">
                           <span className="text-white font-bold text-xs">P</span>
                         </div>
                         <span className="font-medium">PayPal</span>
+                        <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                          Coming soon
+                        </span>
                       </div>
-                      {activeDistributor?.paypalMerchantId ? (
-                        <div className="flex items-center justify-between pl-10">
-                          <div>
-                            {activeDistributor.paypalAccountStatus === 'verified' ? (
-                              <div className="flex items-center gap-2 text-green-600">
-                                <Check className="h-4 w-4"/>
-                                <span className="font-medium text-sm">Connected & verified</span>
-                              </div>
-                            ) : activeDistributor.paypalAccountStatus === 'restricted' ? (
-                              <div className="flex items-center gap-2 text-red-600">
-                                <AlertCircle className="h-4 w-4"/>
-                                <span className="font-medium text-sm">Account restricted</span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2 text-orange-600">
-                                <AlertCircle className="h-4 w-4"/>
-                                <span className="font-medium text-sm">Verification pending</span>
-                              </div>
-                            )}
-                            {activeDistributor.paypalEmail && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Email: <code className="bg-muted px-1 rounded">{activeDistributor.paypalEmail}</code>
-                              </p>
-                            )}
-                          </div>
-                          <Button onClick={handlePayPalConnect} disabled={isConnectingPayPal} size="sm" variant="outline">
-                            {isConnectingPayPal && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Manage <ExternalLink className="ml-1 h-3 w-3"/>
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between pl-10">
-                          <p className="text-sm text-muted-foreground">Accept PayPal payments from your customers.</p>
-                          <Button onClick={handlePayPalConnect} disabled={isConnectingPayPal} size="sm">
-                            {isConnectingPayPal && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Connect PayPal
-                          </Button>
-                        </div>
-                      )}
+                      <div className="flex items-center justify-between pl-10">
+                        <p className="text-sm text-muted-foreground">Accept PayPal payments from your customers. Integration will ship soon.</p>
+                        <Button disabled size="sm" variant="outline">
+                          Connect PayPal
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -2064,6 +2040,58 @@ export default function SettingsPage() {
                   </CardContent>
                 </Card>
               )}
+            </TabsContent>
+          )}
+
+          {/* ==================== PAYMENT TAB ==================== */}
+          {isMaster && (
+            <TabsContent value="payment" className="space-y-4">
+              {/* Stripe Checkout disable (Scale / managed only) */}
+              {(activeDistributor?.subscriptionTier === 'scale' || activeDistributor?.isSubscriptionExempt === true) && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-3">
+                      <AlertCircle className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Online checkout</CardTitle>
+                    </div>
+                    <CardDescription className="text-sm">
+                      For high-volume wholesale orders you may prefer to take payment directly by bank transfer rather than via Stripe. When disabled, the storefront checkout shows only "Request Order" — you then approve each order with an invoice and manually mark it paid once the payment arrives.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex flex-row items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <Label className="text-sm">Disable Stripe / online checkout</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Hides Stripe (and PayPal) from the checkout for all your customers. Existing active payment links stay valid until their 24h expiry.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={activeDistributor?.stripeCheckoutDisabled === true}
+                        onCheckedChange={async (checked) => {
+                          await updateMyDistributorSettings({ stripeCheckoutDisabled: checked });
+                          showSaveSuccess('payment');
+                        }}
+                      />
+                    </div>
+                    {activeDistributor?.stripeCheckoutDisabled && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        Online checkout is currently off. Customers will only see "Request Order" at checkout. You approve each order with an invoice email and mark it paid manually once the bank transfer arrives.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Pointer to sections still in Business tab (will be moved in a follow-up) */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm text-muted-foreground">Also on this page</CardTitle>
+                  <CardDescription className="text-xs">
+                    Payment Providers, Order Settings (incl. payment-link mode), Tax / VAT, Payment Accounts, and Payment Terms are all shown on the Business tab today and will be fully consolidated here in a follow-up update. For now, switch to the <strong>Business</strong> tab to edit those fields.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
             </TabsContent>
           )}
 
