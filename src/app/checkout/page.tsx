@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { formatPriceForDisplay } from "@/lib/utils";
+import { isReverseChargeApplicable, calculateTax } from "@/lib/tax-utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Home, FileText, ShoppingBag, CreditCard, Loader2, Check, ArrowLeft, AlertCircle } from "lucide-react";
@@ -133,6 +134,50 @@ export default function CheckoutPage() {
     }, [distributor?.shippingConfig, user.country, totalWeight, cartTotal, shippingMethod]);
     const shippingCost = shippingResult?.shippingCost || 0;
     const orderTotal = cartTotal + shippingCost;
+
+    // Tax preview — mirrors the cart page so the customer sees consistent
+    // totals across cart → checkout, including reverse-charge detection.
+    const taxMode = distributor?.taxMode || 'none';
+    const taxBehavior = distributor?.taxBehavior || 'inclusive';
+    const taxRate = distributor?.manualTaxRate || 0;
+    const taxLabel = distributor?.manualTaxLabel || 'VAT';
+    const reverseChargePreview = useMemo(() => isReverseChargeApplicable(
+        user?.vatNumber,
+        user?.country,
+        distributor?.country
+    ), [user?.vatNumber, user?.country, distributor?.country]);
+    const vatUnverifiedHint = !!user?.vatNumber && !user?.vatValidated && reverseChargePreview;
+
+    // For a manual-tax distributor, derive a proper subtotal-excl / VAT / total
+    // breakdown that matches the order the customer will actually receive.
+    const taxPreview = useMemo(() => {
+        if (taxMode !== 'manual' || taxRate <= 0) {
+            return { subtotalExcl: cartTotal, taxAmount: 0, total: cartTotal + shippingCost };
+        }
+        // Apply tax math to the items portion then add shipping in the same
+        // convention. The actual order uses the same logic server-side.
+        const itemsResult = calculateTax(cartTotal, taxRate, taxBehavior, reverseChargePreview);
+        if (reverseChargePreview) {
+            return {
+                subtotalExcl: itemsResult.subtotal,
+                taxAmount: 0,
+                total: itemsResult.subtotal + (taxBehavior === 'inclusive' && taxRate > 0 ? shippingCost / (1 + taxRate / 100) : shippingCost),
+            };
+        }
+        if (taxBehavior === 'inclusive') {
+            return {
+                subtotalExcl: itemsResult.subtotal,
+                taxAmount: itemsResult.taxAmount + (shippingCost - shippingCost / (1 + taxRate / 100)),
+                total: cartTotal + shippingCost,
+            };
+        }
+        // exclusive
+        return {
+            subtotalExcl: itemsResult.subtotal,
+            taxAmount: itemsResult.taxAmount + shippingCost * (taxRate / 100),
+            total: cartTotal + shippingCost + itemsResult.taxAmount + shippingCost * (taxRate / 100),
+        };
+    }, [taxMode, taxRate, taxBehavior, reverseChargePreview, cartTotal, shippingCost]);
     const hasShippingZone = distributor?.shippingConfig?.enabled ? !!findShippingZone(distributor.shippingConfig, user.country) : true;
 
     // Check available payment methods
@@ -443,38 +488,73 @@ export default function CheckoutPage() {
                            )}
 
                            <div className="space-y-1">
-                             <div className="flex justify-between text-sm text-muted-foreground">
-                               <span>Subtotal</span>
-                               <span>€ {formatPriceForDisplay(cartTotal)}</span>
-                             </div>
-                             {distributor?.shippingConfig?.enabled && shippingMethod === 'shipping' && (
-                               <div className="flex justify-between text-sm text-muted-foreground">
-                                 <span>Shipping{shippingResult?.zoneName ? ` (${shippingResult.zoneName})` : ''}</span>
-                                 <span>{shippingResult?.freeShippingApplied ? 'Free' : `€ ${formatPriceForDisplay(shippingCost)}`}</span>
-                               </div>
+                             {taxMode === 'manual' && taxRate > 0 ? (
+                               <>
+                                 <div className="flex justify-between text-sm text-muted-foreground">
+                                   <span>Subtotal excl. {taxLabel}</span>
+                                   <span>€ {formatPriceForDisplay(taxPreview.subtotalExcl)}</span>
+                                 </div>
+                                 {distributor?.shippingConfig?.enabled && shippingMethod === 'shipping' && (
+                                   <div className="flex justify-between text-sm text-muted-foreground">
+                                     <span>Shipping{shippingResult?.zoneName ? ` (${shippingResult.zoneName})` : ''}</span>
+                                     <span>{shippingResult?.freeShippingApplied ? 'Free' : `€ ${formatPriceForDisplay(shippingCost)}`}</span>
+                                   </div>
+                                 )}
+                                 {shippingMethod === 'pickup' && (
+                                   <div className="flex justify-between text-sm text-muted-foreground">
+                                     <span>Pickup</span>
+                                     <span>€ 0,00</span>
+                                   </div>
+                                 )}
+                                 <div className="flex justify-between text-sm text-muted-foreground">
+                                   <span>{reverseChargePreview ? `${taxLabel} (Reverse charge)` : `${taxLabel} ${taxRate}%`}</span>
+                                   <span>€ {formatPriceForDisplay(taxPreview.taxAmount)}</span>
+                                 </div>
+                                 <Separator className="my-1" />
+                                 <div className="flex justify-between font-semibold text-lg">
+                                   <span>Total</span>
+                                   <span>€ {formatPriceForDisplay(taxPreview.total)}</span>
+                                 </div>
+                               </>
+                             ) : (
+                               <>
+                                 <div className="flex justify-between text-sm text-muted-foreground">
+                                   <span>Subtotal</span>
+                                   <span>€ {formatPriceForDisplay(cartTotal)}</span>
+                                 </div>
+                                 {distributor?.shippingConfig?.enabled && shippingMethod === 'shipping' && (
+                                   <div className="flex justify-between text-sm text-muted-foreground">
+                                     <span>Shipping{shippingResult?.zoneName ? ` (${shippingResult.zoneName})` : ''}</span>
+                                     <span>{shippingResult?.freeShippingApplied ? 'Free' : `€ ${formatPriceForDisplay(shippingCost)}`}</span>
+                                   </div>
+                                 )}
+                                 {shippingMethod === 'pickup' && (
+                                   <div className="flex justify-between text-sm text-muted-foreground">
+                                     <span>Pickup</span>
+                                     <span>€ 0,00</span>
+                                   </div>
+                                 )}
+                                 <Separator className="my-1" />
+                                 <div className="flex justify-between font-semibold text-lg">
+                                   <span>{taxMode === 'stripe_tax' ? 'Subtotal' : 'Total'}</span>
+                                   <span>€ {formatPriceForDisplay(orderTotal)}</span>
+                                 </div>
+                               </>
                              )}
-                             {shippingMethod === 'pickup' && (
-                               <div className="flex justify-between text-sm text-muted-foreground">
-                                 <span>Pickup</span>
-                                 <span>€ 0,00</span>
-                               </div>
-                             )}
-                             <Separator className="my-1" />
-                             <div className="flex justify-between font-semibold text-lg">
-                               <span>Total</span>
-                               <span>€ {formatPriceForDisplay(orderTotal)}</span>
-                             </div>
                            </div>
-                           {distributor?.taxMode === 'manual' && distributor.manualTaxRate && (
-                               <p className="text-xs text-muted-foreground text-right">
-                                   {distributor.taxBehavior === 'exclusive'
-                                       ? `+ ${distributor.manualTaxLabel || 'VAT'} ${distributor.manualTaxRate}% will be added`
-                                       : `Incl. ${distributor.manualTaxLabel || 'VAT'} ${distributor.manualTaxRate}%`
-                                   }
+                           {taxMode === 'manual' && taxRate > 0 && reverseChargePreview && (
+                               <p className="text-xs text-muted-foreground italic mt-2">
+                                 <AlertCircle className="inline h-3 w-3 mr-1" />
+                                 {taxLabel} to be accounted for by the recipient (intra-EU reverse charge).
                                </p>
                            )}
-                           {distributor?.taxMode === 'stripe_tax' && (
-                               <p className="text-xs text-muted-foreground text-right">VAT will be calculated at checkout</p>
+                           {vatUnverifiedHint && (
+                               <p className="text-xs text-amber-600 dark:text-amber-500 italic mt-1">
+                                 Your VAT number isn't VIES-verified yet. Verify it in your profile so reverse charge is applied on the final invoice.
+                               </p>
+                           )}
+                           {taxMode === 'stripe_tax' && (
+                               <p className="text-xs text-muted-foreground mt-2">VAT will be calculated at checkout based on your delivery address.</p>
                            )}
                             {/* Warning for missing address fields */}
                             {missingFields.length > 0 && (
