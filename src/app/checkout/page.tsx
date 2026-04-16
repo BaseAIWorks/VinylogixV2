@@ -85,11 +85,19 @@ export default function CheckoutPage() {
                 const dist = await getDistributorById(distributorId);
                 setDistributor(dist);
 
-                // Set default payment method based on availability
-                if (dist?.stripeAccountId && dist.stripeAccountStatus === 'verified') {
+                // Set default payment method based on availability. When the
+                // distributor has stripeCheckoutDisabled on (typically Scale
+                // tier / managed accounts that want to avoid Stripe fees on
+                // high-value wholesale orders), the only option is Request
+                // Order — the Stripe and PayPal radios are hidden below.
+                if (dist?.stripeCheckoutDisabled === true) {
+                    setPaymentMethod('request');
+                } else if (dist?.stripeAccountId && dist.stripeAccountStatus === 'verified') {
                     setPaymentMethod('stripe');
                 } else if (dist?.paypalMerchantId && dist.paypalAccountStatus === 'verified') {
                     setPaymentMethod('paypal');
+                } else {
+                    setPaymentMethod('request');
                 }
             } catch (error) {
                 console.error('Failed to load distributor:', error);
@@ -128,9 +136,16 @@ export default function CheckoutPage() {
     const hasShippingZone = distributor?.shippingConfig?.enabled ? !!findShippingZone(distributor.shippingConfig, user.country) : true;
 
     // Check available payment methods
-    const stripeAvailable = distributor?.stripeAccountId && distributor.stripeAccountStatus === 'verified';
-    const paypalAvailable = distributor?.paypalMerchantId && distributor.paypalAccountStatus === 'verified';
-    const requestOrderAvailable = distributor?.allowOrderRequests === true;
+    // Distributors can opt out of Stripe entirely (stripeCheckoutDisabled).
+    // When on, only Request Order is offered regardless of Stripe-account
+    // verification status. Applies to PayPal too for consistency — if online
+    // checkout is disabled it's disabled across the board.
+    const onlineCheckoutDisabled = distributor?.stripeCheckoutDisabled === true;
+    const stripeAvailable = !onlineCheckoutDisabled
+        && distributor?.stripeAccountId && distributor.stripeAccountStatus === 'verified';
+    const paypalAvailable = !onlineCheckoutDisabled
+        && distributor?.paypalMerchantId && distributor.paypalAccountStatus === 'verified';
+    const requestOrderAvailable = distributor?.allowOrderRequests === true || onlineCheckoutDisabled;
     const anyPaymentMethodAvailable = stripeAvailable || paypalAvailable || requestOrderAvailable;
 
     const handlePlaceOrder = async () => {

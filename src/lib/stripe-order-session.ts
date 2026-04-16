@@ -39,6 +39,12 @@ export async function createPaymentSessionForOrder(params: {
   if (!distributor.stripeAccountId || distributor.stripeAccountStatus !== 'verified') {
     throw Object.assign(new Error('Stripe account not configured.'), { status: 400 });
   }
+  if (distributor.stripeCheckoutDisabled === true) {
+    throw Object.assign(
+      new Error('This distributor has disabled Stripe checkout. Use the invoice-only approval flow instead.'),
+      { status: 400 }
+    );
+  }
 
   // Expire the previous session (if any) so both links aren't clickable at the same time
   let expiredPreviousSessionId: string | undefined;

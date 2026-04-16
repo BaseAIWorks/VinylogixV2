@@ -50,8 +50,11 @@ export async function POST(
     }
     const distData = { id: distSnap.id, ...distSnap.data() } as any;
 
+    // Effective mode: if Stripe checkout is disabled on this distributor,
+    // invoice-only is always allowed regardless of paymentLinkMode setting.
     const mode = distData.paymentLinkMode || 'always';
-    if (mode === 'always') {
+    const stripeDisabled = distData.stripeCheckoutDisabled === true;
+    if (!stripeDisabled && mode === 'always') {
       return NextResponse.json(
         { error: 'Invoice-only approval is not enabled for this distributor.' },
         { status: 400 }

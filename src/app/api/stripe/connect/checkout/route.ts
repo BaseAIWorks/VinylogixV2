@@ -70,6 +70,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (distributor.stripeCheckoutDisabled === true) {
+      // Defense-in-depth: the storefront UI hides the Stripe path when this
+      // flag is on, but a malicious client could still POST directly.
+      return NextResponse.json(
+        { error: 'This distributor does not accept Stripe payments. Place a Request Order instead.' },
+        { status: 400 }
+      );
+    }
+
     // SECURITY: Fetch all records from the database to validate prices
     // Never trust client-supplied prices
     const validatedItems: ValidatedCartItem[] = [];

@@ -763,9 +763,14 @@ export default function OrderDetailPage() {
                             </DialogContent>
                         </Dialog>
                         {order.status === 'awaiting_approval' && (() => {
-                            const mode = activeDistributor?.paymentLinkMode || 'always';
-                            const showStripeButton = mode !== 'never';
-                            const showInvoiceOnlyButton = mode === 'optional' || mode === 'never';
+                            // When Stripe checkout is disabled on the distributor, the
+                            // invoice-only path is the only option regardless of the
+                            // paymentLinkMode setting — treat it as 'never'.
+                            const effectiveMode = activeDistributor?.stripeCheckoutDisabled
+                                ? 'never'
+                                : (activeDistributor?.paymentLinkMode || 'always');
+                            const showStripeButton = effectiveMode !== 'never';
+                            const showInvoiceOnlyButton = effectiveMode === 'optional' || effectiveMode === 'never';
                             const busy = isApproving || isApprovingInvoiceOnly || isUpdating;
                             return (
                                 <>
@@ -823,7 +828,10 @@ export default function OrderDetailPage() {
                     )}
 
                     {/* Payment link status — active / stale / expired */}
-                    {canManageOrder && hasPaymentLink && order.paymentStatus !== 'paid' && (
+                    {/* Hide the Stripe payment-link card entirely when the distributor
+                        has opted out of Stripe — even if the order has a legacy
+                        paymentLink field set, regenerating would fail guard checks. */}
+                    {canManageOrder && hasPaymentLink && order.paymentStatus !== 'paid' && !activeDistributor?.stripeCheckoutDisabled && (
                         <Card className={isPaymentLinkStale ? 'border-amber-300 bg-amber-50 dark:bg-amber-950/20' : paymentLinkExpired ? 'border-muted' : 'border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20'}>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-3">

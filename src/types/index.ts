@@ -242,6 +242,17 @@ export interface Distributor {
   // wholesale distributors on Scale tier (default 2%) we can bring the fee
   // down to 1% or 0% per customer-specific agreement.
   customPlatformFeePercent?: number | null;
+
+  // When true, disables the Stripe Checkout path for this distributor:
+  //  - storefront checkout hides the "Pay now via Stripe" option and
+  //    only offers Request Order
+  //  - /api/stripe/* order-payment routes reject requests (defense)
+  //  - approval flow behaves as paymentLinkMode='never' (invoice-only)
+  //  - customer's My Orders page does not show Pay Now
+  // Only surfaced in settings for Scale tier or managed accounts
+  // (isSubscriptionExempt === true) because lower tiers are assumed to
+  // rely on Stripe as their main checkout.
+  stripeCheckoutDisabled?: boolean;
   stripeCustomerId?: string; // For Stripe Billing
   subscriptionId?: string; // For Stripe Billing
   subscriptionStatus?: SubscriptionStatus; // For Stripe Billing
