@@ -226,6 +226,18 @@ export default function ClientDetailPage() {
         return parts.filter(Boolean).join('\n');
     }, [client]);
 
+    const billingAddress = useMemo(() => {
+        if (!client || !client.useDifferentBillingAddress) return null;
+        const parts = [
+            client.billingAddressLine1,
+            client.billingAddressLine2,
+            `${client.billingPostcode || ''} ${client.billingCity || ''}`.trim(),
+            client.billingCountry,
+        ];
+        const formatted = parts.filter(Boolean).join('\n');
+        return formatted || client.billingAddress || null;
+    }, [client]);
+
     if (authLoading || isLoading) {
         return <div className="flex items-center justify-center min-h-[calc(100vh-200px)]"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>;
     }
@@ -295,7 +307,10 @@ export default function ClientDetailPage() {
                             <DetailItem icon={Phone} label="Phone" value={client.phoneNumber} />
                              <DetailItem icon={Phone} label="Mobile" value={client.mobileNumber} />
                             <DetailItem icon={Briefcase} label="Company" value={client.companyName} />
-                            <DetailItem icon={Home} label="Address" value={<div className="whitespace-pre-wrap">{fullAddress}</div>} />
+                            <DetailItem icon={Home} label="Shipping Address" value={<div className="whitespace-pre-wrap">{fullAddress}</div>} />
+                            {billingAddress && (
+                                <DetailItem icon={Home} label="Billing Address" value={<div className="whitespace-pre-wrap">{billingAddress}</div>} />
+                            )}
                             <DetailItem icon={Briefcase} label="Chamber of Commerce" value={client.chamberOfCommerce} />
                              <DetailItem icon={Briefcase} label="EORI Number" value={client.eoriNumber} />
                             <DetailItem icon={UserIcon} label="VAT Number" value={client.vatNumber ? (

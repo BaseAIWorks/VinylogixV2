@@ -511,6 +511,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             country: userData.country,
             billingAddress: userData.billingAddress,
             useDifferentBillingAddress: userData.useDifferentBillingAddress,
+            billingAddressLine1: userData.billingAddressLine1,
+            billingAddressLine2: userData.billingAddressLine2,
+            billingPostcode: userData.billingPostcode,
+            billingCity: userData.billingCity,
+            billingCountry: userData.billingCountry,
             chamberOfCommerce: userData.chamberOfCommerce,
             vatNumber: userData.vatNumber,
             vatValidated: userData.vatValidated,
@@ -1247,6 +1252,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (data.useDifferentBillingAddress !== undefined)
       allowedUpdates.useDifferentBillingAddress =
         data.useDifferentBillingAddress;
+    if (data.billingAddressLine1 !== undefined)
+      allowedUpdates.billingAddressLine1 = data.billingAddressLine1;
+    if (data.billingAddressLine2 !== undefined)
+      allowedUpdates.billingAddressLine2 = data.billingAddressLine2;
+    if (data.billingPostcode !== undefined)
+      allowedUpdates.billingPostcode = data.billingPostcode;
+    if (data.billingCity !== undefined)
+      allowedUpdates.billingCity = data.billingCity;
+    if (data.billingCountry !== undefined)
+      allowedUpdates.billingCountry = data.billingCountry;
     if (data.chamberOfCommerce !== undefined)
       allowedUpdates.chamberOfCommerce = data.chamberOfCommerce;
     if (data.vatNumber !== undefined)
