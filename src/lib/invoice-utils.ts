@@ -151,22 +151,27 @@ async function buildInvoicePdfDoc(
   const companyName = distributor.companyName || distributor.name;
 
   let logoLoaded = false;
+  let headerHeight = 20; // mm reserved for the header block (logo + INVOICE title baseline)
   if (distributor.logoUrl) {
     try {
       const logoBase64 = await loadImageAsBase64(distributor.logoUrl);
       if (logoBase64) {
         const dims = await getImageDimensions(logoBase64);
-        const maxH = 20, maxW = 65;
+        // Larger logo — use about 60% of the available header column and up to
+        // 32mm tall. The INVOICE title sits on the right so this can expand.
+        const maxH = 32, maxW = 95;
         if (dims && dims.w > 0 && dims.h > 0) {
           let { w, h } = dims;
           const r = w / h;
           if (h > maxH) { h = maxH; w = h * r; }
           if (w > maxW) { w = maxW; h = w / r; }
           doc.addImage(logoBase64, 'AUTO', margin, currentY, w, h);
+          headerHeight = Math.max(headerHeight, Math.ceil(h) + 4);
           logoLoaded = true;
         } else {
-          // Unknown dimensions (unsupported format) — render at max height preserving generous width
-          doc.addImage(logoBase64, 'AUTO', margin, currentY, 50, 20);
+          // Unknown dimensions (unsupported format) — render at generous default
+          doc.addImage(logoBase64, 'AUTO', margin, currentY, 80, 32);
+          headerHeight = Math.max(headerHeight, 36);
           logoLoaded = true;
         }
       }
@@ -180,12 +185,14 @@ async function buildInvoicePdfDoc(
     doc.text(companyName, margin, currentY + 10);
   }
 
+  // INVOICE title — vertically centered against the header height so it
+  // doesn't sit awkwardly high when the logo is tall.
   doc.setFontSize(26);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLORS.accent);
-  doc.text("INVOICE", pageWidth - margin, currentY + 10, { align: 'right' });
+  doc.text("INVOICE", pageWidth - margin, currentY + Math.min(headerHeight, 14), { align: 'right' });
 
-  currentY += 20;
+  currentY += headerHeight;
 
   // ============================================
   // FROM and BILL TO

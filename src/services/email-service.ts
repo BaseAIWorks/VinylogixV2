@@ -35,10 +35,10 @@ const renderDistributorHeader = (distributor?: RenderableDistributor | null, acc
   const name = escapeHtml(distributorDisplayName(distributor));
   const logo = distributor?.logoUrl;
   return `
-    <div style="padding: 24px 24px 16px 24px; border-bottom: 1px solid #e5e7eb; text-align: center; background: #ffffff;">
+    <div style="padding: 32px 24px 20px 24px; border-bottom: 1px solid #e5e7eb; text-align: center; background: #ffffff;">
       ${logo
-        ? `<img src="${escapeHtml(logo)}" alt="${name}" style="max-height: 48px; max-width: 180px; margin: 0 auto 8px auto; display: block;" />`
-        : `<div style="font-size: 18px; font-weight: 700; color: #111827;">${name}</div>`}
+        ? `<img src="${escapeHtml(logo)}" alt="${name}" style="max-height: 96px; max-width: 280px; margin: 0 auto; display: block;" />`
+        : `<div style="font-size: 22px; font-weight: 700; color: #111827;">${name}</div>`}
     </div>
     <div style="background: ${accentColor}; color: white; padding: 6px 24px; text-align: center; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;">
       ${name}
@@ -243,6 +243,34 @@ const renderDistributorFooter = (distributor?: RenderableDistributor | null): st
   `;
 };
 
+// Compact Vinylogix platform footer. Appended to every email below the
+// distributor-specific footer so recipients always know the system behind the
+// order and how to get in touch with Vinylogix directly (support, partnership
+// enquiries, sign up as a distributor). Kept deliberately small so it doesn't
+// compete visually with the distributor's own contact block.
+const renderPlatformFooter = (): string => {
+  return `
+    <div style="padding: 16px 24px 20px 24px; text-align: center; background: #111827; color: #9ca3af; font-size: 11px; line-height: 1.6;">
+      <div style="margin-bottom: 6px;">
+        <a href="${siteUrl}" style="color: #ffffff; text-decoration: none; font-weight: 600; letter-spacing: 0.02em;">Vinylogix</a>
+        <span style="color: #6b7280;"> — B2B vinyl distribution platform</span>
+      </div>
+      <div>
+        Questions? <a href="mailto:support@vinylogix.com" style="color: #d1d5db;">support@vinylogix.com</a>
+        &nbsp;·&nbsp;
+        Want to sell on Vinylogix? <a href="${siteUrl}/register" style="color: #d1d5db;">Become a distributor</a>
+      </div>
+      <div style="margin-top: 8px; color: #6b7280;">
+        © ${new Date().getFullYear()} Vinylogix
+        &nbsp;·&nbsp;
+        <a href="${siteUrl}/privacy" style="color: #6b7280;">Privacy</a>
+        &nbsp;·&nbsp;
+        <a href="${siteUrl}/terms" style="color: #6b7280;">Terms</a>
+      </div>
+    </div>
+  `;
+};
+
 const renderEmailShell = (opts: {
   distributor?: RenderableDistributor | null;
   title: string;
@@ -264,6 +292,7 @@ const renderEmailShell = (opts: {
     </div>
     ${opts.bodyHtml}
     ${renderDistributorFooter(opts.distributor)}
+    ${renderPlatformFooter()}
   </div>
 </body>
 </html>
