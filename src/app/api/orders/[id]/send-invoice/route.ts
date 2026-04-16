@@ -1,12 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminDb } from '@/lib/firebase-admin';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { requireAuth, authErrorResponse } from '@/lib/auth-helpers';
+import { authErrorResponse } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
+import { requireOrderAccess } from '@/lib/order-access';
+import { getInvoicePdfBase64 } from '@/lib/invoice-utils';
 import { sendInvoiceToCustomerEmail } from '@/services/email-service';
+import type { Order, Distributor } from '@/types';
 
-// Roughly 3 MB of raw PDF bytes → ~4 MB base64. Resend attachment limit is 40 MB total payload.
-const MAX_PDF_BASE64_LENGTH = 4 * 1024 * 1024;
+// Firestore admin Timestamps can't be passed straight to the PDF builder
+// (which calls format(new Date(order.createdAt))). Convert known timestamp
+// fields to ISO strings so the shared browser+Node builder stays simple.
+function hydrateTimestamps<T extends Record<string, any>>(data: T, fields: string[]): T {
+  const copy: Record<string, any> = { ...data };
+  for (const field of fields) {
+    const v = copy[field];
+    if (v && typeof v.toDate === 'function') {
+      copy[field] = v.toDate().toISOString();
+    }
+  }
+  return copy as T;
+}
 
 export async function POST(
   req: NextRequest,
@@ -16,62 +29,35 @@ export async function POST(
   if (rateLimited) return rateLimited;
 
   try {
-    const caller = await requireAuth(req);
     const { id: orderId } = await params;
-    if (!orderId) {
-      return NextResponse.json({ error: 'Order ID is required.' }, { status: 400 });
-    }
-
-    const body = await req.json().catch(() => ({}));
-    const { pdfBase64, filename } = body as { pdfBase64?: string; filename?: string };
-    if (!pdfBase64 || typeof pdfBase64 !== 'string') {
-      return NextResponse.json({ error: 'Invoice PDF is missing.' }, { status: 400 });
-    }
-    if (pdfBase64.length > MAX_PDF_BASE64_LENGTH) {
-      return NextResponse.json({ error: 'Invoice PDF is too large.' }, { status: 413 });
-    }
-    const safeFilename = (filename || `Invoice-${orderId.slice(0, 8)}.pdf`).replace(/[^\w.\-]+/g, '_');
-
-    const adminDb = getAdminDb();
-    if (!adminDb) {
-      return NextResponse.json({ error: 'Service unavailable.' }, { status: 500 });
-    }
-
-    // Verify caller can manage orders for this distributor (master / superadmin / worker with permission)
-    const callerSnap = await adminDb.collection('users').doc(caller.uid).get();
-    if (!callerSnap.exists) {
-      return NextResponse.json({ error: 'Insufficient permissions.' }, { status: 403 });
-    }
-    const callerData = callerSnap.data() as any;
-
-    const orderSnap = await adminDb.collection('orders').doc(orderId).get();
-    if (!orderSnap.exists) {
-      return NextResponse.json({ error: 'Order not found.' }, { status: 404 });
-    }
-    const orderData = { id: orderSnap.id, ...orderSnap.data() } as any;
-
-    const isSuperadmin = callerData.role === 'superadmin';
-    const isMasterOfDistributor = callerData.role === 'master' && callerData.distributorId === orderData.distributorId;
-    const isWorkerWithPermission = callerData.role === 'worker'
-      && callerData.distributorId === orderData.distributorId
-      && callerData.permissions?.canManageOrders === true;
-    if (!isSuperadmin && !isMasterOfDistributor && !isWorkerWithPermission) {
-      return NextResponse.json({ error: 'Insufficient permissions.' }, { status: 403 });
-    }
+    const { orderData, orderRef, adminDb } = await requireOrderAccess(req, orderId);
 
     if (!orderData.viewerEmail) {
       return NextResponse.json({ error: 'Order has no customer email address.' }, { status: 400 });
     }
 
-    // Load distributor name + contact email for friendly from/reply-to
+    // Load distributor (source of truth) — never trust anything from the client here
     const distSnap = await adminDb.collection('distributors').doc(orderData.distributorId).get();
-    const distData = distSnap.exists ? (distSnap.data() as any) : {};
-    const distributorName = distData.companyName || distData.name || 'Your distributor';
-    const replyToEmail = distData.contactEmail || undefined;
+    if (!distSnap.exists) {
+      return NextResponse.json({ error: 'Distributor not found.' }, { status: 404 });
+    }
+    const distData = { id: distSnap.id, ...distSnap.data() } as any;
 
-    await sendInvoiceToCustomerEmail(orderData, distributorName, pdfBase64, safeFilename, replyToEmail);
+    const order = hydrateTimestamps(orderData, [
+      'createdAt', 'updatedAt', 'paidAt', 'shippedAt', 'approvedAt',
+      'paymentLinkExpiresAt', 'estimatedDeliveryDate',
+      'itemChangesNotifiedAt', 'invoiceEmailedAt',
+    ]) as Order;
+    const distributor = hydrateTimestamps(distData, ['createdAt', 'updatedAt']) as Distributor;
 
-    await orderSnap.ref.update({
+    const { base64, filename } = await getInvoicePdfBase64(order, distributor);
+
+    const distributorName = distributor.companyName || distributor.name || 'Your distributor';
+    const replyToEmail = (distData.contactEmail as string | undefined) || undefined;
+
+    await sendInvoiceToCustomerEmail(order, distributorName, base64, filename, replyToEmail);
+
+    await orderRef.update({
       invoiceEmailedAt: Timestamp.now(),
       invoiceEmailedCount: FieldValue.increment(1),
     });

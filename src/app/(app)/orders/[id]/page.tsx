@@ -21,7 +21,7 @@ import Image from "next/image";
 import { formatPriceForDisplay, checkBusinessProfileComplete } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { generateInvoicePdf, getInvoicePdfBase64 } from "@/lib/invoice-utils";
+import { generateInvoicePdf } from "@/lib/invoice-utils";
 
 
 const statusConfig: Record<OrderStatus, { icon: React.ElementType, color: string, label: string }> = {
@@ -286,25 +286,19 @@ export default function OrderDetailPage() {
     };
 
     const handleEmailInvoice = async () => {
-        if (!order || !activeDistributor) {
-            toast({ title: "Error", description: "Unable to send invoice. Distributor information not available.", variant: "destructive" });
-            return;
-        }
+        if (!order) return;
         if (!order.viewerEmail) {
             toast({ title: "Missing email", description: "This order has no customer email address.", variant: "destructive" });
             return;
         }
         setIsEmailingInvoice(true);
         try {
-            const { base64, filename } = await getInvoicePdfBase64(order, activeDistributor);
             const token = await auth.currentUser?.getIdToken();
             const res = await fetch(`/api/orders/${order.id}/send-invoice`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
                 },
-                body: JSON.stringify({ pdfBase64: base64, filename }),
             });
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));

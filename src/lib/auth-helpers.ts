@@ -87,5 +87,9 @@ export function authErrorResponse(error: unknown): NextResponse {
   if (error instanceof AuthError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }
+  if (error && typeof error === 'object' && typeof (error as any).status === 'number') {
+    const e = error as any;
+    return NextResponse.json({ error: e.message || 'Request failed.' }, { status: e.status });
+  }
   return NextResponse.json({ error: 'Authentication failed.' }, { status: 401 });
 }

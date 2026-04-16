@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminDb } from '@/lib/firebase-admin';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { requireAuth, authErrorResponse } from '@/lib/auth-helpers';
+import { authErrorResponse } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
+import { requireOrderAccess } from '@/lib/order-access';
 import { sendOrderItemChangesEmail } from '@/services/email-service';
 
 export async function POST(
@@ -13,39 +13,12 @@ export async function POST(
   if (rateLimited) return rateLimited;
 
   try {
-    const caller = await requireAuth(req);
     const { id: orderId } = await params;
-    if (!orderId) {
-      return NextResponse.json({ error: 'Order ID is required.' }, { status: 400 });
-    }
+    const { orderData, orderRef, adminDb } = await requireOrderAccess(req, orderId);
 
-    const adminDb = getAdminDb();
-    if (!adminDb) {
-      return NextResponse.json({ error: 'Service unavailable.' }, { status: 500 });
-    }
-
-    const callerSnap = await adminDb.collection('users').doc(caller.uid).get();
-    if (!callerSnap.exists) {
-      return NextResponse.json({ error: 'Insufficient permissions.' }, { status: 403 });
-    }
-    const callerData = callerSnap.data() as any;
-
-    const orderSnap = await adminDb.collection('orders').doc(orderId).get();
-    if (!orderSnap.exists) {
-      return NextResponse.json({ error: 'Order not found.' }, { status: 404 });
-    }
-    const orderData = { id: orderSnap.id, ...orderSnap.data() } as any;
-
-    const isSuperadmin = callerData.role === 'superadmin';
-    const isMasterOfDistributor = callerData.role === 'master' && callerData.distributorId === orderData.distributorId;
-    const isWorkerWithPermission = callerData.role === 'worker'
-      && callerData.distributorId === orderData.distributorId
-      && callerData.permissions?.canManageOrders === true;
-    if (!isSuperadmin && !isMasterOfDistributor && !isWorkerWithPermission) {
-      return NextResponse.json({ error: 'Insufficient permissions.' }, { status: 403 });
-    }
-
-    const hasChanges = (orderData.items || []).some((item: any) => item.itemStatus && item.itemStatus !== 'available');
+    const hasChanges = (orderData.items || []).some(
+      (item: any) => item.itemStatus && item.itemStatus !== 'available'
+    );
     if (!hasChanges) {
       return NextResponse.json({ error: 'No item status changes to notify about.' }, { status: 400 });
     }
@@ -56,7 +29,7 @@ export async function POST(
 
     await sendOrderItemChangesEmail(orderData, distributorName);
 
-    await orderSnap.ref.update({
+    await orderRef.update({
       itemChangesNotifiedAt: Timestamp.now(),
       itemChangesNotifiedCount: FieldValue.increment(1),
     });

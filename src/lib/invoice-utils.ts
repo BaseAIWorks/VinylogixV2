@@ -68,13 +68,68 @@ async function buildInvoicePdfDoc(
   const loadImageAsBase64 = async (url: string): Promise<string | null> => {
     try {
       const response = await fetch(url);
-      const blob = await response.blob();
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(blob);
+      if (!response.ok) return null;
+      const contentType = response.headers.get('content-type') || 'image/png';
+      const arrayBuffer = await response.arrayBuffer();
+
+      // Browser path: keep using FileReader on the Blob so we don't change behavior for downloads
+      if (typeof FileReader !== 'undefined' && typeof Blob !== 'undefined') {
+        const blob = new Blob([arrayBuffer], { type: contentType });
+        return await new Promise<string | null>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      // Node path: encode via Buffer
+      const base64 = Buffer.from(arrayBuffer).toString('base64');
+      return `data:${contentType};base64,${base64}`;
+    } catch {
+      return null;
+    }
+  };
+
+  // Environment-agnostic image dimension reader. In the browser we defer to the
+  // native Image element (exact parsing); in Node we parse PNG / JPEG headers manually
+  // so we don't need to add a dependency just for logo sizing on the server.
+  const getImageDimensions = async (base64DataUri: string): Promise<{ w: number; h: number } | null> => {
+    if (typeof Image !== 'undefined') {
+      return await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img.naturalWidth > 0 && img.naturalHeight > 0
+          ? { w: img.naturalWidth, h: img.naturalHeight }
+          : null);
+        img.onerror = () => resolve(null);
+        img.src = base64DataUri;
       });
+    }
+    try {
+      const comma = base64DataUri.indexOf(',');
+      const rawBase64 = comma >= 0 ? base64DataUri.slice(comma + 1) : base64DataUri;
+      const buf = Buffer.from(rawBase64, 'base64');
+      // PNG: 89 50 4E 47 0D 0A 1A 0A, IHDR width at bytes 16..19, height at 20..23 (big-endian)
+      if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) {
+        return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+      }
+      // JPEG: starts with FF D8; scan for an SOFn marker to read dimensions
+      if (buf[0] === 0xFF && buf[1] === 0xD8) {
+        let i = 2;
+        while (i + 9 < buf.length) {
+          if (buf[i] !== 0xFF) break;
+          const marker = buf[i + 1];
+          const isSof = marker >= 0xC0 && marker <= 0xCF && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC;
+          if (isSof) {
+            const h = buf.readUInt16BE(i + 5);
+            const w = buf.readUInt16BE(i + 7);
+            return { w, h };
+          }
+          const segmentSize = buf.readUInt16BE(i + 2);
+          i += 2 + segmentSize;
+        }
+      }
+      return null;
     } catch {
       return null;
     }
@@ -100,19 +155,18 @@ async function buildInvoicePdfDoc(
     try {
       const logoBase64 = await loadImageAsBase64(distributor.logoUrl);
       if (logoBase64) {
-        const img = new Image();
-        await new Promise<void>((resolve) => {
-          img.onload = () => resolve();
-          img.onerror = () => resolve();
-          img.src = logoBase64;
-        });
+        const dims = await getImageDimensions(logoBase64);
         const maxH = 20, maxW = 65;
-        let w = img.naturalWidth, h = img.naturalHeight;
-        if (w > 0 && h > 0) {
+        if (dims && dims.w > 0 && dims.h > 0) {
+          let { w, h } = dims;
           const r = w / h;
           if (h > maxH) { h = maxH; w = h * r; }
           if (w > maxW) { w = maxW; h = w / r; }
           doc.addImage(logoBase64, 'AUTO', margin, currentY, w, h);
+          logoLoaded = true;
+        } else {
+          // Unknown dimensions (unsupported format) — render at max height preserving generous width
+          doc.addImage(logoBase64, 'AUTO', margin, currentY, 50, 20);
           logoLoaded = true;
         }
       }
