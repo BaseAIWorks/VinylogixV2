@@ -4,7 +4,13 @@
 import type { Order, OrderStatus, OrderItemStatus, User, CartItem, OrderItem } from '@/types';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, where, limit, Timestamp } from 'firebase/firestore';
-import { deductStockForOrder, restoreStockForOrder, getRecordById } from './record-service';
+import {
+  deductStockForOrder,
+  deductReservedStockForOrder,
+  releaseStockForOrder,
+  restoreStockForOrder,
+  getRecordById,
+} from './record-service';
 import { getDistributorById, updateDistributor } from './distributor-service';
 import { logger } from '@/lib/logger';
 
@@ -104,11 +110,32 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, ac
     
     const orderData = orderSnap.data() as Order;
     const oldStatus = orderData.status;
+    const currentStockState: Order['stockState'] = orderData.stockState || 'none';
+    let nextStockState: Order['stockState'] = currentStockState;
+
+    // Only items the customer is actually paying for should affect physical stock.
+    // Anything the distributor marked not_available / out_of_stock should have its
+    // earlier reservation released instead.
+    const isBillable = (i: OrderItem) => {
+        const s = i.itemStatus || 'available';
+        return s === 'available' || s === 'back_order';
+    };
+    const billableItems = orderData.items.filter(isBillable);
+    const nonBillableItems = orderData.items.filter(i => !isBillable(i));
 
     // Deduct stock when marking as paid
     if (status === 'paid' && oldStatus !== 'paid') {
         try {
-            await deductStockForOrder(orderData.items, orderData.distributorId, actingUser);
+            if (currentStockState === 'reserved') {
+                if (nonBillableItems.length > 0) {
+                    await releaseStockForOrder(nonBillableItems);
+                }
+                await deductReservedStockForOrder(billableItems, actingUser.email);
+            } else if (currentStockState !== 'deducted') {
+                // Legacy order with no reservation — fall back to a direct deduct.
+                await deductStockForOrder(billableItems, orderData.distributorId, actingUser);
+            }
+            nextStockState = 'deducted';
         } catch (error) {
             logger.error(`Failed to deduct stock for order ${orderId}`, error as Error);
             // Re-throw the error to prevent status update if stock deduction fails, and show it to the user.
@@ -116,13 +143,18 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, ac
         }
     }
 
-    // Restore stock ONLY if a paid order is cancelled
-    if (status === 'cancelled' && oldStatus === 'paid') {
+    // Cancelling clears stock claim: release if only reserved, restore if already deducted.
+    if (status === 'cancelled' && oldStatus !== 'cancelled') {
         try {
-            await restoreStockForOrder(orderData.items, actingUser);
+            if (currentStockState === 'reserved') {
+                await releaseStockForOrder(orderData.items);
+            } else if (currentStockState === 'deducted') {
+                await restoreStockForOrder(orderData.items, actingUser);
+            }
+            nextStockState = 'none';
         } catch (error) {
-            logger.error(`Failed to restore stock for cancelled order ${orderId}`, error as Error);
-            // Don't re-throw here, as cancelling the order is the primary goal even if stock restoration fails.
+            logger.error(`Failed to clear stock claim for cancelled order ${orderId}`, error as Error);
+            // Don't re-throw here, as cancelling the order is the primary goal even if stock ops fail.
         }
     }
 
@@ -130,6 +162,10 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus, ac
         status: status,
         updatedAt: Timestamp.now(),
     };
+
+    if (nextStockState !== currentStockState) {
+        updatePayload.stockState = nextStockState;
+    }
 
     // Add shippedAt timestamp when marking as shipped
     if (status === 'shipped' && oldStatus !== 'shipped') {
@@ -187,6 +223,42 @@ export async function updateOrderItemStatuses(
     }
     return item;
   });
+
+  // Sync reservations for orders still in 'reserved' state. An item that
+  // becomes unavailable releases its hold; quantity reductions release the
+  // delta; the reverse direction (re-enabling or increasing qty) is skipped
+  // here since it could race with concurrent orders — the distributor can
+  // cancel and rebook if they really need more than was originally reserved.
+  if ((orderData.stockState || 'none') === 'reserved') {
+    const isBillable = (s?: OrderItemStatus) => {
+      const v = s || 'available';
+      return v === 'available' || v === 'back_order';
+    };
+    const releases: OrderItem[] = [];
+    for (const beforeItem of orderData.items) {
+      const change = changeMap.get(beforeItem.recordId);
+      if (!change) continue;
+      const beforeActive = isBillable(beforeItem.itemStatus);
+      const afterActive = isBillable(change.itemStatus);
+      const beforeQty = beforeItem.quantity || 0;
+      const afterQty = change.quantity !== undefined ? change.quantity : beforeQty;
+      const heldBefore = beforeActive ? beforeQty : 0;
+      const heldAfter = afterActive ? afterQty : 0;
+      const delta = heldBefore - heldAfter;
+      if (delta > 0) {
+        releases.push({ ...beforeItem, quantity: delta });
+      }
+      // delta < 0 (more reservation needed) intentionally skipped — safer to
+      // surface as "please re-approve" than to silently fail later.
+    }
+    if (releases.length > 0) {
+      try {
+        await releaseStockForOrder(releases);
+      } catch (err) {
+        logger.warn(`Failed to sync reservations for order ${orderId}`, { err: (err as Error).message });
+      }
+    }
+  }
 
   // Preserve original totals on first adjustment
   const originalTotalAmount = orderData.originalTotalAmount ?? orderData.totalAmount;

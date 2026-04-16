@@ -44,7 +44,9 @@ export default function RecordCard({ record, isOperator, isFavorite, onToggleFav
   const settings = activeDistributor?.cardDisplaySettings || defaultCardSettings;
   
   const totalStock = Number(record.stock_shelves || 0) + Number(record.stock_storage || 0);
-  
+  const reservedStock = Number(record.reserved || 0);
+  const availableStock = Math.max(0, totalStock - reservedStock);
+
   const allLocations = useMemo(() => {
     const locations = new Set<string>();
     // Handle new array format
@@ -103,17 +105,17 @@ export default function RecordCard({ record, isOperator, isFavorite, onToggleFav
     onSelect?.(record.id);
   };
 
-  const isAvailable = record.isInventoryItem && totalStock > 0;
+  const isAvailable = record.isInventoryItem && availableStock > 0;
   const canBePurchased = !isOperator && isAvailable && (record.sellingPrice ?? -1) >= 0;
 
   const getStockBadge = () => {
     if (isOperator || !record.isInventoryItem) return null;
 
-    if (totalStock <= 0) {
+    if (availableStock <= 0) {
         return <Badge variant="destructive" className="absolute bottom-2 left-2 z-10">Out of Stock</Badge>;
     }
-    if (totalStock <= 10) {
-        return <Badge variant="secondary" className="absolute bottom-2 left-2 z-10">Low Stock ({totalStock})</Badge>;
+    if (availableStock <= 10) {
+        return <Badge variant="secondary" className="absolute bottom-2 left-2 z-10">Low Stock ({availableStock})</Badge>;
     }
     return <Badge variant="default" className="absolute bottom-2 left-2 z-10">In Stock</Badge>;
   };

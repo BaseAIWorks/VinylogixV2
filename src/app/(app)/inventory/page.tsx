@@ -591,9 +591,11 @@ export default function InventoryPage() {
                   <TableBody>
                     {filteredRecords.map((record) => {
                       const totalStock = Number(record.stock_shelves || 0) + Number(record.stock_storage || 0);
+                      const reservedStock = Number(record.reserved || 0);
+                      const availableStock = Math.max(0, totalStock - reservedStock);
                       const formats = record.formatDetails?.split(',').map(f => f.trim()) || [];
                       const displayFormats = formats.length > 3 ? `${formats.slice(0, 3).join(', ')}, and more...` : formats.join(', ');
-                      const canBePurchased = !isOperator && record.isInventoryItem && totalStock > 0 && (record.sellingPrice ?? -1) >= 0;
+                      const canBePurchased = !isOperator && record.isInventoryItem && availableStock > 0 && (record.sellingPrice ?? -1) >= 0;
 
                       return (
                         <TableRow
@@ -642,7 +644,20 @@ export default function InventoryPage() {
                                </>
                             )}
 
-                            {cardSettings.showTotalStock && <TableCell className="hidden sm:table-cell text-center align-middle font-medium">{totalStock}</TableCell>}
+                            {cardSettings.showTotalStock && (
+                                <TableCell className="hidden sm:table-cell text-center align-middle font-medium">
+                                    {reservedStock > 0 && !isOperator ? (
+                                        <div className="leading-tight">
+                                            <div>{totalStock}</div>
+                                            <div className="text-[10px] text-amber-600 dark:text-amber-400 font-normal" title={`${reservedStock} reserved by open orders`}>
+                                                {availableStock} avail.
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        totalStock
+                                    )}
+                                </TableCell>
+                            )}
                             {cardSettings.showFormat && <TableCell className="hidden lg:table-cell align-middle text-xs">{displayFormats || 'N/A'}</TableCell>}
                             
                             {isOperator && (

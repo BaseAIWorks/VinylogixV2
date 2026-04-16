@@ -22,6 +22,7 @@ import {
   Query,
   DocumentData,
   QuerySnapshot,
+  runTransaction,
 } from 'firebase/firestore';
 import { handleLowStockNotification } from './notification-service';
 import { getDistributorById } from './distributor-service';
@@ -732,56 +733,181 @@ export async function deleteRecord(id: string): Promise<boolean> {
   }
 }
 
-async function checkStockAvailability(items: OrderItem[], distributorId: string): Promise<void> {
+// Available-for-sale = total physical stock minus reserved by open orders.
+export function getAvailableStock(record: Pick<VinylRecord, 'stock_shelves' | 'stock_storage' | 'reserved'> | undefined | null): number {
+  if (!record) return 0;
+  const total = (record.stock_shelves || 0) + (record.stock_storage || 0);
+  const reserved = record.reserved || 0;
+  return Math.max(0, total - reserved);
+}
+
+/**
+ * Reserves stock for each item in one Firestore transaction per record. Holds
+ * the quantity via `reserved` so it counts against visible availability without
+ * touching the physical stock_shelves / stock_storage counts. Throws if any
+ * item would over-reserve — the caller should then bail the whole order.
+ */
+export async function reserveStockForOrder(items: OrderItem[], distributorId: string): Promise<void> {
   for (const item of items) {
-    const record = await getRecordById(item.recordId);
-    if (!record || record.distributorId !== distributorId) {
-      throw new Error(`Record "${item.title}" not found in this distributor's inventory.`);
-    }
-    const totalStock = (record.stock_shelves || 0) + (record.stock_storage || 0);
-    if (totalStock < item.quantity) {
-      throw new Error(`Insufficient stock for "${record.title}". Available: ${totalStock}, Requested: ${item.quantity}.`);
+    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+    const recordRef = doc(db, RECORDS_COLLECTION, item.recordId);
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(recordRef);
+      if (!snap.exists()) {
+        throw new Error(`Record "${item.title}" not found.`);
+      }
+      const data = snap.data() as VinylRecord;
+      if (data.distributorId !== distributorId) {
+        throw new Error(`Record "${item.title}" does not belong to this distributor.`);
+      }
+      const total = (data.stock_shelves || 0) + (data.stock_storage || 0);
+      const currentReserved = data.reserved || 0;
+      const availableForReservation = total - currentReserved;
+      if (availableForReservation < item.quantity) {
+        throw new Error(`Insufficient stock for "${data.title}". Available: ${availableForReservation}, requested: ${item.quantity}.`);
+      }
+      tx.update(recordRef, { reserved: currentReserved + item.quantity });
+    });
+  }
+}
+
+/**
+ * Releases a prior reservation (e.g. order cancelled before payment). Clamps
+ * at zero so repeated calls don't underflow — intended to be idempotent.
+ */
+export async function releaseStockForOrder(items: OrderItem[]): Promise<void> {
+  for (const item of items) {
+    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+    const recordRef = doc(db, RECORDS_COLLECTION, item.recordId);
+    try {
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(recordRef);
+        if (!snap.exists()) return;
+        const data = snap.data() as VinylRecord;
+        const currentReserved = data.reserved || 0;
+        const nextReserved = Math.max(0, currentReserved - item.quantity);
+        tx.update(recordRef, { reserved: nextReserved });
+      });
+    } catch (err) {
+      console.warn(`Failed to release reservation for record ${item.recordId}:`, err);
     }
   }
 }
 
-
-export async function deductStockForOrder(items: OrderItem[], distributorId: string, actingUser: User): Promise<void> {
-  await checkStockAvailability(items, distributorId);
-
+/**
+ * Converts an existing reservation into a real stock deduction (order paid).
+ * Atomic per record: decrements `reserved`, then decrements physical stock
+ * (shelves first, fall back to storage). Written in a single transaction so
+ * the invariant "reserved never exceeds physical stock" is preserved even
+ * under concurrent deductions.
+ */
+export async function deductReservedStockForOrder(items: OrderItem[], actingUserEmail?: string | null): Promise<void> {
   for (const item of items) {
-    const record = await getRecordById(item.recordId);
-    if (record) {
-      let quantityToDeduct = item.quantity;
-      let shelfStock = record.stock_shelves || 0;
-      let storageStock = record.stock_storage || 0;
+    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+    const recordRef = doc(db, RECORDS_COLLECTION, item.recordId);
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(recordRef);
+      if (!snap.exists()) return;
+      const data = snap.data() as VinylRecord;
 
-      const fromShelves = Math.min(quantityToDeduct, shelfStock);
-      shelfStock -= fromShelves;
-      quantityToDeduct -= fromShelves;
+      let qty = item.quantity;
+      let shelf = data.stock_shelves || 0;
+      let storage = data.stock_storage || 0;
 
-      if (quantityToDeduct > 0) {
-        storageStock -= quantityToDeduct;
+      const fromShelves = Math.min(qty, shelf);
+      shelf -= fromShelves;
+      qty -= fromShelves;
+      if (qty > 0) {
+        const fromStorage = Math.min(qty, storage);
+        storage -= fromStorage;
+        qty -= fromStorage;
+      }
+      // If qty > 0 here the physical stock is insufficient — this can happen
+      // legitimately if the record was edited after reservation. Clamp and log
+      // rather than throw, because the customer already paid and we shouldn't
+      // fail the webhook.
+      if (qty > 0) {
+        console.warn(`[deductReservedStock] Physical stock underran for record ${item.recordId} by ${qty}. Distributor should reconcile.`);
       }
 
-      await updateRecord(record.id, {
-        stock_shelves: shelfStock,
-        stock_storage: storageStock
-      }, actingUser);
-    }
+      const newReserved = Math.max(0, (data.reserved || 0) - item.quantity);
+
+      tx.update(recordRef, {
+        stock_shelves: shelf,
+        stock_storage: storage,
+        reserved: newReserved,
+        last_modified_at: new Date().toISOString(),
+        ...(actingUserEmail ? { last_modified_by_email: actingUserEmail } : {}),
+      });
+    });
   }
 }
 
+/**
+ * Deducts physical stock directly without prior reservation. Used for legacy
+ * orders that were created before the reservation flow existed, or orders
+ * that were reactivated from a non-reserved state. Atomic per record.
+ */
+export async function deductStockForOrder(items: OrderItem[], distributorId: string, actingUser: User): Promise<void> {
+  for (const item of items) {
+    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+    const recordRef = doc(db, RECORDS_COLLECTION, item.recordId);
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(recordRef);
+      if (!snap.exists()) {
+        throw new Error(`Record "${item.title}" not found.`);
+      }
+      const data = snap.data() as VinylRecord;
+      if (data.distributorId !== distributorId) {
+        throw new Error(`Record "${item.title}" does not belong to this distributor.`);
+      }
+      const total = (data.stock_shelves || 0) + (data.stock_storage || 0);
+      if (total < item.quantity) {
+        throw new Error(`Insufficient stock for "${data.title}". Available: ${total}, requested: ${item.quantity}.`);
+      }
+
+      let qty = item.quantity;
+      let shelf = data.stock_shelves || 0;
+      let storage = data.stock_storage || 0;
+
+      const fromShelves = Math.min(qty, shelf);
+      shelf -= fromShelves;
+      qty -= fromShelves;
+      if (qty > 0) {
+        storage -= qty;
+      }
+
+      tx.update(recordRef, {
+        stock_shelves: shelf,
+        stock_storage: storage,
+        last_modified_at: new Date().toISOString(),
+        last_modified_by_email: actingUser.email || null,
+      });
+    });
+  }
+}
+
+/**
+ * Restores previously-deducted stock (refund of a paid order). Adds back to
+ * storage so the distributor can decide where to put it physically.
+ */
 export async function restoreStockForOrder(items: OrderItem[], actingUser: User): Promise<void> {
   for (const item of items) {
-    const record = await getRecordById(item.recordId);
-    if (record) {
-      const newStorageStock = (record.stock_storage || 0) + item.quantity;
-      await updateRecord(record.id, {
-        stock_storage: newStorageStock
-      }, actingUser);
-    } else {
-      console.warn(`Could not restore stock for record ID ${item.recordId} as it was not found.`);
+    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+    const recordRef = doc(db, RECORDS_COLLECTION, item.recordId);
+    try {
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(recordRef);
+        if (!snap.exists()) return;
+        const data = snap.data() as VinylRecord;
+        tx.update(recordRef, {
+          stock_storage: (data.stock_storage || 0) + item.quantity,
+          last_modified_at: new Date().toISOString(),
+          last_modified_by_email: actingUser.email || null,
+        });
+      });
+    } catch (err) {
+      console.warn(`Could not restore stock for record ID ${item.recordId}:`, err);
     }
   }
 }

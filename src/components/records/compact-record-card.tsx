@@ -24,6 +24,7 @@ export default function CompactRecordCard({ record, isOperator, isFavorite, onTo
   const { addToCart, activeDistributorId } = useAuth();
   
   const totalStock = Number(record.stock_shelves || 0) + Number(record.stock_storage || 0);
+  const availableStock = Math.max(0, totalStock - Number(record.reserved || 0));
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -39,7 +40,7 @@ export default function CompactRecordCard({ record, isOperator, isFavorite, onTo
     }
   };
 
-  const isAvailable = record.isInventoryItem && totalStock > 0;
+  const isAvailable = record.isInventoryItem && availableStock > 0;
   const canBePurchased = !isOperator && isAvailable && (record.sellingPrice ?? -1) >= 0;
 
   const handleClick = onNavigate ? (e: React.MouseEvent) => { e.preventDefault(); onNavigate(record.id); } : undefined;

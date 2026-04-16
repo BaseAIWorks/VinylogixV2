@@ -7,6 +7,127 @@ import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
 
 const ORDERS_COLLECTION = 'orders';
+const RECORDS_COLLECTION = 'vinylRecords';
+
+/**
+ * Admin-SDK atomic stock operations. Mirrors the client-side transactional
+ * helpers in record-service.ts but uses firebase-admin runTransaction so it
+ * works inside webhooks and server actions.
+ */
+async function reserveStockAdmin(
+  items: Array<{ recordId: string; title?: string; quantity: number }>,
+  distributorId: string
+): Promise<void> {
+  const adminDb = getAdminDb();
+  if (!adminDb) throw new Error('Admin DB not initialized.');
+  for (const item of items) {
+    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+    const ref = adminDb.collection(RECORDS_COLLECTION).doc(item.recordId);
+    await adminDb.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) {
+        throw new Error(`Record "${item.title || item.recordId}" not found.`);
+      }
+      const data = snap.data()!;
+      if (data.distributorId !== distributorId) {
+        throw new Error(`Record "${item.title || item.recordId}" does not belong to this distributor.`);
+      }
+      const total = (data.stock_shelves || 0) + (data.stock_storage || 0);
+      const currentReserved = data.reserved || 0;
+      const availableForReservation = total - currentReserved;
+      if (availableForReservation < item.quantity) {
+        throw new Error(`Insufficient stock for "${data.title || item.title}". Available: ${availableForReservation}, requested: ${item.quantity}.`);
+      }
+      tx.update(ref, { reserved: currentReserved + item.quantity });
+    });
+  }
+}
+
+async function releaseStockAdmin(items: Array<{ recordId: string; quantity: number }>): Promise<void> {
+  const adminDb = getAdminDb();
+  if (!adminDb) return;
+  for (const item of items) {
+    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+    const ref = adminDb.collection(RECORDS_COLLECTION).doc(item.recordId);
+    try {
+      await adminDb.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;
+        const data = snap.data()!;
+        const next = Math.max(0, (data.reserved || 0) - item.quantity);
+        tx.update(ref, { reserved: next });
+      });
+    } catch (err) {
+      console.warn(`[reserve-release-admin] Failed for record ${item.recordId}:`, err);
+    }
+  }
+}
+
+async function deductReservedStockAdmin(items: Array<{ recordId: string; quantity: number }>): Promise<void> {
+  const adminDb = getAdminDb();
+  if (!adminDb) return;
+  for (const item of items) {
+    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+    const ref = adminDb.collection(RECORDS_COLLECTION).doc(item.recordId);
+    await adminDb.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const data = snap.data()!;
+      let qty = item.quantity;
+      let shelf = data.stock_shelves || 0;
+      let storage = data.stock_storage || 0;
+      const fromShelves = Math.min(qty, shelf);
+      shelf -= fromShelves;
+      qty -= fromShelves;
+      if (qty > 0) {
+        const fromStorage = Math.min(qty, storage);
+        storage -= fromStorage;
+        qty -= fromStorage;
+      }
+      if (qty > 0) {
+        console.warn(`[deduct-reserved-admin] Physical stock underran for record ${item.recordId} by ${qty}. Needs reconciliation.`);
+      }
+      const newReserved = Math.max(0, (data.reserved || 0) - item.quantity);
+      tx.update(ref, {
+        stock_shelves: shelf,
+        stock_storage: storage,
+        reserved: newReserved,
+      });
+    });
+  }
+}
+
+async function deductStockAdmin(items: Array<{ recordId: string; quantity: number; title?: string }>): Promise<void> {
+  const adminDb = getAdminDb();
+  if (!adminDb) return;
+  for (const item of items) {
+    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+    const ref = adminDb.collection(RECORDS_COLLECTION).doc(item.recordId);
+    await adminDb.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const data = snap.data()!;
+      const total = (data.stock_shelves || 0) + (data.stock_storage || 0);
+      if (total < item.quantity) {
+        console.warn(`[deduct-stock-admin] Insufficient stock for "${data.title || item.title}". Available: ${total}, requested: ${item.quantity}. Clamping.`);
+      }
+      let qty = item.quantity;
+      let shelf = data.stock_shelves || 0;
+      let storage = data.stock_storage || 0;
+      const fromShelves = Math.min(qty, shelf);
+      shelf -= fromShelves;
+      qty -= fromShelves;
+      if (qty > 0) {
+        const fromStorage = Math.min(qty, storage);
+        storage -= fromStorage;
+      }
+      tx.update(ref, {
+        stock_shelves: Math.max(0, shelf),
+        stock_storage: Math.max(0, storage),
+      });
+    });
+  }
+}
 
 const processOrderTimestampsServer = (orderData: any): Order => {
   const processed = { ...orderData };
@@ -144,10 +265,12 @@ export async function createOrderFromCheckout(session: Stripe.Checkout.Session):
 
     // Payment fields
     paymentStatus: 'paid' as const,
+    paymentMethod: 'stripe' as const,
     stripePaymentIntentId: session.payment_intent as string,
     stripeCheckoutSessionId: session.id,
     paidAt: Timestamp.fromDate(now),
     platformFeeAmount,
+    stockState: 'deducted' as const,
   };
 
   // Add phone number if available
@@ -219,6 +342,18 @@ export async function createOrderFromCheckout(session: Stripe.Checkout.Session):
 
   // Create the order
   const orderDocRef = await adminDb.collection(ORDERS_COLLECTION).add(newOrderData);
+
+  // Deduct stock directly (no prior reservation because storefront Stripe
+  // checkout creates the order only after payment succeeds). Atomic per record.
+  try {
+    await deductStockAdmin(orderItems.map(i => ({
+      recordId: i.recordId,
+      quantity: i.quantity,
+      title: i.title,
+    })));
+  } catch (stockError) {
+    console.error(`[createOrderFromCheckout] Failed to deduct stock for order ${orderDocRef.id}:`, stockError);
+  }
 
   // Counter already updated in transaction above
 
@@ -442,21 +577,51 @@ export async function updateOrderPaymentStatus(
 
     await orderDocRef.update(updateData);
 
-    // Deduct stock for paid orders (items are in the order document)
+    // Deduct stock for paid orders. If the order had an active reservation
+    // (awaiting_payment after a Request Order approval), convert it; otherwise
+    // fall back to a direct atomic deduct.
     if (paymentStatus === 'paid' && currentData.items?.length > 0) {
       try {
-        for (const item of currentData.items) {
-          if (!item.recordId) continue;
-          const recordRef = adminDb.collection('vinylRecords').doc(item.recordId);
-          const recordSnap = await recordRef.get();
-          if (recordSnap.exists) {
-            const currentStock = recordSnap.data()?.stock_shelves || 0;
-            const newStock = Math.max(0, currentStock - (item.quantity || 1));
-            await recordRef.update({ stock_shelves: newStock });
-          }
+        const stockState = currentData.stockState || 'none';
+        if (stockState === 'reserved') {
+          await deductReservedStockAdmin(currentData.items as any);
+        } else if (stockState !== 'deducted') {
+          await deductStockAdmin(currentData.items as any);
         }
+        updateData.stockState = 'deducted';
       } catch (stockError) {
         console.error(`Failed to deduct stock for order ${orderId}:`, stockError);
+      }
+    }
+    // A failed payment releases any held reservation so the stock returns.
+    if (paymentStatus === 'failed' && currentData.items?.length > 0) {
+      try {
+        if ((currentData.stockState || 'none') === 'reserved') {
+          await releaseStockAdmin(currentData.items as any);
+          updateData.stockState = 'none';
+        }
+      } catch (stockError) {
+        console.error(`Failed to release reservation for failed order ${orderId}:`, stockError);
+      }
+    }
+    // Refund on a paid order restores physical stock.
+    if (paymentStatus === 'refunded' && currentData.items?.length > 0) {
+      try {
+        if ((currentData.stockState || 'none') === 'deducted') {
+          for (const item of currentData.items) {
+            if (!item.recordId) continue;
+            const ref = adminDb.collection(RECORDS_COLLECTION).doc(item.recordId);
+            await adminDb.runTransaction(async (tx) => {
+              const snap = await tx.get(ref);
+              if (!snap.exists) return;
+              const d = snap.data()!;
+              tx.update(ref, { stock_storage: (d.stock_storage || 0) + (item.quantity || 1) });
+            });
+          }
+          updateData.stockState = 'none';
+        }
+      } catch (stockError) {
+        console.error(`Failed to restore stock for refunded order ${orderId}:`, stockError);
       }
     }
 
@@ -521,6 +686,14 @@ export async function createOrderRequestServer(params: {
   const totalAmount = params.items.reduce((sum, i) => sum + i.sellingPrice * i.quantity, 0);
   const totalWeight = params.items.reduce((sum, i) => sum + (i.weight || 0) * i.quantity, 0);
 
+  // Reserve stock atomically BEFORE writing the order. If reservation fails
+  // (e.g. another customer just claimed the last copy), we surface the error
+  // to the caller without ever creating an order doc or a notification.
+  await reserveStockAdmin(
+    orderItems.map(i => ({ recordId: i.recordId, title: i.title, quantity: i.quantity })),
+    distributorId
+  );
+
   const newOrderData: any = {
     distributorId,
     viewerId,
@@ -531,6 +704,7 @@ export async function createOrderRequestServer(params: {
     status: 'awaiting_approval',
     paymentMethod: 'pending',
     paymentStatus: 'unpaid',
+    stockState: 'reserved',
     totalAmount,
     totalWeight,
     createdAt: Timestamp.fromDate(now),

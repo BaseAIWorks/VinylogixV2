@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import type { VinylRecord, DiscogsMarketplaceStats, Track, WorkerPermissions } from "@/types";
 import { getRecordsByArtist } from "@/services/record-service";
 import RecordCard from "@/components/records/record-card";
-import { ArrowLeft, Edit, Trash2, CalendarDays, Tag, Music, Layers3, Info, Euro, Package, MapPin, AlignLeft, Barcode, Disc3, Loader2, User, Heart, Scale, ListMusic, ExternalLink, Library, PlusCircle, ListChecks, Sparkles, UserCircle, RefreshCw, ShoppingCart, Minus, Plus, Warehouse, Store, Check, BarChart3, AlertTriangle, Users, Star, TrendingDown, Briefcase, Globe, Paintbrush, X, Weight } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, CalendarDays, Tag, Music, Layers3, Info, Euro, Package, MapPin, AlignLeft, Barcode, Disc3, Loader2, User, Heart, Scale, ListMusic, ExternalLink, Library, PlusCircle, ListChecks, Sparkles, UserCircle, RefreshCw, ShoppingCart, Minus, Plus, Warehouse, Store, Check, BarChart3, AlertTriangle, Users, Star, TrendingDown, Briefcase, Globe, Paintbrush, X, Weight, Clock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -535,7 +535,9 @@ export default function RecordDetailPage() {
   }
 
   const totalStock = Number(record.stock_shelves || 0) + Number(record.stock_storage || 0);
-  const canBePurchased = user?.role === 'viewer' && record.isInventoryItem !== false && totalStock > 0 && (record.sellingPrice ?? -1) >= 0;
+  const reservedStock = Number(record.reserved || 0);
+  const availableStock = Math.max(0, totalStock - reservedStock);
+  const canBePurchased = user?.role === 'viewer' && record.isInventoryItem !== false && availableStock > 0 && (record.sellingPrice ?? -1) >= 0;
 
   return (
       <div className="max-w-6xl mx-auto space-y-6">
@@ -745,6 +747,18 @@ export default function RecordDetailPage() {
                         <DetailItem icon={Warehouse} label="Stock (Storage)" value={record.stock_storage} />
                         <DetailItem icon={MapPin} label="Storage Locations" value={allStorageLocations.length > 0 ? <div className="flex flex-wrap gap-1">{allStorageLocations.map(loc => <Badge key={loc} variant="secondary">{loc}</Badge>)}</div> : "N/A"} />
                         <DetailItem icon={Package} label="Total Stock" value={totalStock} />
+                        {reservedStock > 0 && (
+                            <DetailItem
+                                icon={Clock}
+                                label="Reserved"
+                                value={<span className="text-amber-600 dark:text-amber-400 font-medium">{reservedStock} held by open orders</span>}
+                            />
+                        )}
+                        <DetailItem
+                            icon={Package}
+                            label="Available for sale"
+                            value={<span className={availableStock > 0 ? 'font-semibold' : 'text-muted-foreground'}>{availableStock}</span>}
+                        />
                         {record.weight && <DetailItem icon={Weight} label="Weight" value={`${record.weight} g`} />}
                     </div>
 

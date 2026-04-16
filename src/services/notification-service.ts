@@ -24,7 +24,10 @@ export async function handleLowStockNotification(record: VinylRecord, actingUser
         return; // Notifications disabled or not configured for this distributor
     }
 
+    // Use available (= total - reserved) so low-stock alerts fire based on
+    // what customers can actually still buy, not physical warehouse count.
     const totalStock = (record.stock_shelves || 0) + (record.stock_storage || 0);
+    const availableStock = Math.max(0, totalStock - (record.reserved || 0));
     const notificationsCollectionRef = collection(db, NOTIFICATIONS_COLLECTION);
 
     const q = query(
@@ -36,16 +39,16 @@ export async function handleLowStockNotification(record: VinylRecord, actingUser
     );
     const existingNotifications = await getDocs(q);
 
-    if (totalStock <= distributor.lowStockThreshold) {
+    if (availableStock <= distributor.lowStockThreshold) {
         // Stock is low. Create a notification if an unread one doesn't already exist.
         if (existingNotifications.empty) {
             const newNotificationData = {
                 distributorId: actingUser.distributorId,
                 type: 'low_stock' as const,
-                message: `Stock for "${record.title}" is low.`,
+                message: `Available stock for "${record.title}" is low.`,
                 recordId: record.id,
                 recordTitle: record.title,
-                remainingStock: totalStock,
+                remainingStock: availableStock,
                 createdAt: Timestamp.now(),
                 isRead: false,
             };

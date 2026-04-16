@@ -147,11 +147,13 @@ export async function GET(
       }
     }
 
-    // Stock availability (not raw numbers)
+    // Stock availability (not raw numbers). Uses available = stock - reserved
+    // so items held by open orders don't show as in-stock to other customers.
     const totalStock = (record.stock_shelves || 0) + (record.stock_storage || 0);
-    if (totalStock === 0) {
+    const availableStock = Math.max(0, totalStock - (record.reserved || 0));
+    if (availableStock === 0) {
       safe.stockStatus = 'out_of_stock';
-    } else if (totalStock <= lowStockThreshold) {
+    } else if (availableStock <= lowStockThreshold) {
       safe.stockStatus = 'low_stock';
     } else {
       safe.stockStatus = 'in_stock';

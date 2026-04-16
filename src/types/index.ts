@@ -391,6 +391,10 @@ export interface VinylRecord {
   sellingPrice?: number;
   stock_shelves?: number;
   stock_storage?: number;
+  // Count of items held by open orders (awaiting_approval / awaiting_payment).
+  // Visible stock for customers = (stock_shelves + stock_storage) - reserved.
+  // Cleared when the order is paid (converted to stock deduction) or cancelled (released).
+  reserved?: number;
   shelf_location?: string;
   storage_location?: string;
   shelf_locations?: string[];
@@ -646,6 +650,12 @@ export interface Order {
   // Item status adjustment
   originalTotalAmount?: number; // Preserved when items are marked unavailable
   originalSubtotalAmount?: number;
+
+  // Stock reservation state machine.
+  // - 'reserved': order created and stock is held (awaiting_approval / awaiting_payment)
+  // - 'deducted': order paid and stock was physically decremented
+  // - 'none' or missing: no stock claim (cancelled / rejected, or legacy pre-reservation orders)
+  stockState?: 'none' | 'reserved' | 'deducted';
 
   // Customer-facing notification tracking (for resend UX)
   itemChangesNotifiedAt?: string; // ISO — last time the "items updated" email was sent

@@ -58,9 +58,10 @@ async function getInitialCatalog(distributorId: string, lowStockThreshold = 3, l
   const records = docs.map((doc) => {
     const d = doc.data();
     const totalStock = (d.stock_shelves || 0) + (d.stock_storage || 0);
+    const availableStock = Math.max(0, totalStock - (d.reserved || 0));
     let stockStatus: "in_stock" | "low_stock" | "out_of_stock" = "in_stock";
-    if (totalStock === 0) stockStatus = "out_of_stock";
-    else if (totalStock <= lowStockThreshold) stockStatus = "low_stock";
+    if (availableStock === 0) stockStatus = "out_of_stock";
+    else if (availableStock <= lowStockThreshold) stockStatus = "low_stock";
 
     return {
       id: doc.id,
