@@ -643,6 +643,17 @@ export interface Order {
   isReverseCharge?: boolean;
   taxBreakdown?: Array<{ rate: number; amount: number; jurisdiction: string }>;
 
+  // Discount applied by the distributor during approval. Discount is applied
+  // to the items subtotal BEFORE tax (EU standard). Shipping is never
+  // discounted. Capped at items-subtotal (100% off).
+  // - discountType: 'fixed' = discountValue is € amount; 'percent' = 0-100
+  // - discountValue: the raw input from the distributor (for re-editing)
+  // - discountAmount: the actual € reduction applied, in the SAME tax
+  //   convention as priceAtTimeOfOrder (inclusive or exclusive per distributor)
+  discountType?: 'fixed' | 'percent';
+  discountValue?: number;
+  discountAmount?: number;
+
   // Shipping Fields
   shippingCost?: number;
   shippingZoneName?: string;

@@ -79,6 +79,17 @@ const renderOrderSummary = (order: Order, distributor?: RenderableDistributor | 
       </tr>
     `);
   }
+  if (typeof order.discountAmount === 'number' && order.discountAmount > 0) {
+    const discountLabel = order.discountType === 'percent' && typeof order.discountValue === 'number'
+      ? `Discount (${order.discountValue}%)`
+      : 'Discount';
+    totalsRows.push(`
+      <tr>
+        <td style="padding: 4px 12px; text-align: right; color: #6b7280; font-size: 13px;">${escapeHtml(discountLabel)}</td>
+        <td style="padding: 4px 12px; text-align: right; color: #16a34a; font-size: 13px; font-weight: 600; white-space: nowrap;">− € ${formatPriceForDisplay(order.discountAmount)}</td>
+      </tr>
+    `);
+  }
   if (typeof shipping === 'number' && shipping > 0) {
     totalsRows.push(`
       <tr>

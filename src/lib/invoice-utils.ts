@@ -568,6 +568,20 @@ async function buildInvoicePdfDoc(
     doc.text(`\u20AC ${formatPriceForDisplay(order.subtotalAmount)}`, pageWidth - margin, currentY, { align: 'right' });
     currentY += 4;
 
+    // Discount line — shown between subtotal and shipping. Amount is stored in
+    // the items' tax convention; the display matches. Only visible when a
+    // non-zero discount was applied.
+    if (order.discountAmount !== undefined && order.discountAmount > 0) {
+      const discountLabel = order.discountType === 'percent' && typeof order.discountValue === 'number'
+        ? `Discount (${order.discountValue}%):`
+        : 'Discount:';
+      doc.setTextColor(...COLORS.secondary);
+      doc.text(discountLabel, totalsX, currentY);
+      doc.setTextColor(34, 139, 34); // success green for the credit
+      doc.text(`\u2212 \u20AC ${formatPriceForDisplay(order.discountAmount)}`, pageWidth - margin, currentY, { align: 'right' });
+      currentY += 4;
+    }
+
     // Shipping line — shown above VAT so VAT is calculated on subtotal + shipping
     if (order.shippingCost !== undefined && order.shippingCost > 0) {
       doc.setTextColor(...COLORS.secondary);

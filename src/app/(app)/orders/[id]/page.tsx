@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import type { Order, OrderStatus, OrderItemStatus, VinylRecord } from "@/types";
-import { getOrderById, updateOrderStatus, updateOrderItemStatuses, recalculateOrderTax, getOrdersByViewerId } from "@/services/order-service";
+import { getOrderById, updateOrderStatus, updateOrderItemStatuses, recalculateOrderPriceAndTax, getOrdersByViewerId } from "@/services/order-service";
 import { getRecordById } from "@/services/record-service";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback } from "react";
@@ -25,6 +25,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { generateInvoicePdf } from "@/lib/invoice-utils";
 
 
@@ -85,7 +86,13 @@ export default function OrderDetailPage() {
     const [markPaidSendEmail, setMarkPaidSendEmail] = useState(true);
     const [isRecalculating, setIsRecalculating] = useState(false);
     const [shippingCostInput, setShippingCostInput] = useState<string>('');
-    const [isSavingShipping, setIsSavingShipping] = useState(false);
+    const [showShipping, setShowShipping] = useState<boolean>(false);
+
+    // Discount state — mirrors Order.discountType/discountValue. Toggle off =
+    // discount cleared when distributor clicks Recalculate.
+    const [showDiscount, setShowDiscount] = useState<boolean>(false);
+    const [discountType, setDiscountType] = useState<'fixed' | 'percent'>('fixed');
+    const [discountInput, setDiscountInput] = useState<string>('');
     const hasUnsavedItemChanges = Object.keys(itemStatusChanges).length > 0 || Object.keys(itemQuantityChanges).length > 0;
     const hasItemStatusChanges = order?.items.some(item => item.itemStatus && item.itemStatus !== 'available') ?? false;
     const itemChangesNotifiedAt = order?.itemChangesNotifiedAt;
@@ -117,7 +124,23 @@ export default function OrderDetailPage() {
             const fetchedOrder = await getOrderById(orderId);
             if (fetchedOrder && (fetchedOrder.distributorId === user.distributorId || user.role === 'superadmin')) {
                 setOrder(fetchedOrder);
-                setShippingCostInput(fetchedOrder.shippingCost ? fetchedOrder.shippingCost.toString() : '');
+                // Hydrate local input state from the fetched order. Toggles
+                // auto-open when the order already carries a non-zero value,
+                // so distributors can see/edit what's applied without manual
+                // clicks.
+                const savedShipping = fetchedOrder.shippingCost || 0;
+                setShippingCostInput(savedShipping > 0 ? savedShipping.toString() : '');
+                setShowShipping(savedShipping > 0);
+                const savedDiscountType = fetchedOrder.discountType;
+                const savedDiscountValue = fetchedOrder.discountValue;
+                if (savedDiscountType && typeof savedDiscountValue === 'number' && savedDiscountValue > 0) {
+                    setDiscountType(savedDiscountType);
+                    setDiscountInput(savedDiscountValue.toString());
+                    setShowDiscount(true);
+                } else {
+                    setDiscountInput('');
+                    setShowDiscount(false);
+                }
             } else {
                 toast({ title: "Not Found", description: "The requested order could not be found.", variant: "destructive" });
                 router.push('/orders');
@@ -534,54 +557,112 @@ export default function OrderDetailPage() {
         }
     };
 
-    const handleRecalculateTax = async () => {
+    // Parsed inputs for the pricing card; null if the input is invalid
+    const parseNum = (s: string): number | null => {
+        const n = parseFloat(s.replace(',', '.'));
+        return isNaN(n) ? null : n;
+    };
+
+    // True when the distributor has changed discount/shipping inputs vs what's
+    // stored on the order. Combined with hasUnsavedItemChanges this gates the
+    // send/email/regenerate/approve buttons — we can't ship an invoice that
+    // doesn't yet reflect the pending pricing edits.
+    const hasPricingInputPending = (() => {
+        if (!order) return false;
+        const savedShipping = order.shippingCost || 0;
+        const savedDiscountValue = order.discountValue || 0;
+        const savedDiscountType = order.discountType || 'fixed';
+
+        const shippingNow = showShipping ? (parseNum(shippingCostInput) ?? 0) : 0;
+        if (Math.abs(shippingNow - savedShipping) > 0.001) return true;
+
+        const discountNow = showDiscount ? (parseNum(discountInput) ?? 0) : 0;
+        if (Math.abs(discountNow - savedDiscountValue) > 0.001) return true;
+
+        if (showDiscount && discountType !== savedDiscountType) return true;
+
+        return false;
+    })();
+
+    const isPricingDirty = hasUnsavedItemChanges || hasPricingInputPending;
+
+    const handleRecalculatePriceAndTax = async () => {
         if (!order || !user) return;
         setIsRecalculating(true);
         try {
-            const updatedOrder = await recalculateOrderTax(orderId, user);
-            setOrder(updatedOrder);
-            setShippingCostInput(updatedOrder.shippingCost ? updatedOrder.shippingCost.toString() : '');
-            toast({ title: "Tax recalculated", description: "Order totals have been updated with current tax settings." });
+            // 1. Save item changes first (status / quantity) if pending, so the
+            //    recalc runs against the up-to-date items list.
+            if (hasUnsavedItemChanges) {
+                const allRecordIds = new Set([
+                    ...Object.keys(itemStatusChanges),
+                    ...Object.keys(itemQuantityChanges),
+                ]);
+                const changes = Array.from(allRecordIds).map(recordId => ({
+                    recordId,
+                    itemStatus:
+                        itemStatusChanges[recordId] ||
+                        order.items.find(i => i.recordId === recordId)?.itemStatus ||
+                        ('available' as OrderItemStatus),
+                    quantity: itemQuantityChanges[recordId],
+                }));
+                await updateOrderItemStatuses(orderId, changes, user);
+                setItemStatusChanges({});
+                setItemQuantityChanges({});
+            }
+
+            // 2. Gather pricing inputs
+            let shippingOpt: number | undefined;
+            if (showShipping) {
+                const parsed = parseNum(shippingCostInput);
+                if (parsed === null || parsed < 0) {
+                    toast({ title: 'Invalid shipping', description: 'Enter a valid non-negative shipping cost.', variant: 'destructive' });
+                    setIsRecalculating(false);
+                    return;
+                }
+                shippingOpt = parsed;
+            } else {
+                shippingOpt = 0;
+            }
+
+            let discountOpt: { type: 'fixed' | 'percent'; value: number } | null = null;
+            if (showDiscount) {
+                const parsed = parseNum(discountInput);
+                if (parsed === null || parsed < 0) {
+                    toast({ title: 'Invalid discount', description: 'Enter a valid non-negative discount.', variant: 'destructive' });
+                    setIsRecalculating(false);
+                    return;
+                }
+                if (parsed > 0) {
+                    discountOpt = { type: discountType, value: parsed };
+                }
+            }
+
+            // 3. Run the full recalc
+            const updated = await recalculateOrderPriceAndTax(orderId, user, {
+                shippingCost: shippingOpt,
+                discount: discountOpt,
+            });
+
+            setOrder(updated);
+            // Re-sync inputs to what was saved (server may cap / round the values)
+            setShippingCostInput(updated.shippingCost ? updated.shippingCost.toString() : '');
+            setShowShipping((updated.shippingCost || 0) > 0);
+            if (updated.discountType && typeof updated.discountValue === 'number' && updated.discountValue > 0) {
+                setDiscountType(updated.discountType);
+                setDiscountInput(updated.discountValue.toString());
+                setShowDiscount(true);
+            } else {
+                setDiscountInput('');
+                setShowDiscount(false);
+            }
+
+            toast({ title: 'Price & tax recalculated', description: 'Order totals updated.' });
         } catch (error: any) {
-            toast({ title: "Error", description: error.message || "Failed to recalculate tax.", variant: "destructive" });
+            toast({ title: 'Error', description: error.message || 'Failed to recalculate.', variant: 'destructive' });
         } finally {
             setIsRecalculating(false);
         }
     };
-
-    const handleSaveShippingCost = async () => {
-        if (!order || !user) return;
-        const parsed = parseFloat(shippingCostInput.replace(',', '.'));
-        if (isNaN(parsed)) {
-            toast({ title: "Invalid amount", description: "Please enter a valid number.", variant: "destructive" });
-            // Reset input to last saved value
-            setShippingCostInput((order.shippingCost || 0).toString());
-            return;
-        }
-        const newCost = parsed;
-        if (newCost < 0) {
-            toast({ title: "Invalid amount", description: "Shipping cost cannot be negative.", variant: "destructive" });
-            return;
-        }
-        setIsSavingShipping(true);
-        try {
-            const updatedOrder = await recalculateOrderTax(orderId, user, newCost);
-            setOrder(updatedOrder);
-            setShippingCostInput(updatedOrder.shippingCost ? updatedOrder.shippingCost.toString() : '');
-            toast({ title: "Shipping cost updated", description: "Order totals and tax recalculated." });
-        } catch (error: any) {
-            toast({ title: "Error", description: error.message || "Failed to update shipping cost.", variant: "destructive" });
-        } finally {
-            setIsSavingShipping(false);
-        }
-    };
-
-    const hasShippingChange = (() => {
-        if (!order) return false;
-        const parsed = parseFloat(shippingCostInput.replace(',', '.') || '0');
-        if (isNaN(parsed)) return false; // Don't trigger save on invalid input
-        return parsed !== (order.shippingCost || 0);
-    })();
 
     const getEffectiveItemStatus = (recordId: string): OrderItemStatus => {
         return itemStatusChanges[recordId] ?? order?.items.find(i => i.recordId === recordId)?.itemStatus ?? 'available';
@@ -682,7 +763,7 @@ export default function OrderDetailPage() {
                 {canManageOrder && (
                     <div className="flex items-center gap-2 flex-wrap">
                         <Button variant="outline" onClick={handleDownloadInvoice}><FileDown className="mr-2 h-4 w-4" /> Download Invoice</Button>
-                        <Button variant="outline" onClick={handleEmailInvoice} disabled={isEmailingInvoice || !order.viewerEmail} title={invoiceEmailedAt ? `Last emailed on ${format(new Date(invoiceEmailedAt), 'dd MMM yyyy HH:mm')}` : 'Email the invoice PDF to the customer'}>
+                        <Button variant="outline" onClick={handleEmailInvoice} disabled={isEmailingInvoice || !order.viewerEmail || isPricingDirty} title={isPricingDirty ? 'Recalculate Price + Tax before sending the invoice' : (invoiceEmailedAt ? `Last emailed on ${format(new Date(invoiceEmailedAt), 'dd MMM yyyy HH:mm')}` : 'Email the invoice PDF to the customer')}>
                             {isEmailingInvoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
                             {invoiceEmailedAt ? 'Resend Invoice' : 'Email Invoice'}
                         </Button>
@@ -772,16 +853,17 @@ export default function OrderDetailPage() {
                             const showStripeButton = effectiveMode !== 'never';
                             const showInvoiceOnlyButton = effectiveMode === 'optional' || effectiveMode === 'never';
                             const busy = isApproving || isApprovingInvoiceOnly || isUpdating;
+                            const dirtyTip = 'Recalculate Price + Tax before approving';
                             return (
                                 <>
                                     {showStripeButton && (
-                                        <Button onClick={handleApproveOrder} disabled={busy} className="bg-green-600 hover:bg-green-700">
+                                        <Button onClick={handleApproveOrder} disabled={busy || isPricingDirty} className="bg-green-600 hover:bg-green-700" title={isPricingDirty ? dirtyTip : undefined}>
                                             {isApproving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsUp className="mr-2 h-4 w-4" />}
                                             Approve & Send Payment Link
                                         </Button>
                                     )}
                                     {showInvoiceOnlyButton && (
-                                        <Button onClick={handleApproveInvoiceOnly} disabled={busy} variant={showStripeButton ? 'outline' : 'default'} className={showStripeButton ? '' : 'bg-green-600 hover:bg-green-700'}>
+                                        <Button onClick={handleApproveInvoiceOnly} disabled={busy || isPricingDirty} variant={showStripeButton ? 'outline' : 'default'} className={showStripeButton ? '' : 'bg-green-600 hover:bg-green-700'} title={isPricingDirty ? dirtyTip : undefined}>
                                             {isApprovingInvoiceOnly ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}
                                             Approve & Send Invoice Only
                                         </Button>
@@ -793,7 +875,7 @@ export default function OrderDetailPage() {
                             );
                         })()}
                         {(order.status === 'pending' || order.status === 'awaiting_payment') && (
-                            <Button onClick={() => setMarkPaidDialogOpen(true)} disabled={isUpdating}>
+                            <Button onClick={() => setMarkPaidDialogOpen(true)} disabled={isUpdating || isPricingDirty} title={isPricingDirty ? 'Recalculate Price + Tax before marking as paid' : undefined}>
                                 <DollarSign className="mr-2 h-4 w-4"/> Mark as Paid
                             </Button>
                         )}
@@ -859,7 +941,7 @@ export default function OrderDetailPage() {
                                     </div>
                                 )}
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <Button onClick={handleRegeneratePaymentLink} disabled={isRegeneratingPaymentLink} size="sm" variant={isPaymentLinkStale ? 'default' : 'outline'}>
+                                    <Button onClick={handleRegeneratePaymentLink} disabled={isRegeneratingPaymentLink || isPricingDirty} size="sm" variant={isPaymentLinkStale ? 'default' : 'outline'} title={isPricingDirty ? 'Recalculate Price + Tax before regenerating the link' : undefined}>
                                         {isRegeneratingPaymentLink ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                                         Regenerate Payment Link
                                     </Button>
@@ -952,7 +1034,7 @@ export default function OrderDetailPage() {
                                         </Button>
                                     )}
                                     {!hasUnsavedItemChanges && hasItemStatusChanges && (
-                                        <Button onClick={handleNotifyClient} disabled={isSendingNotification} variant="outline" size="sm">
+                                        <Button onClick={handleNotifyClient} disabled={isSendingNotification || isPricingDirty} variant="outline" size="sm" title={isPricingDirty ? 'Recalculate Price + Tax before notifying the client' : undefined}>
                                             {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
                                             {itemChangesNotifiedAt ? 'Resend Change Notification' : 'Notify Client of Changes'}
                                         </Button>
@@ -982,29 +1064,14 @@ export default function OrderDetailPage() {
                                 {order.subtotalAmount !== undefined && (
                                     <p className="text-sm text-muted-foreground">Subtotal excl. {order.taxLabel || 'VAT'}: € {formatPriceForDisplay(order.subtotalAmount)}</p>
                                 )}
-                                {/* Editable shipping cost — shown above VAT so VAT is calculated on subtotal + shipping */}
-                                {/* Only allow editing on unpaid orders to preserve historical totals */}
-                                {order.status !== 'shipped' && order.status !== 'cancelled' && order.paymentStatus !== 'paid' ? (
-                                    <div className="flex items-center justify-end gap-2 py-1">
-                                        <span className="text-sm text-muted-foreground">Shipping{order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}:</span>
-                                        <span className="text-sm">€</span>
-                                        <Input
-                                            type="text"
-                                            inputMode="decimal"
-                                            value={shippingCostInput}
-                                            onChange={(e) => setShippingCostInput(e.target.value)}
-                                            onBlur={() => { if (hasShippingChange) handleSaveShippingCost(); }}
-                                            onKeyDown={(e) => { if (e.key === 'Enter' && hasShippingChange) handleSaveShippingCost(); }}
-                                            className="w-20 h-7 text-right text-sm"
-                                            placeholder="0.00"
-                                            disabled={isSavingShipping}
-                                        />
-                                        {isSavingShipping && <Loader2 className="h-3 w-3 animate-spin" />}
-                                    </div>
-                                ) : (
-                                    order.shippingCost !== undefined && order.shippingCost > 0 && (
-                                        <p className="text-sm text-muted-foreground">Shipping{order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}: € {formatPriceForDisplay(order.shippingCost)}</p>
-                                    )
+                                {/* Discount + shipping are edited in the Pricing card (side panel). */}
+                                {order.discountAmount !== undefined && order.discountAmount > 0 && (
+                                    <p className="text-sm text-muted-foreground">
+                                        Discount {order.discountType === 'percent' ? `(${order.discountValue}%)` : '(Fixed)'}: <span className="text-green-600">− € {formatPriceForDisplay(order.discountAmount)}</span>
+                                    </p>
+                                )}
+                                {order.shippingCost !== undefined && order.shippingCost > 0 && (
+                                    <p className="text-sm text-muted-foreground">Shipping{order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}: € {formatPriceForDisplay(order.shippingCost)}</p>
                                 )}
                                 {order.freeShippingApplied && (
                                     <p className="text-sm text-green-600">Free shipping applied</p>
@@ -1021,22 +1088,6 @@ export default function OrderDetailPage() {
                                 {order.isReverseCharge && <p className="text-xs text-muted-foreground italic">Reverse charge — VAT to be accounted for by the recipient.</p>}
                                 <p className="text-sm text-muted-foreground">Total Items: {order.items.reduce((sum, item) => sum + item.quantity, 0)}</p>
                                 {order.totalWeight && <p className="text-sm text-muted-foreground">Total Weight: {(order.totalWeight / 1000).toFixed(2)} kg</p>}
-                                {order.status !== 'shipped' && order.status !== 'cancelled' && order.paymentStatus !== 'paid' && (
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="mt-2"
-                                        onClick={handleRecalculateTax}
-                                        disabled={isRecalculating || isSavingShipping}
-                                    >
-                                        {isRecalculating ? (
-                                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                                        ) : (
-                                            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                                        )}
-                                        Recalculate Tax
-                                    </Button>
-                                )}
                             </div>
                         </CardContent>
                     </Card>
@@ -1056,6 +1107,127 @@ export default function OrderDetailPage() {
                             <p className="text-xs text-muted-foreground mt-2">Last updated: {format(new Date(order.updatedAt), 'Pp')}</p>
                          </CardContent>
                     </Card>
+
+                    {/* Pricing card — discount + shipping toggles + unified recalc.
+                        Only editable while the order is still open (not paid / shipped / cancelled). */}
+                    {canManageOrder && order.status !== 'shipped' && order.status !== 'cancelled' && order.paymentStatus !== 'paid' && (
+                        <Card>
+                            <CardHeader className="pb-3">
+                                <CardTitle className="flex items-center gap-3 text-base">
+                                    <DollarSign className="h-5 w-5 text-primary" />
+                                    Pricing
+                                </CardTitle>
+                                <CardDescription className="text-xs">
+                                    Apply a discount or shipping charge, then recalculate so the invoice reflects the new totals.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {/* DISCOUNT */}
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-sm">Discount</Label>
+                                        <Switch
+                                            checked={showDiscount}
+                                            onCheckedChange={(v: boolean) => {
+                                                setShowDiscount(v);
+                                                if (!v) setDiscountInput('');
+                                            }}
+                                        />
+                                    </div>
+                                    {showDiscount && (
+                                        <div className="space-y-2 pl-1">
+                                            <div className="flex items-center gap-1 rounded-md border p-0.5 w-fit bg-muted/30">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={discountType === 'fixed' ? 'default' : 'ghost'}
+                                                    className="h-7 text-xs"
+                                                    onClick={() => setDiscountType('fixed')}
+                                                >Fixed amount</Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={discountType === 'percent' ? 'default' : 'ghost'}
+                                                    className="h-7 text-xs"
+                                                    onClick={() => setDiscountType('percent')}
+                                                >Percent</Button>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {discountType === 'fixed' && <span className="text-sm text-muted-foreground">€</span>}
+                                                <Input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    value={discountInput}
+                                                    onChange={(e) => setDiscountInput(e.target.value)}
+                                                    placeholder={discountType === 'fixed' ? '0.00' : '0'}
+                                                    className="h-8 text-sm"
+                                                />
+                                                {discountType === 'percent' && <span className="text-sm text-muted-foreground">%</span>}
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground">
+                                                {discountType === 'percent' ? 'Capped at 100%.' : 'Capped at the items subtotal.'} Applied before VAT.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <Separator />
+
+                                {/* SHIPPING */}
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-sm">Shipping charge</Label>
+                                        <Switch
+                                            checked={showShipping}
+                                            onCheckedChange={(v: boolean) => {
+                                                setShowShipping(v);
+                                                if (!v) setShippingCostInput('');
+                                            }}
+                                        />
+                                    </div>
+                                    {showShipping && (
+                                        <div className="space-y-2 pl-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm text-muted-foreground">€</span>
+                                                <Input
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    value={shippingCostInput}
+                                                    onChange={(e) => setShippingCostInput(e.target.value)}
+                                                    placeholder="0.00"
+                                                    className="h-8 text-sm"
+                                                />
+                                            </div>
+                                            {order.shippingZoneName && (
+                                                <p className="text-[11px] text-muted-foreground">Zone: {order.shippingZoneName}</p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <Separator />
+
+                                {/* DIRTY WARNING + RECALC BUTTON */}
+                                {isPricingDirty && (
+                                    <div className="flex items-start gap-2 rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 p-2 text-[11px] text-amber-800 dark:text-amber-300">
+                                        <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                                        <span>Pricing has changed — click Recalculate before sending the invoice.</span>
+                                    </div>
+                                )}
+                                <Button
+                                    onClick={handleRecalculatePriceAndTax}
+                                    disabled={isRecalculating || !isPricingDirty}
+                                    size="sm"
+                                    className="w-full"
+                                    variant={isPricingDirty ? 'default' : 'outline'}
+                                >
+                                    {isRecalculating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                                    Recalculate Price + Tax
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    )}
+
                      <Card>
                          <CardHeader className="pb-3">
                             <CardTitle className="flex items-center justify-between">

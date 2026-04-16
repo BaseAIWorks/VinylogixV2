@@ -368,10 +368,26 @@ export async function updateOrderItemStatuses(
   return processOrderTimestamps({ ...updatedSnap.data(), id: updatedSnap.id });
 }
 
-export async function recalculateOrderTax(
+/**
+ * Full pricing recalculation for an order.
+ *
+ * Supersedes the old recalculateOrderTax — handles items + discount + shipping
+ * + tax in a single atomic update. Uses the tax rate stored on the order
+ * (historical rate, preserved across distributor-setting changes) when
+ * available; falls back to the distributor's current manualTaxRate for
+ * orders that pre-date that field.
+ *
+ * Discount is applied to the items subtotal BEFORE tax (EU standard) and
+ * capped at 100% of items (you can't give away more than the products).
+ * Shipping is never discounted.
+ */
+export async function recalculateOrderPriceAndTax(
   orderId: string,
   actingUser: User,
-  manualShippingCost?: number
+  opts?: {
+    shippingCost?: number;
+    discount?: { type: 'fixed' | 'percent'; value: number } | null;
+  }
 ): Promise<Order> {
   if (!actingUser.distributorId) throw new Error("User has no distributorId.");
 
@@ -384,57 +400,82 @@ export async function recalculateOrderTax(
 
   const orderData = orderSnap.data() as Order;
 
-  // Fetch distributor tax settings
+  // Fetch distributor tax settings (used as fallback for orders without stored tax fields)
   const distributor = await getDistributorById(actingUser.distributorId);
   if (!distributor) throw new Error("Distributor not found.");
 
-  const taxMode = distributor.taxMode || 'none';
-  if (taxMode !== 'manual' || !distributor.manualTaxRate) {
-    throw new Error("Tax recalculation is only supported for manual tax mode.");
-  }
-
-  const taxBehavior = distributor.taxBehavior || 'inclusive';
-
-  // Calculate item total from active items
+  // Active items in the distributor's tax-behavior convention.
   const activeItems = orderData.items.filter(item => {
     const status = item.itemStatus || 'available';
     return status === 'available' || status === 'back_order';
   });
   const itemTotal = activeItems.reduce((sum, item) => sum + (item.priceAtTimeOfOrder * item.quantity), 0);
 
-  // Use manual shipping cost if provided, otherwise preserve existing
-  const enteredShipping = manualShippingCost !== undefined ? manualShippingCost : (orderData.shippingCost || 0);
+  // Discount handling — undefined opts.discount means "keep current", null means "remove"
+  let discountType: 'fixed' | 'percent' | undefined;
+  let discountValue: number | undefined;
+  if (opts?.discount === null) {
+    discountType = undefined;
+    discountValue = undefined;
+  } else if (opts?.discount !== undefined) {
+    discountType = opts.discount.type;
+    discountValue = opts.discount.value;
+  } else {
+    discountType = orderData.discountType;
+    discountValue = orderData.discountValue;
+  }
 
-  // Determine reverse charge from stored order data
-  const reverseCharge = orderData.isReverseCharge || false;
-
-  const rate = distributor.manualTaxRate;
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
-  // IMPORTANT: shippingCost is stored in the SAME convention as priceAtTimeOfOrder
-  // (i.e. inclusive for inclusive distributors, exclusive for exclusive distributors).
-  // This makes recalc idempotent — repeated calls produce the same result.
-  // Compute products and shipping excl tax + tax + total
-  // VAT applies to BOTH products and shipping (EU standard)
+  // Cap the discount so it never exceeds itemTotal (no negative products).
+  let discountAmount = 0;
+  if (discountType && typeof discountValue === 'number' && discountValue > 0) {
+    if (discountType === 'fixed') {
+      discountAmount = round2(Math.min(discountValue, itemTotal));
+    } else {
+      const pct = Math.min(100, Math.max(0, discountValue));
+      discountAmount = round2(itemTotal * pct / 100);
+    }
+  }
+  const itemAfterDiscount = round2(itemTotal - discountAmount);
+
+  // Shipping: undefined means keep current.
+  const enteredShipping = opts?.shippingCost !== undefined
+    ? Math.max(0, opts.shippingCost)
+    : (orderData.shippingCost || 0);
+
+  // Use order's historical rate + behavior where available; fall back to distributor.
+  const hasStoredTax = typeof orderData.taxRate === 'number' && typeof orderData.taxInclusive === 'boolean';
+  const rate = hasStoredTax ? orderData.taxRate! : (distributor.manualTaxRate || 0);
+  const inclusive = hasStoredTax ? orderData.taxInclusive! : ((distributor.taxBehavior || 'inclusive') === 'inclusive');
+  const reverseCharge = orderData.isReverseCharge === true;
+  const taxLabel = orderData.taxLabel || distributor.manualTaxLabel || 'VAT';
+
+  // shippingCost + priceAtTimeOfOrder are stored in the same convention
+  // (inclusive/exclusive per taxBehavior), so the recalc is idempotent.
   let productsExcl: number;
   let shippingExcl: number;
   let taxAmount: number;
   let totalAmount: number;
 
-  if (taxBehavior === 'inclusive') {
-    // Both itemTotal and enteredShipping are inclusive of tax
-    productsExcl = round2(itemTotal / (1 + rate / 100));
+  if (rate <= 0 && !reverseCharge) {
+    // No tax configured — products and shipping are pass-through.
+    productsExcl = itemAfterDiscount;
+    shippingExcl = enteredShipping;
+    taxAmount = 0;
+    totalAmount = round2(itemAfterDiscount + enteredShipping);
+  } else if (inclusive) {
+    productsExcl = round2(itemAfterDiscount / (1 + rate / 100));
     shippingExcl = round2(enteredShipping / (1 + rate / 100));
     if (reverseCharge) {
       taxAmount = 0;
       totalAmount = round2(productsExcl + shippingExcl);
     } else {
-      taxAmount = round2((itemTotal + enteredShipping) - (productsExcl + shippingExcl));
-      totalAmount = round2(itemTotal + enteredShipping);
+      taxAmount = round2((itemAfterDiscount + enteredShipping) - (productsExcl + shippingExcl));
+      totalAmount = round2(itemAfterDiscount + enteredShipping);
     }
   } else {
-    // exclusive — itemTotal and enteredShipping are excl tax
-    productsExcl = itemTotal;
+    productsExcl = itemAfterDiscount;
     shippingExcl = enteredShipping;
     if (reverseCharge) {
       taxAmount = 0;
@@ -450,17 +491,38 @@ export async function recalculateOrderTax(
     taxAmount,
     totalAmount,
     taxRate: reverseCharge ? 0 : rate,
-    taxInclusive: taxBehavior === 'inclusive',
-    taxLabel: distributor.manualTaxLabel || 'VAT',
+    taxInclusive: inclusive,
+    taxLabel,
     isReverseCharge: reverseCharge,
-    shippingCost: enteredShipping, // Store in same convention as priceAtTimeOfOrder (idempotent)
+    shippingCost: enteredShipping,
     updatedAt: Timestamp.now(),
   };
+  if (discountType && discountValue && discountValue > 0) {
+    updatePayload.discountType = discountType;
+    updatePayload.discountValue = discountValue;
+    updatePayload.discountAmount = discountAmount;
+  } else {
+    // Remove any existing discount fields when discount is cleared.
+    updatePayload.discountType = null;
+    updatePayload.discountValue = null;
+    updatePayload.discountAmount = null;
+  }
 
   await updateDoc(orderDocRef, updatePayload);
 
   const updatedSnap = await getDoc(orderDocRef);
   return processOrderTimestamps({ ...updatedSnap.data(), id: updatedSnap.id });
+}
+
+/** @deprecated Use recalculateOrderPriceAndTax instead. Kept as thin wrapper for legacy callers. */
+export async function recalculateOrderTax(
+  orderId: string,
+  actingUser: User,
+  manualShippingCost?: number
+): Promise<Order> {
+  return recalculateOrderPriceAndTax(orderId, actingUser, {
+    shippingCost: manualShippingCost,
+  });
 }
 
 export async function createOrder(user: User, cartItems: CartItem[]): Promise<Order> {
