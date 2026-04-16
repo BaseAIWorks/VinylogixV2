@@ -12,11 +12,11 @@ const ORDERS_COLLECTION = 'orders';
 
 const processOrderTimestamps = (orderData: any): Order => {
   const processed = { ...orderData };
-  if (processed.createdAt && processed.createdAt instanceof Timestamp) {
-    processed.createdAt = processed.createdAt.toDate().toISOString();
-  }
-   if (processed.updatedAt && processed.updatedAt instanceof Timestamp) {
-    processed.updatedAt = processed.updatedAt.toDate().toISOString();
+  const tsFields = ['createdAt', 'updatedAt', 'itemChangesNotifiedAt', 'invoiceEmailedAt'] as const;
+  for (const field of tsFields) {
+    if (processed[field] && processed[field] instanceof Timestamp) {
+      processed[field] = processed[field].toDate().toISOString();
+    }
   }
   return processed as Order;
 };

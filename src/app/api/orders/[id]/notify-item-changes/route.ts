@@ -5,13 +5,16 @@ import { requireAuth, authErrorResponse } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
 import { sendOrderItemChangesEmail } from '@/services/email-service';
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const rateLimited = rateLimit(req, { limit: 10, windowMs: 60_000, prefix: 'notify-item-changes' });
   if (rateLimited) return rateLimited;
 
   try {
     const caller = await requireAuth(req);
-    const orderId = params.id;
+    const { id: orderId } = await params;
     if (!orderId) {
       return NextResponse.json({ error: 'Order ID is required.' }, { status: 400 });
     }

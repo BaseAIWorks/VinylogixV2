@@ -8,13 +8,16 @@ import { sendInvoiceToCustomerEmail } from '@/services/email-service';
 // Roughly 3 MB of raw PDF bytes → ~4 MB base64. Resend attachment limit is 40 MB total payload.
 const MAX_PDF_BASE64_LENGTH = 4 * 1024 * 1024;
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const rateLimited = rateLimit(req, { limit: 10, windowMs: 60_000, prefix: 'send-invoice' });
   if (rateLimited) return rateLimited;
 
   try {
     const caller = await requireAuth(req);
-    const orderId = params.id;
+    const { id: orderId } = await params;
     if (!orderId) {
       return NextResponse.json({ error: 'Order ID is required.' }, { status: 400 });
     }
