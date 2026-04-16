@@ -578,7 +578,10 @@ async function buildInvoicePdfDoc(
       doc.setTextColor(...COLORS.secondary);
       doc.text(discountLabel, totalsX, currentY);
       doc.setTextColor(34, 139, 34); // success green for the credit
-      doc.text(`\u2212 \u20AC ${formatPriceForDisplay(order.discountAmount)}`, pageWidth - margin, currentY, { align: 'right' });
+      // Use ASCII hyphen-minus rather than U+2212 — jsPDF's built-in Helvetica
+      // uses WinANSI encoding and doesn't carry the Unicode minus glyph, which
+      // causes a 0-width measurement and breaks the right-align on this line.
+      doc.text(`- \u20AC ${formatPriceForDisplay(order.discountAmount)}`, pageWidth - margin, currentY, { align: 'right' });
       currentY += 4;
     }
 
