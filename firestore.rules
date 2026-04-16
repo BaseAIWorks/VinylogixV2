@@ -162,7 +162,14 @@ service cloud.firestore {
 
       // Only the master of a distributor can update it.
       // Also allow if the user is the masterUserUid (covers case where custom claims aren't synced yet).
-      allow update: if isMasterOf(distributorId) || (isSignedIn() && resource.data.masterUserUid == request.auth.uid);
+      // SECURITY: customPlatformFeePercent is a platform-economics field.
+      // Only a superadmin may change it — masters must not be able to lower
+      // their own platform fee by editing their distributor doc directly.
+      allow update: if (isMasterOf(distributorId) || (isSignedIn() && resource.data.masterUserUid == request.auth.uid))
+                      && (!('customPlatformFeePercent' in request.resource.data) ||
+                          ('customPlatformFeePercent' in resource.data && resource.data.customPlatformFeePercent == request.resource.data.customPlatformFeePercent) ||
+                          (!('customPlatformFeePercent' in resource.data) && request.resource.data.customPlatformFeePercent == null));
+      allow update: if isSuperAdmin();
 
       // Suppliers subcollection under each distributor
       match /suppliers/{supplierId} {

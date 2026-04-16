@@ -235,6 +235,13 @@ export interface Distributor {
 
   stripeAccountId?: string; // For Stripe Connect
   stripeAccountStatus?: 'pending' | 'verified' | 'in_review' | 'restricted' | 'details_needed';
+
+  // Superadmin-only override for the platform fee percentage on this
+  // distributor's orders. Range 0.0–6 (percentage, so 2 = 2%). When set,
+  // overrides the tier-derived rate in getPlatformFeeRate — e.g. for
+  // wholesale distributors on Scale tier (default 2%) we can bring the fee
+  // down to 1% or 0% per customer-specific agreement.
+  customPlatformFeePercent?: number | null;
   stripeCustomerId?: string; // For Stripe Billing
   subscriptionId?: string; // For Stripe Billing
   subscriptionStatus?: SubscriptionStatus; // For Stripe Billing

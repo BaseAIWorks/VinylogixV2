@@ -110,7 +110,17 @@ export async function getPlatformFeeRate(distributorId: string): Promise<number>
     const distDoc = await adminDb.collection('distributors').doc(distributorId).get();
     if (!distDoc.exists) return DEFAULT_FEES.essential;
 
-    const tier = distDoc.data()?.subscriptionTier as string | undefined;
+    const data = distDoc.data()!;
+
+    // Superadmin-configured per-distributor override takes precedence over
+    // the tier-derived rate. Stored as a percentage (0.0–6), converted to
+    // the decimal representation the rest of the system uses.
+    const override = data.customPlatformFeePercent;
+    if (typeof override === 'number' && override >= 0 && override <= 6) {
+      return override / 100;
+    }
+
+    const tier = data.subscriptionTier as string | undefined;
     const fees = await getPlatformFees();
 
     return fees[tier || 'essential'] ?? DEFAULT_FEES.essential;

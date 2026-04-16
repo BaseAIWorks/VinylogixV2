@@ -302,6 +302,50 @@ export default function DistributorDetailPage() {
                                                 <Select value={editFormState.subscriptionTier || editFormState.subscription?.tier} onValueChange={onSubscriptionTierChange} disabled={editFormState.isSubscriptionExempt}><SelectTrigger id="subscriptionTier"><SelectValue placeholder="Select a tier" /></SelectTrigger><SelectContent>{DistributorTiers.map(tier => <SelectItem key={tier} value={tier} className="capitalize">{tier}</SelectItem>)}</SelectContent></Select>
                                             </div>
                                             <Separator className="my-2"/>
+                                            <div className="rounded-lg border p-4 space-y-2">
+                                                <div>
+                                                    <Label className="text-base">Platform fee override</Label>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        Override the default platform fee rate for this distributor (range 0.0% – 6%).
+                                                        Leave empty to use the tier default. Applies to new orders only; historical orders keep their recorded rate.
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        id="customPlatformFeePercent"
+                                                        type="number"
+                                                        min={0}
+                                                        max={6}
+                                                        step={0.1}
+                                                        value={editFormState.customPlatformFeePercent ?? ''}
+                                                        onChange={(e) => {
+                                                            const raw = e.target.value;
+                                                            if (raw === '') {
+                                                                setEditFormState(prev => ({ ...prev, customPlatformFeePercent: null }));
+                                                                return;
+                                                            }
+                                                            const n = parseFloat(raw);
+                                                            if (!isNaN(n) && n >= 0 && n <= 6) {
+                                                                setEditFormState(prev => ({ ...prev, customPlatformFeePercent: Math.round(n * 10) / 10 }));
+                                                            }
+                                                        }}
+                                                        placeholder="Tier default"
+                                                        className="max-w-[120px]"
+                                                    />
+                                                    <span className="text-sm text-muted-foreground">%</span>
+                                                    {editFormState.customPlatformFeePercent != null && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => setEditFormState(prev => ({ ...prev, customPlatformFeePercent: null }))}
+                                                        >
+                                                            Reset to default
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <Separator className="my-2"/>
                                             <div className="space-y-1"><Label htmlFor="adminNotes">Admin Notes</Label>
                                                 <Textarea id="adminNotes" value={(editFormState as any).adminNotes || ''} onChange={(e) => setEditFormState(prev => ({...prev, adminNotes: e.target.value}))} placeholder="Internal notes about this distributor..." rows={3} />
                                             </div>
@@ -361,6 +405,13 @@ export default function DistributorDetailPage() {
                             ) : (
                                 <>
                                  <DetailItem icon={Briefcase} label="Tier" value={<Badge className="capitalize">{distributor.subscriptionTier || distributor.subscription?.tier || 'N/A'}</Badge>} />
+                                 {typeof distributor.customPlatformFeePercent === 'number' && (
+                                   <DetailItem
+                                     icon={DollarSign}
+                                     label="Platform fee (override)"
+                                     value={<Badge variant="outline" className="border-amber-500 text-amber-700">{distributor.customPlatformFeePercent}% (custom)</Badge>}
+                                   />
+                                 )}
                                  <DetailItem icon={TrendingUp} label="Status" value={<Badge variant="outline" className={`capitalize ${(distributor.subscriptionStatus || distributor.subscription?.status) === 'active' ? 'text-green-600 border-green-500' : (distributor.subscriptionStatus || distributor.subscription?.status) === 'past_due' ? 'text-orange-600 border-orange-500' : 'text-red-600 border-red-500'}`}>{(distributor.subscriptionStatus || distributor.subscription?.status || 'N/A').replace('_', ' ')}</Badge>} />
                                  <DetailItem icon={Package} label="Max Records" value={distributor.subscription?.maxRecords === -1 ? 'Unlimited' : distributor.subscription?.maxRecords} />
                                  <DetailItem icon={Users} label="Max Users" value={distributor.subscription?.maxUsers === -1 ? 'Unlimited' : distributor.subscription?.maxUsers} />
