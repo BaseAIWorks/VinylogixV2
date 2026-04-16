@@ -515,21 +515,29 @@ export default function AdminOrderDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {order.subtotalAmount !== undefined && order.taxAmount !== undefined && (
-                <>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal excl. {order.taxLabel || 'VAT'}</span>
-                    <span className="font-medium">€ {formatPriceForDisplay(order.subtotalAmount)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{order.taxLabel || 'VAT'} {order.isReverseCharge ? '0% (RC)' : `${order.taxRate || 0}%`}</span>
-                    <span className="font-medium">€ {formatPriceForDisplay(order.taxAmount)}</span>
-                  </div>
-                </>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal excl. {order.taxLabel || 'VAT'}</span>
+                  <span className="font-medium">€ {formatPriceForDisplay(order.subtotalAmount)}</span>
+                </div>
+              )}
+              {order.discountAmount !== undefined && order.discountAmount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Discount{order.discountType === 'percent' && typeof order.discountValue === 'number' ? ` (${order.discountValue}%)` : ''}
+                  </span>
+                  <span className="font-medium text-green-600">− € {formatPriceForDisplay(order.discountAmount)}</span>
+                </div>
               )}
               {order.shippingCost !== undefined && order.shippingCost > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Shipping{order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}</span>
                   <span className="font-medium">€ {formatPriceForDisplay(order.shippingCost)}</span>
+                </div>
+              )}
+              {order.subtotalAmount !== undefined && order.taxAmount !== undefined && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{order.taxLabel || 'VAT'} {order.isReverseCharge ? '0% (RC)' : `${order.taxRate || 0}%`}</span>
+                  <span className="font-medium">€ {formatPriceForDisplay(order.taxAmount)}</span>
                 </div>
               )}
               {order.freeShippingApplied && (

@@ -196,15 +196,20 @@ export default function ClientOrderDetailPage() {
                     <p className="text-sm text-muted-foreground">Original total: <span className="line-through">€ {formatPriceForDisplay(order.originalTotalAmount)}</span></p>
                   )}
                   {order.subtotalAmount !== undefined && order.taxAmount !== undefined && (
-                    <>
-                      <p className="text-sm text-muted-foreground">Subtotal excl. {order.taxLabel || 'VAT'}: € {formatPriceForDisplay(order.subtotalAmount)}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {order.taxLabel || 'VAT'} {order.isReverseCharge ? '0% (Reverse charge)' : `${order.taxRate || 0}%`}: € {formatPriceForDisplay(order.taxAmount)}
-                      </p>
-                    </>
+                    <p className="text-sm text-muted-foreground">Subtotal excl. {order.taxLabel || 'VAT'}: € {formatPriceForDisplay(order.subtotalAmount)}</p>
+                  )}
+                  {order.discountAmount !== undefined && order.discountAmount > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Discount{order.discountType === 'percent' && typeof order.discountValue === 'number' ? ` (${order.discountValue}%)` : ''}: <span className="text-green-600">− € {formatPriceForDisplay(order.discountAmount)}</span>
+                    </p>
                   )}
                   {order.shippingCost !== undefined && order.shippingCost > 0 && (
                     <p className="text-sm text-muted-foreground">Shipping{order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}: € {formatPriceForDisplay(order.shippingCost)}</p>
+                  )}
+                  {order.subtotalAmount !== undefined && order.taxAmount !== undefined && (
+                    <p className="text-sm text-muted-foreground">
+                      {order.taxLabel || 'VAT'} {order.isReverseCharge ? '0% (Reverse charge)' : `${order.taxRate || 0}%`}: € {formatPriceForDisplay(order.taxAmount)}
+                    </p>
                   )}
                   {order.freeShippingApplied && (
                     <p className="text-sm text-green-600">Free shipping applied</p>
