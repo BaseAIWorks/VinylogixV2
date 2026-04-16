@@ -120,9 +120,17 @@ export async function getPlatformFeeStats(): Promise<{
       return b;
     };
 
+    let orphanedPaidOrderCount = 0;
     querySnapshot.docs.forEach(doc => {
       const order = doc.data();
-      const distributorId = (order.distributorId as string | undefined) || 'unknown';
+      const distributorId = (order.distributorId as string | undefined) || '';
+      if (!distributorId) {
+        // Data-integrity issue: an order without a distributorId can't be
+        // attributed. Count it for alerting but keep it out of revenue totals.
+        if (order.paymentStatus === 'paid') orphanedPaidOrderCount += 1;
+        return;
+      }
+
       const bucket = ensureBucket(distributorId);
 
       if (order.paymentStatus === 'paid' && order.totalAmount) {
@@ -140,6 +148,9 @@ export async function getPlatformFeeStats(): Promise<{
         bucket.refundedOrders += 1;
       }
     });
+    if (orphanedPaidOrderCount > 0) {
+      console.warn(`[getPlatformFeeStats] ${orphanedPaidOrderCount} paid orders have no distributorId and were excluded from revenue totals.`);
+    }
 
     const totalDistributorPayouts = totalRevenue - totalPlatformFees;
 

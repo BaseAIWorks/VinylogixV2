@@ -199,54 +199,105 @@ export async function POST(req: NextRequest) {
             // Check if this is a payment for an existing order (Request Order flow)
             if (session.metadata?.isOrderPayment === 'true' && session.metadata?.orderId) {
               const orderId = session.metadata.orderId;
-              const { updateOrderPaymentStatus } = await import('@/services/server-order-service');
-              await updateOrderPaymentStatus(
-                orderId,
-                'paid',
-                session.payment_intent as string
-              );
-              console.log(
-                `Updated existing order ${orderId} to paid`
-              );
+              const { getAdminDb } = await import('@/lib/firebase-admin');
+              const { Timestamp } = await import('firebase-admin/firestore');
+              const adminDb = getAdminDb();
 
-              // Defense-in-depth: compare Stripe's captured amount against the
-              // current order.totalAmount. If the customer paid via a stale link
-              // (e.g. distributor adjusted items after the link was sent), flag
-              // the order so a human can reconcile. Money is already captured by
-              // Stripe at this point — we only record the discrepancy.
-              try {
-                const { getAdminDb } = await import('@/lib/firebase-admin');
-                const { Timestamp } = await import('firebase-admin/firestore');
-                const adminDb = getAdminDb();
-                if (adminDb) {
+              // Pre-check: if the customer paid via a stale link (e.g. distributor
+              // adjusted items after approval) OR the order was already marked
+              // paid manually, we must NOT blindly run the paid-transition path
+              // — that would double-deduct stock, fire a second confirmation
+              // email, or overwrite the manual paymentMethod with 'stripe'.
+              // Inspect the order first and decide how to handle.
+              let shouldMarkPaid = true;
+              let mismatchPayload: any = null;
+              let alreadyPaidManually = false;
+
+              if (adminDb) {
+                try {
                   const orderSnap = await adminDb.collection('orders').doc(orderId).get();
                   if (orderSnap.exists) {
                     const orderData = orderSnap.data() as any;
-                    const expectedCents = Math.round((orderData.totalAmount || 0) * 100);
-                    const actualCents = session.amount_total ?? 0;
-                    // Allow 2 cents tolerance for rounding quirks between our tax math and Stripe's
-                    if (Math.abs(actualCents - expectedCents) > 2) {
+
+                    // Case A: the order is already paid and it was a non-Stripe
+                    // manual payment. Treat the Stripe capture as a probable
+                    // double-payment that needs manual reconciliation.
+                    if (
+                      orderData.paymentStatus === 'paid' &&
+                      orderData.paymentMethod &&
+                      orderData.paymentMethod !== 'stripe'
+                    ) {
+                      alreadyPaidManually = true;
+                      shouldMarkPaid = false;
                       await orderSnap.ref.update({
-                        status: 'on_hold',
                         paymentAmountMismatch: {
+                          sessionAmountCents: session.amount_total ?? 0,
+                          expectedAmountCents: Math.round((orderData.totalAmount || 0) * 100),
+                          currency: session.currency || 'eur',
+                          stripeSessionId: session.id,
+                          detectedAt: Timestamp.now(),
+                          reason: 'already_paid_manually',
+                        },
+                        updatedAt: Timestamp.now(),
+                      });
+                      console.warn(
+                        `[webhook] Order ${orderId} was already paid via ${orderData.paymentMethod}; ` +
+                        `Stripe capture for session ${session.id} likely a double payment. Flagged for reconciliation.`
+                      );
+                    }
+
+                    // Case B: amount mismatch. Stripe charged a different amount
+                    // than what the order currently totals (stale link). Record
+                    // the discrepancy but still mark paid — money was captured
+                    // and we need stock reflected correctly. Reviewer will
+                    // reconcile via a refund.
+                    if (!alreadyPaidManually) {
+                      const expectedCents = Math.round((orderData.totalAmount || 0) * 100);
+                      const actualCents = session.amount_total ?? 0;
+                      if (Math.abs(actualCents - expectedCents) > 2) {
+                        mismatchPayload = {
                           sessionAmountCents: actualCents,
                           expectedAmountCents: expectedCents,
                           currency: session.currency || 'eur',
                           stripeSessionId: session.id,
                           detectedAt: Timestamp.now(),
-                        },
-                        updatedAt: Timestamp.now(),
-                      });
-                      console.warn(
-                        `[webhook] Payment amount mismatch on order ${orderId}: ` +
-                        `Stripe charged ${actualCents}c, order expected ${expectedCents}c. ` +
-                        `Order moved to on_hold for reconciliation.`
-                      );
+                        };
+                      }
                     }
                   }
+                } catch (preCheckErr) {
+                  console.error(`[webhook] Pre-check failed for order ${orderId}:`, preCheckErr);
                 }
-              } catch (mismatchErr) {
-                console.error(`[webhook] Failed mismatch check for order ${orderId}:`, mismatchErr);
+              }
+
+              if (shouldMarkPaid) {
+                const { updateOrderPaymentStatus } = await import('@/services/server-order-service');
+                await updateOrderPaymentStatus(
+                  orderId,
+                  'paid',
+                  session.payment_intent as string
+                );
+                console.log(`Updated existing order ${orderId} to paid`);
+
+                // If the amount was mismatched, flag the order on_hold AFTER
+                // the paid-transition so stock is reflected but a human still
+                // gets alerted.
+                if (mismatchPayload && adminDb) {
+                  try {
+                    await adminDb.collection('orders').doc(orderId).update({
+                      status: 'on_hold',
+                      paymentAmountMismatch: mismatchPayload,
+                      updatedAt: Timestamp.now(),
+                    });
+                    console.warn(
+                      `[webhook] Payment amount mismatch on order ${orderId}: ` +
+                      `Stripe ${mismatchPayload.sessionAmountCents}c vs expected ${mismatchPayload.expectedAmountCents}c. ` +
+                      `Order moved to on_hold for reconciliation.`
+                    );
+                  } catch (flagErr) {
+                    console.error(`[webhook] Failed to flag mismatch on order ${orderId}:`, flagErr);
+                  }
+                }
               }
             } else {
               // New order from direct checkout

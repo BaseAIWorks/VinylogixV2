@@ -226,9 +226,10 @@ export async function updateOrderItemStatuses(
 
   // Sync reservations for orders still in 'reserved' state. An item that
   // becomes unavailable releases its hold; quantity reductions release the
-  // delta; the reverse direction (re-enabling or increasing qty) is skipped
-  // here since it could race with concurrent orders — the distributor can
-  // cancel and rebook if they really need more than was originally reserved.
+  // delta. Quantity increases or flipping a non-billable item back to
+  // billable would need a fresh stock check — which could race with other
+  // pending orders — so those are rejected explicitly instead of silently
+  // leaving the reservation under-held.
   if ((orderData.stockState || 'none') === 'reserved') {
     const isBillable = (s?: OrderItemStatus) => {
       const v = s || 'available';
@@ -247,9 +248,12 @@ export async function updateOrderItemStatuses(
       const delta = heldBefore - heldAfter;
       if (delta > 0) {
         releases.push({ ...beforeItem, quantity: delta });
+      } else if (delta < 0) {
+        throw new Error(
+          `Cannot increase reserved quantity for "${beforeItem.title}" on an open order. ` +
+          `Cancel this order and create a new one if more stock is needed.`
+        );
       }
-      // delta < 0 (more reservation needed) intentionally skipped — safer to
-      // surface as "please re-approve" than to silently fail later.
     }
     if (releases.length > 0) {
       try {

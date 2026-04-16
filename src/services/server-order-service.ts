@@ -9,6 +9,23 @@ import { stripe } from '@/lib/stripe';
 const ORDERS_COLLECTION = 'orders';
 const RECORDS_COLLECTION = 'vinylRecords';
 
+// Same rationale as record-service.coalesceByRecordId — each admin-SDK stock
+// op runs a transaction per recordId. If the same record appears twice in an
+// items list the separate transactions would race and double-count.
+function coalesceByRecordId<T extends { recordId: string; quantity: number; title?: string }>(items: T[]): T[] {
+  const byId = new Map<string, T>();
+  for (const item of items) {
+    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+    const existing = byId.get(item.recordId);
+    if (existing) {
+      existing.quantity += item.quantity;
+    } else {
+      byId.set(item.recordId, { ...item });
+    }
+  }
+  return Array.from(byId.values());
+}
+
 /**
  * Admin-SDK atomic stock operations. Mirrors the client-side transactional
  * helpers in record-service.ts but uses firebase-admin runTransaction so it
@@ -20,8 +37,8 @@ async function reserveStockAdmin(
 ): Promise<void> {
   const adminDb = getAdminDb();
   if (!adminDb) throw new Error('Admin DB not initialized.');
-  for (const item of items) {
-    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+  const unique = coalesceByRecordId(items);
+  for (const item of unique) {
     const ref = adminDb.collection(RECORDS_COLLECTION).doc(item.recordId);
     await adminDb.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -46,8 +63,8 @@ async function reserveStockAdmin(
 async function releaseStockAdmin(items: Array<{ recordId: string; quantity: number }>): Promise<void> {
   const adminDb = getAdminDb();
   if (!adminDb) return;
-  for (const item of items) {
-    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+  const unique = coalesceByRecordId(items);
+  for (const item of unique) {
     const ref = adminDb.collection(RECORDS_COLLECTION).doc(item.recordId);
     try {
       await adminDb.runTransaction(async (tx) => {
@@ -66,8 +83,8 @@ async function releaseStockAdmin(items: Array<{ recordId: string; quantity: numb
 async function deductReservedStockAdmin(items: Array<{ recordId: string; quantity: number }>): Promise<void> {
   const adminDb = getAdminDb();
   if (!adminDb) return;
-  for (const item of items) {
-    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+  const unique = coalesceByRecordId(items);
+  for (const item of unique) {
     const ref = adminDb.collection(RECORDS_COLLECTION).doc(item.recordId);
     await adminDb.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -100,8 +117,8 @@ async function deductReservedStockAdmin(items: Array<{ recordId: string; quantit
 async function deductStockAdmin(items: Array<{ recordId: string; quantity: number; title?: string }>): Promise<void> {
   const adminDb = getAdminDb();
   if (!adminDb) return;
-  for (const item of items) {
-    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+  const unique = coalesceByRecordId(items);
+  for (const item of unique) {
     const ref = adminDb.collection(RECORDS_COLLECTION).doc(item.recordId);
     await adminDb.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -689,10 +706,21 @@ export async function createOrderRequestServer(params: {
   // Reserve stock atomically BEFORE writing the order. If reservation fails
   // (e.g. another customer just claimed the last copy), we surface the error
   // to the caller without ever creating an order doc or a notification.
-  await reserveStockAdmin(
-    orderItems.map(i => ({ recordId: i.recordId, title: i.title, quantity: i.quantity })),
-    distributorId
-  );
+  const reservationItems = orderItems.map(i => ({ recordId: i.recordId, title: i.title, quantity: i.quantity }));
+  await reserveStockAdmin(reservationItems, distributorId);
+  // Track whether we've handed off ownership of the reservation to the created
+  // order. Until that point, any error must release the hold so the stock
+  // isn't leaked on the records forever.
+  let reservationOwned = true;
+  const rollbackReservation = async () => {
+    if (!reservationOwned) return;
+    try {
+      await releaseStockAdmin(reservationItems);
+      reservationOwned = false;
+    } catch (err) {
+      console.error('[createOrderRequestServer] Failed to roll back stock reservation:', err);
+    }
+  };
 
   const newOrderData: any = {
     distributorId,
@@ -769,19 +797,32 @@ export async function createOrderRequestServer(params: {
     }
   }
 
-  const orderDocRef = await adminDb.collection(ORDERS_COLLECTION).add(newOrderData);
+  let orderDocRef: FirebaseFirestore.DocumentReference;
+  try {
+    orderDocRef = await adminDb.collection(ORDERS_COLLECTION).add(newOrderData);
+    // From here on the reservation is owned by the order doc — cancelling the
+    // order will release it via the regular order-service flow.
+    reservationOwned = false;
+  } catch (err) {
+    await rollbackReservation();
+    throw err;
+  }
 
-  // Notification
-  await adminDb.collection('notifications').add({
-    distributorId,
-    type: 'new_order',
-    message: `New order request from ${params.customerEmail} awaiting your approval.`,
-    orderId: orderDocRef.id,
-    orderTotal: totalAmount,
-    customerEmail: params.customerEmail,
-    createdAt: Timestamp.fromDate(now),
-    isRead: false,
-  });
+  // Notification — best-effort; if it fails we don't want to lose the order.
+  try {
+    await adminDb.collection('notifications').add({
+      distributorId,
+      type: 'new_order',
+      message: `New order request from ${params.customerEmail} awaiting your approval.`,
+      orderId: orderDocRef.id,
+      orderTotal: totalAmount,
+      customerEmail: params.customerEmail,
+      createdAt: Timestamp.fromDate(now),
+      isRead: false,
+    });
+  } catch (err) {
+    console.error(`[createOrderRequestServer] Notification write failed for order ${orderDocRef.id}:`, err);
+  }
 
   const newDocSnap = await orderDocRef.get();
   const order = processOrderTimestampsServer({ ...newDocSnap.data(), id: orderDocRef.id });

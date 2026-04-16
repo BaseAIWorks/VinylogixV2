@@ -741,6 +741,25 @@ export function getAvailableStock(record: Pick<VinylRecord, 'stock_shelves' | 's
   return Math.max(0, total - reserved);
 }
 
+// Collapse items that reference the same recordId into a single entry with
+// summed quantity. Each stock op below runs one Firestore transaction per
+// recordId, so if the order accidentally lists the same record twice the
+// transactions would race against each other on the same doc. Callers must
+// pass the coalesced list.
+function coalesceByRecordId<T extends { recordId: string; quantity: number; title?: string }>(items: T[]): T[] {
+  const byId = new Map<string, T>();
+  for (const item of items) {
+    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+    const existing = byId.get(item.recordId);
+    if (existing) {
+      existing.quantity += item.quantity;
+    } else {
+      byId.set(item.recordId, { ...item });
+    }
+  }
+  return Array.from(byId.values());
+}
+
 /**
  * Reserves stock for each item in one Firestore transaction per record. Holds
  * the quantity via `reserved` so it counts against visible availability without
@@ -748,8 +767,8 @@ export function getAvailableStock(record: Pick<VinylRecord, 'stock_shelves' | 's
  * item would over-reserve — the caller should then bail the whole order.
  */
 export async function reserveStockForOrder(items: OrderItem[], distributorId: string): Promise<void> {
-  for (const item of items) {
-    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+  const unique = coalesceByRecordId(items);
+  for (const item of unique) {
     const recordRef = doc(db, RECORDS_COLLECTION, item.recordId);
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(recordRef);
@@ -776,8 +795,8 @@ export async function reserveStockForOrder(items: OrderItem[], distributorId: st
  * at zero so repeated calls don't underflow — intended to be idempotent.
  */
 export async function releaseStockForOrder(items: OrderItem[]): Promise<void> {
-  for (const item of items) {
-    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+  const unique = coalesceByRecordId(items);
+  for (const item of unique) {
     const recordRef = doc(db, RECORDS_COLLECTION, item.recordId);
     try {
       await runTransaction(db, async (tx) => {
@@ -802,8 +821,8 @@ export async function releaseStockForOrder(items: OrderItem[]): Promise<void> {
  * under concurrent deductions.
  */
 export async function deductReservedStockForOrder(items: OrderItem[], actingUserEmail?: string | null): Promise<void> {
-  for (const item of items) {
-    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+  const unique = coalesceByRecordId(items);
+  for (const item of unique) {
     const recordRef = doc(db, RECORDS_COLLECTION, item.recordId);
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(recordRef);
@@ -849,8 +868,8 @@ export async function deductReservedStockForOrder(items: OrderItem[], actingUser
  * that were reactivated from a non-reserved state. Atomic per record.
  */
 export async function deductStockForOrder(items: OrderItem[], distributorId: string, actingUser: User): Promise<void> {
-  for (const item of items) {
-    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+  const unique = coalesceByRecordId(items);
+  for (const item of unique) {
     const recordRef = doc(db, RECORDS_COLLECTION, item.recordId);
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(recordRef);
@@ -892,8 +911,8 @@ export async function deductStockForOrder(items: OrderItem[], distributorId: str
  * storage so the distributor can decide where to put it physically.
  */
 export async function restoreStockForOrder(items: OrderItem[], actingUser: User): Promise<void> {
-  for (const item of items) {
-    if (!item.recordId || !item.quantity || item.quantity <= 0) continue;
+  const unique = coalesceByRecordId(items);
+  for (const item of unique) {
     const recordRef = doc(db, RECORDS_COLLECTION, item.recordId);
     try {
       await runTransaction(db, async (tx) => {

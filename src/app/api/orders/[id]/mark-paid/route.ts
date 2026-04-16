@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { authErrorResponse } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
 import { requireOrderAccess } from '@/lib/order-access';
@@ -168,11 +168,11 @@ export async function POST(
       paidAt: Timestamp.now(),
       paidBy: caller.uid,
       updatedAt: Timestamp.now(),
-      // Clear payment-link fields so UI doesn't show a dead link next to a paid order
-      paymentLink: null,
-      stripeCheckoutSessionId: null,
-      paymentLinkExpiresAt: null,
-      paymentLinkCreatedAt: null,
+      // Remove payment-link fields so UI doesn't show a dead link next to a paid order
+      paymentLink: FieldValue.delete(),
+      stripeCheckoutSessionId: FieldValue.delete(),
+      paymentLinkExpiresAt: FieldValue.delete(),
+      paymentLinkCreatedAt: FieldValue.delete(),
     };
     if (paymentReference && paymentReference.trim()) {
       updatePayload.paymentReference = paymentReference.trim().slice(0, 200);

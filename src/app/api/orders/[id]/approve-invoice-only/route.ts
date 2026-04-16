@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Timestamp } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { authErrorResponse } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
 import { requireOrderAccess } from '@/lib/order-access';
@@ -58,34 +58,44 @@ export async function POST(
       );
     }
 
-    // Transition the order first so the PDF reflects "Awaiting Payment" status
+    // Build the PDF BEFORE transitioning the order. If PDF generation fails
+    // (bad logo URL, PDF lib error, etc.) the order stays in awaiting_approval
+    // so the distributor can retry. The PDF is the point of no return: once
+    // we have it, we commit the transition and email in short order.
+    const distributor = hydrateTimestamps(distData, ['createdAt', 'updatedAt']) as Distributor;
+    const previewOrder = hydrateTimestamps(orderData, [
+      'createdAt', 'updatedAt', 'paidAt', 'shippedAt', 'approvedAt',
+      'paymentLinkCreatedAt', 'itemChangesNotifiedAt', 'invoiceEmailedAt',
+    ]) as Order;
+    // Render the PDF showing the order as already approved (what the customer
+    // will receive), even though we haven't committed the transition yet.
+    const { base64, filename } = await getInvoicePdfBase64(
+      { ...previewOrder, status: 'awaiting_payment' },
+      distributor
+    );
+
     await orderRef.update({
       status: 'awaiting_payment',
       approvedAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
       // Remove any dormant Stripe link fields so the UI doesn't show a dead link
-      paymentLink: null,
-      stripeCheckoutSessionId: null,
-      paymentLinkExpiresAt: null,
-      paymentLinkCreatedAt: null,
+      paymentLink: FieldValue.delete(),
+      stripeCheckoutSessionId: FieldValue.delete(),
+      paymentLinkExpiresAt: FieldValue.delete(),
+      paymentLinkCreatedAt: FieldValue.delete(),
     });
-
-    const freshSnap = await orderRef.get();
-    const freshData = { id: freshSnap.id, ...freshSnap.data() } as any;
-
-    const order = hydrateTimestamps(freshData, [
-      'createdAt', 'updatedAt', 'paidAt', 'shippedAt', 'approvedAt',
-      'paymentLinkCreatedAt', 'itemChangesNotifiedAt', 'invoiceEmailedAt',
-    ]) as Order;
-    const distributor = hydrateTimestamps(distData, ['createdAt', 'updatedAt']) as Distributor;
-
-    const { base64, filename } = await getInvoicePdfBase64(order, distributor);
 
     try {
       const { sendOrderApprovedInvoiceOnlyEmail } = await import('@/services/email-service');
       const distributorName = distributor.companyName || distributor.name || 'Your distributor';
       const replyToEmail = (distData.contactEmail as string | undefined) || undefined;
-      await sendOrderApprovedInvoiceOnlyEmail(order, distributorName, base64, filename, replyToEmail);
+      await sendOrderApprovedInvoiceOnlyEmail(
+        { ...previewOrder, status: 'awaiting_payment', approvedAt: new Date().toISOString() },
+        distributorName,
+        base64,
+        filename,
+        replyToEmail
+      );
     } catch (emailErr) {
       console.error('Failed to send invoice-only approval email:', emailErr);
       // Don't fail the approval — order is already transitioned; distributor can resend invoice manually.
