@@ -60,21 +60,42 @@ export async function POST(req: NextRequest) {
       address: viesData.address || null,
     };
 
-    // Store validation result on user document if clientUid provided
+    // Store validation result on user document if clientUid provided.
+    // Every branch that SKIPS the write now logs why — previous versions
+    // silently returned `persisted: false` which made verify-flows that
+    // looked successful to the user (local React state updated) invisibly
+    // fail to stick across refreshes.
     let persisted = false;
-    if (clientUid) {
+    let persistSkipReason: string | null = null;
+    if (!clientUid) {
+      persistSkipReason = 'no-client-uid';
+    } else {
       const adminDb = getAdminDb();
-      if (adminDb) {
-        // Verify caller is a master user before writing to another user's doc
+      if (!adminDb) {
+        persistSkipReason = 'admin-db-unavailable';
+        console.error(`[verify-vat] Admin DB not initialised; cannot persist vatValidated for client ${clientUid}.`);
+      } else {
         const callerSnap = await adminDb.collection('users').doc(auth.uid).get();
-        const callerData = callerSnap.data();
-        if (callerData?.role === 'master' || callerData?.role === 'worker') {
-          await adminDb.collection('users').doc(clientUid).update({
-            vatValidated: result.valid,
-            vatValidatedAt: new Date().toISOString(),
-            ...(result.valid && result.name ? { vatValidatedName: result.name } : {}),
-          });
-          persisted = true;
+        const callerData = callerSnap.exists ? callerSnap.data() : null;
+        const callerRole = callerData?.role;
+        if (!callerData) {
+          persistSkipReason = 'caller-doc-missing';
+          console.error(`[verify-vat] Caller user doc ${auth.uid} not found; cannot persist.`);
+        } else if (callerRole !== 'master' && callerRole !== 'worker' && callerRole !== 'superadmin') {
+          persistSkipReason = `caller-role-${callerRole || 'unknown'}`;
+          console.warn(`[verify-vat] Caller ${auth.uid} has role "${callerRole}"; vatValidated not persisted for client ${clientUid}.`);
+        } else {
+          try {
+            await adminDb.collection('users').doc(clientUid).update({
+              vatValidated: result.valid,
+              vatValidatedAt: new Date().toISOString(),
+              ...(result.valid && result.name ? { vatValidatedName: result.name } : {}),
+            });
+            persisted = true;
+          } catch (writeErr) {
+            persistSkipReason = 'firestore-write-failed';
+            console.error(`[verify-vat] Firestore update failed for client ${clientUid}:`, writeErr);
+          }
         }
       }
     }
@@ -89,7 +110,7 @@ export async function POST(req: NextRequest) {
       userRole: auth?.role,
       page: clientUid ? `/clients/${clientUid}` : '/clients',
     }));
-    return NextResponse.json({ ...result, persisted });
+    return NextResponse.json({ ...result, persisted, ...(persistSkipReason ? { persistSkipReason } : {}) });
   } catch (error: any) {
     console.error('VIES validation error:', error);
     import('@/services/system-log-service').then(m => m.logSystemEvent({

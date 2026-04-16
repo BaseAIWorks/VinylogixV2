@@ -173,20 +173,35 @@ export default function ClientDetailPage() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Validation failed.');
-            // Update local state immediately so UI reflects the result
-            setClient(prev => prev ? {
-                ...prev,
-                vatValidated: data.valid,
-                vatValidatedAt: new Date().toISOString(),
-                vatValidatedName: data.valid ? (data.name || undefined) : undefined,
-            } : prev);
-            toast({
-                title: data.valid ? "VAT Valid" : "VAT Invalid",
-                description: data.valid
-                    ? `Verified: ${data.name || client.vatNumber}`
-                    : `The VAT number ${client.vatNumber} could not be validated.`,
-                variant: data.valid ? "default" : "destructive",
-            });
+            // Only reflect "verified" locally if the server actually persisted
+            // it — otherwise the badge would disappear on the next refresh and
+            // give a false sense that reverse charge applies on future orders.
+            if (data.persisted) {
+                setClient(prev => prev ? {
+                    ...prev,
+                    vatValidated: data.valid,
+                    vatValidatedAt: new Date().toISOString(),
+                    vatValidatedName: data.valid ? (data.name || undefined) : undefined,
+                } : prev);
+            }
+            if (!data.persisted) {
+                toast({
+                    title: data.valid ? 'VAT looks valid, but not saved' : 'VAT Invalid',
+                    description: data.valid
+                        ? `VIES says valid (${data.name || client.vatNumber}), but the result could not be saved to this client. Reason: ${data.persistSkipReason || 'unknown'}. Please try again or contact support.`
+                        : `The VAT number ${client.vatNumber} could not be validated.`,
+                    variant: 'destructive',
+                    duration: 10000,
+                });
+            } else {
+                toast({
+                    title: data.valid ? 'VAT Valid' : 'VAT Invalid',
+                    description: data.valid
+                        ? `Verified: ${data.name || client.vatNumber}`
+                        : `The VAT number ${client.vatNumber} could not be validated.`,
+                    variant: data.valid ? 'default' : 'destructive',
+                });
+            }
         } catch (error: any) {
             toast({ title: "Verification Failed", description: error.message, variant: "destructive" });
         } finally {

@@ -14,24 +14,64 @@ export const TAX_LABELS = [
   { value: 'VAT', description: 'Ierland, VK, internationaal' },
 ] as const;
 
-const EU_COUNTRIES = [
-  'Austria', 'Belgium', 'Bulgaria', 'Croatia', 'Cyprus', 'Czech Republic',
-  'Denmark', 'Estonia', 'Finland', 'France', 'Germany', 'Greece', 'Hungary',
-  'Ireland', 'Italy', 'Latvia', 'Lithuania', 'Luxembourg', 'Malta',
-  'Netherlands', 'Poland', 'Portugal', 'Romania', 'Slovakia', 'Slovenia',
-  'Spain', 'Sweden',
-];
-
-/** Map country names to VIES member-state codes */
+/** Map country names to VIES member-state codes. Accepts common localized
+ *  names (German, French, Dutch, Spanish, Italian, Portuguese) in addition
+ *  to English so profiles like "Nederland" or "España" are recognised. */
 const COUNTRY_TO_VIES_CODE: Record<string, string> = {
-  austria: 'AT', belgium: 'BE', bulgaria: 'BG', croatia: 'HR',
-  cyprus: 'CY', 'czech republic': 'CZ', czechia: 'CZ',
-  denmark: 'DK', estonia: 'EE', finland: 'FI', france: 'FR',
-  germany: 'DE', greece: 'EL', hungary: 'HU', ireland: 'IE',
-  italy: 'IT', latvia: 'LV', lithuania: 'LT', luxembourg: 'LU',
-  malta: 'MT', netherlands: 'NL', 'the netherlands': 'NL',
-  nederland: 'NL', poland: 'PL', portugal: 'PT', romania: 'RO',
-  slovakia: 'SK', slovenia: 'SI', spain: 'ES', sweden: 'SE',
+  // Austria
+  austria: 'AT', österreich: 'AT', oesterreich: 'AT', autriche: 'AT',
+  // Belgium
+  belgium: 'BE', belgië: 'BE', belgie: 'BE', belgique: 'BE', belgien: 'BE',
+  // Bulgaria
+  bulgaria: 'BG', bulgarije: 'BG', bulgarien: 'BG', bulgarie: 'BG',
+  // Croatia
+  croatia: 'HR', kroatië: 'HR', kroatie: 'HR', kroatien: 'HR', croatie: 'HR', hrvatska: 'HR',
+  // Cyprus
+  cyprus: 'CY', cypern: 'CY', chypre: 'CY', κυπρος: 'CY',
+  // Czech Republic
+  'czech republic': 'CZ', czechia: 'CZ', tsjechië: 'CZ', tsjechie: 'CZ', tschechien: 'CZ', république_tchèque: 'CZ',
+  // Denmark
+  denmark: 'DK', denemarken: 'DK', dänemark: 'DK', danemark: 'DK',
+  // Estonia
+  estonia: 'EE', estland: 'EE', estonie: 'EE', eesti: 'EE',
+  // Finland
+  finland: 'FI', finlande: 'FI', suomi: 'FI', finnland: 'FI',
+  // France
+  france: 'FR', frankrijk: 'FR', frankreich: 'FR', francia: 'FR',
+  // Germany
+  germany: 'DE', duitsland: 'DE', deutschland: 'DE', allemagne: 'DE', alemania: 'DE', germania: 'DE',
+  // Greece
+  greece: 'EL', griekenland: 'EL', griechenland: 'EL', grèce: 'EL', grecia: 'EL', ελλαδα: 'EL',
+  // Hungary
+  hungary: 'HU', hongarije: 'HU', ungarn: 'HU', hongrie: 'HU', magyarország: 'HU', magyarorszag: 'HU',
+  // Ireland
+  ireland: 'IE', ierland: 'IE', irland: 'IE', irlande: 'IE', irlanda: 'IE', éire: 'IE', eire: 'IE',
+  // Italy
+  italy: 'IT', italië: 'IT', italie: 'IT', italien: 'IT', italia: 'IT',
+  // Latvia
+  latvia: 'LV', letland: 'LV', lettland: 'LV', lettonie: 'LV', latvija: 'LV',
+  // Lithuania
+  lithuania: 'LT', litouwen: 'LT', litauen: 'LT', lituanie: 'LT', lietuva: 'LT',
+  // Luxembourg
+  luxembourg: 'LU', luxemburg: 'LU', luxemburgo: 'LU',
+  // Malta
+  malta: 'MT', 'малта': 'MT',
+  // Netherlands
+  netherlands: 'NL', 'the netherlands': 'NL', nederland: 'NL', niederlande: 'NL', 'pays-bas': 'NL', países_bajos: 'NL', olanda: 'NL',
+  // Poland
+  poland: 'PL', polen: 'PL', pologne: 'PL', polska: 'PL', polonia: 'PL',
+  // Portugal
+  portugal: 'PT', portugese_republiek: 'PT',
+  // Romania
+  romania: 'RO', roemenië: 'RO', roemenie: 'RO', rumänien: 'RO', roumanie: 'RO', românia: 'RO',
+  // Slovakia
+  slovakia: 'SK', slowakije: 'SK', slowakei: 'SK', slovaquie: 'SK', slovensko: 'SK', eslovaquia: 'SK',
+  // Slovenia
+  slovenia: 'SI', slovenië: 'SI', slovenie: 'SI', slowenien: 'SI', slovénie: 'SI', slovenija: 'SI', eslovenia: 'SI',
+  // Spain
+  spain: 'ES', spanje: 'ES', spanien: 'ES', espagne: 'ES', españa: 'ES', espana: 'ES', spagna: 'ES',
+  // Sweden
+  sweden: 'SE', zweden: 'SE', schweden: 'SE', suède: 'SE', suecia: 'SE', svezia: 'SE', sverige: 'SE',
 };
 
 /**
@@ -67,7 +107,12 @@ export function stripVatPrefix(vatNumber: string, countryCode: string): string {
 }
 
 export function isEuCountry(country: string): boolean {
-  return EU_COUNTRIES.some(c => c.toLowerCase() === country.toLowerCase());
+  // Delegate to countryToViesCode so we accept country names in many languages
+  // (e.g. "Nederland" for Netherlands, "España" for Spain) plus the 2-letter
+  // ISO codes. Previously this used a hardcoded English-name list which
+  // silently returned false for localized names and killed reverse-charge
+  // detection for EU-based clients whose profile country was in Dutch.
+  return countryToViesCode(country) !== null;
 }
 
 /**
@@ -87,9 +132,32 @@ export function isReverseChargeApplicable(
   distributorCountry: string | undefined,
   opts?: { validated?: boolean; requireValidated?: boolean }
 ): boolean {
-  if (!customerVatNumber || !customerCountry || !distributorCountry) return false;
-  if (customerCountry.toLowerCase() === distributorCountry.toLowerCase()) return false;
-  if (!isEuCountry(customerCountry) || !isEuCountry(distributorCountry)) return false;
+  if (!customerVatNumber || !distributorCountry) return false;
+  if (!isEuCountry(distributorCountry)) return false;
+
+  // Resolve customer country. Prefer the profile country; fall back to the
+  // VAT-number prefix (e.g. "NL005285017B34" → NL) so a missing or oddly-
+  // named customerCountry field doesn't silently disable reverse charge.
+  const customerCode = customerCountry
+    ? countryToViesCode(customerCountry)
+    : null;
+  const prefixCode = (() => {
+    const upper = customerVatNumber.trim().toUpperCase();
+    // 2-letter alpha prefix, must be a known VIES member state
+    const m = upper.match(/^([A-Z]{2})/);
+    if (!m) return null;
+    const code = m[1];
+    // Special case: Greece VIES code is EL even though ISO is GR
+    if (code === 'GR' || code === 'EL') return 'EL';
+    return Object.values(COUNTRY_TO_VIES_CODE).includes(code) ? code : null;
+  })();
+  const effectiveCustomerCode = customerCode || prefixCode;
+  if (!effectiveCustomerCode) return false;
+
+  const distributorCode = countryToViesCode(distributorCountry);
+  if (!distributorCode) return false;
+  if (effectiveCustomerCode === distributorCode) return false;
+
   if (opts?.requireValidated && !opts.validated) return false;
   return true;
 }
