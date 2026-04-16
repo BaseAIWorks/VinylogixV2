@@ -148,14 +148,27 @@ async function deductStockAdmin(items: Array<{ recordId: string; quantity: numbe
 
 const processOrderTimestampsServer = (orderData: any): Order => {
   const processed = { ...orderData };
-  if (processed.createdAt instanceof Timestamp) {
-    processed.createdAt = processed.createdAt.toDate().toISOString();
+  const tsFields = [
+    'createdAt',
+    'updatedAt',
+    'paidAt',
+    'approvedAt',
+    'shippedAt',
+    'itemChangesNotifiedAt',
+    'invoiceEmailedAt',
+    'paymentLinkCreatedAt',
+  ] as const;
+  for (const field of tsFields) {
+    if (processed[field] && processed[field] instanceof Timestamp) {
+      processed[field] = processed[field].toDate().toISOString();
+    }
   }
-  if (processed.updatedAt instanceof Timestamp) {
-    processed.updatedAt = processed.updatedAt.toDate().toISOString();
-  }
-  if (processed.paidAt instanceof Timestamp) {
-    processed.paidAt = processed.paidAt.toDate().toISOString();
+  if (processed.paymentAmountMismatch && typeof processed.paymentAmountMismatch === 'object') {
+    const m = { ...processed.paymentAmountMismatch };
+    if (m.detectedAt && m.detectedAt instanceof Timestamp) {
+      m.detectedAt = m.detectedAt.toDate().toISOString();
+    }
+    processed.paymentAmountMismatch = m;
   }
   return processed as Order;
 };

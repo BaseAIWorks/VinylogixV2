@@ -277,5 +277,17 @@ service cloud.firestore {
       // All authenticated users can read changelog entries.
       allow read: if isSignedIn();
     }
+
+    match /userActivity/{activityId} {
+      // Any signed-in user can log their OWN activity (audit/analytics stream).
+      // The client sends userId in the document body — we require the userId
+      // field to equal the authenticated uid so users can't forge logs as
+      // someone else.
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      // Activity logs are read by superadmin dashboards only; users don't
+      // read them back directly.
+      allow read: if isSuperAdmin();
+      // Activity logs are immutable from the client — no update / delete path.
+    }
   }
 }

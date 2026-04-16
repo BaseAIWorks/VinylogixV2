@@ -18,9 +18,15 @@ const ORDERS_COLLECTION = 'orders';
 
 const processOrderTimestamps = (orderData: any): Order => {
   const processed = { ...orderData };
+  // Every Firestore Timestamp field we might read must be converted to ISO —
+  // the UI calls format(new Date(order.paidAt)) etc. and date-fns throws
+  // "Invalid time value" when handed a Timestamp object.
   const tsFields = [
     'createdAt',
     'updatedAt',
+    'paidAt',
+    'approvedAt',
+    'shippedAt',
     'itemChangesNotifiedAt',
     'invoiceEmailedAt',
     'paymentLinkCreatedAt',
@@ -29,6 +35,15 @@ const processOrderTimestamps = (orderData: any): Order => {
     if (processed[field] && processed[field] instanceof Timestamp) {
       processed[field] = processed[field].toDate().toISOString();
     }
+  }
+  // Nested Timestamp inside paymentAmountMismatch.detectedAt (set by the
+  // Stripe webhook when an amount mismatch is detected).
+  if (processed.paymentAmountMismatch && typeof processed.paymentAmountMismatch === 'object') {
+    const m = { ...processed.paymentAmountMismatch };
+    if (m.detectedAt && m.detectedAt instanceof Timestamp) {
+      m.detectedAt = m.detectedAt.toDate().toISOString();
+    }
+    processed.paymentAmountMismatch = m;
   }
   return processed as Order;
 };
