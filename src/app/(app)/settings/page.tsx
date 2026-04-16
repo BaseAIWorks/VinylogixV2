@@ -1307,7 +1307,236 @@ export default function SettingsPage() {
                 </Card>
               )}
 
-              {/* Payouts & Billing - Master only */}
+              {/* Shipping Settings - Master only */}
+              {isMaster && (
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                      <Truck className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Shipping</CardTitle>
+                    </div>
+                    <CardDescription className="text-sm">Configure shipping methods and rates for your orders.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="rounded-lg border border-dashed p-6 text-center">
+                      <Truck className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                      <p className="text-sm font-medium">Shipping Settings Coming Soon</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Configure shipping carriers, zones, and rates for your store.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Shipping Settings - Master only */}
+              {isMaster && (
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                      <Truck className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Shipping</CardTitle>
+                    </div>
+                    <CardDescription className="text-sm">Configure shipping zones and weight-based rates.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Enable Shipping Costs</Label>
+                        <p className="text-xs text-muted-foreground">Calculate shipping based on weight and destination.</p>
+                      </div>
+                      <Switch checked={shippingConfig.enabled} onCheckedChange={(checked) => setShippingConfig(prev => ({ ...prev, enabled: checked }))} />
+                    </div>
+
+                    {shippingConfig.enabled && (
+                      <>
+                        <Separator />
+                        <div className="grid sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Free Shipping Threshold (EUR)</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="e.g. 100"
+                              value={shippingConfig.freeShippingThreshold || ''}
+                              onChange={(e) => setShippingConfig(prev => ({ ...prev, freeShippingThreshold: e.target.value ? parseFloat(e.target.value) : undefined }))}
+                            />
+                            <p className="text-xs text-muted-foreground">Leave empty to disable. Orders above this amount get free shipping.</p>
+                          </div>
+                          <div className="flex items-center gap-3 pt-6">
+                            <Switch checked={shippingConfig.allowPickup || false} onCheckedChange={(checked) => setShippingConfig(prev => ({ ...prev, allowPickup: checked }))} />
+                            <div>
+                              <Label>Allow Pickup</Label>
+                              <p className="text-xs text-muted-foreground">Let clients choose to pick up their order (no shipping cost).</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Separator />
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-base font-semibold">Shipping Zones</Label>
+                            <div className="flex gap-2">
+                              <Button type="button" size="sm" variant="outline" onClick={() => addShippingZone('nl')} className="text-xs">+ NL</Button>
+                              <Button type="button" size="sm" variant="outline" onClick={() => addShippingZone('eu')} className="text-xs">+ EU</Button>
+                              <Button type="button" size="sm" variant="outline" onClick={() => addShippingZone('world')} className="text-xs">+ World</Button>
+                              <Button type="button" size="sm" variant="outline" onClick={() => addShippingZone()}><Plus className="h-3 w-3 mr-1" />Custom</Button>
+                            </div>
+                          </div>
+
+                          {shippingConfig.zones.length === 0 && (
+                            <p className="text-sm text-muted-foreground text-center py-4 border rounded-lg border-dashed">No shipping zones configured. Add a zone or use a preset above.</p>
+                          )}
+
+                          {shippingConfig.zones.map((zone) => (
+                            <Card key={zone.id} className="border-muted">
+                              <CardContent className="pt-4 space-y-4">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex-1 space-y-3">
+                                    <div>
+                                      <Label className="text-xs">Zone Name</Label>
+                                      <Input
+                                        value={zone.name}
+                                        onChange={(e) => updateShippingZone(zone.id, { name: e.target.value })}
+                                        placeholder="e.g. Netherlands, EU, World"
+                                        className="mt-1"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs">Countries</Label>
+                                      <div className="mt-1 flex flex-wrap gap-1.5 p-2 border rounded-md min-h-[40px] max-h-[120px] overflow-y-auto">
+                                        {zone.countries.map((country) => (
+                                          <span key={country} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full">
+                                            {country}
+                                            <button type="button" onClick={() => updateShippingZone(zone.id, { countries: zone.countries.filter(c => c !== country) })} className="hover:text-destructive">
+                                              <X className="h-3 w-3" />
+                                            </button>
+                                          </span>
+                                        ))}
+                                      </div>
+                                      <Select onValueChange={(val) => {
+                                        if (!zone.countries.includes(val)) {
+                                          updateShippingZone(zone.id, { countries: [...zone.countries, val].sort() });
+                                        }
+                                      }}>
+                                        <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Add country..." /></SelectTrigger>
+                                        <SelectContent className="max-h-[200px]">
+                                          {countries.filter(c => !zone.countries.includes(c)).map(c => (
+                                            <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+                                  <Button type="button" size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeShippingZone(zone.id)}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+
+                                <div>
+                                  <Label className="text-xs">Rate Tiers (weight-based)</Label>
+                                  <div className="mt-1 space-y-2">
+                                    <div className="grid grid-cols-[1fr_1fr_1fr_32px] gap-2 text-[10px] text-muted-foreground font-medium px-1">
+                                      <span>Min Weight (kg)</span><span>Max Weight (kg)</span><span>Price (EUR)</span><span></span>
+                                    </div>
+                                    {zone.rateTiers.map((tier) => (
+                                      <div key={tier.id} className="grid grid-cols-[1fr_1fr_1fr_32px] gap-2">
+                                        <Input
+                                          type="number"
+                                          step="0.1"
+                                          min="0"
+                                          value={tier.minWeightGrams / 1000}
+                                          onChange={(e) => updateRateTier(zone.id, tier.id, { minWeightGrams: Math.round(parseFloat(e.target.value || '0') * 1000) })}
+                                          className="h-8 text-xs"
+                                        />
+                                        <Input
+                                          type="number"
+                                          step="0.1"
+                                          min="0"
+                                          value={tier.maxWeightGrams / 1000}
+                                          onChange={(e) => updateRateTier(zone.id, tier.id, { maxWeightGrams: Math.round(parseFloat(e.target.value || '0') * 1000) })}
+                                          className="h-8 text-xs"
+                                        />
+                                        <Input
+                                          type="number"
+                                          step="0.01"
+                                          min="0"
+                                          value={tier.price}
+                                          onChange={(e) => updateRateTier(zone.id, tier.id, { price: parseFloat(e.target.value || '0') })}
+                                          className="h-8 text-xs"
+                                          placeholder="€"
+                                        />
+                                        <Button type="button" size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeRateTier(zone.id, tier.id)} disabled={zone.rateTiers.length <= 1}>
+                                          <X className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    ))}
+                                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => addRateTier(zone.id)}>
+                                      <Plus className="h-3 w-3 mr-1" />Add Tier
+                                    </Button>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+
+                        <div className="flex justify-end pt-2">
+                          <Button type="button" size="sm" onClick={handleSaveShipping} disabled={isSavingShipping}>
+                            {isSavingShipping ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : saveSuccess === 'shipping' ? <CheckCircle2 className="h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                            {saveSuccess === 'shipping' ? 'Saved!' : 'Save Shipping Settings'}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+          )}
+
+          {/* ==================== PAYMENT TAB ==================== */}
+          {isMaster && (
+            <TabsContent value="payment" className="space-y-4">
+              {/* Stripe Checkout disable (Scale / managed only) */}
+              {(activeDistributor?.subscriptionTier === 'scale' || activeDistributor?.isSubscriptionExempt === true) && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-3">
+                      <AlertCircle className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Online checkout</CardTitle>
+                    </div>
+                    <CardDescription className="text-sm">
+                      For high-volume wholesale orders you may prefer to take payment directly by bank transfer rather than via Stripe. When disabled, the storefront checkout shows only "Request Order" — you then approve each order with an invoice and manually mark it paid once the payment arrives.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex flex-row items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <Label className="text-sm">Disable Stripe / online checkout</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Hides Stripe (and PayPal) from the checkout for all your customers. Existing active payment links stay valid until their 24h expiry.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={activeDistributor?.stripeCheckoutDisabled === true}
+                        onCheckedChange={async (checked) => {
+                          await updateMyDistributorSettings({ stripeCheckoutDisabled: checked });
+                          showSaveSuccess('payment');
+                        }}
+                      />
+                    </div>
+                    {activeDistributor?.stripeCheckoutDisabled && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        Online checkout is currently off. Customers will only see "Request Order" at checkout. You approve each order with an invoice email and mark it paid manually once the bank transfer arrives.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Payment Providers - Master only */}
               {isMaster && (
                 <Card>
                   <CardHeader className="pb-4">
@@ -1365,7 +1594,6 @@ export default function SettingsPage() {
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            {/* Refresh status button */}
                             <Button
                               onClick={handleRefreshStripeStatus}
                               disabled={isRefreshingStripeStatus}
@@ -1375,7 +1603,6 @@ export default function SettingsPage() {
                             >
                               <RefreshCw className={`h-4 w-4 ${isRefreshingStripeStatus ? 'animate-spin' : ''}`}/>
                             </Button>
-                            {/* Main action button based on status */}
                             {activeDistributor.stripeAccountStatus === 'verified' ? (
                               <Button onClick={handleStripeConnect} disabled={isConnectingStripe} size="sm" variant="outline">
                                 {isConnectingStripe && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -1424,7 +1651,199 @@ export default function SettingsPage() {
                 </Card>
               )}
 
-              {/* Invoice Settings - Master only */}
+              {/* Order Settings */}
+              {isMaster && (
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                      <Receipt className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Order Settings</CardTitle>
+                    </div>
+                    <CardDescription className="text-sm">Configure how clients can place orders.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-row items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <Label className="text-sm">Allow Order Requests</Label>
+                        <p className="text-xs text-muted-foreground">Clients can request orders without immediate payment. You approve or reject before they pay.</p>
+                      </div>
+                      <Switch
+                        checked={activeDistributor?.allowOrderRequests || false}
+                        onCheckedChange={async (checked) => {
+                          await updateMyDistributorSettings({ allowOrderRequests: checked });
+                          showSaveSuccess('orderSettings');
+                        }}
+                      />
+                    </div>
+                    {activeDistributor?.allowOrderRequests && (
+                      <div className="rounded-lg border p-3 space-y-2">
+                        <div>
+                          <Label className="text-sm">Payment link on approval</Label>
+                          <p className="text-xs text-muted-foreground">How orders are billed after you approve a Request Order. "Invoice only" means the client pays externally (bank transfer, etc.) and you manually mark paid.</p>
+                        </div>
+                        <Select
+                          value={activeDistributor?.paymentLinkMode || 'always'}
+                          onValueChange={async (value) => {
+                            await updateMyDistributorSettings({ paymentLinkMode: value as 'always' | 'optional' | 'never' });
+                            showSaveSuccess('orderSettings');
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="always">Always send Stripe payment link</SelectItem>
+                            <SelectItem value="optional">Ask per order (invoice-only or Stripe)</SelectItem>
+                            <SelectItem value="never">Never — always invoice-only</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Tax / VAT */}
+              {isMaster && (
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center gap-3">
+                      <Receipt className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Tax / VAT</CardTitle>
+                    </div>
+                    <CardDescription className="text-sm">Configure how VAT is calculated on orders and invoices.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Tax Calculation Method</Label>
+                      <Select
+                        value={activeDistributor?.taxMode || 'none'}
+                        onValueChange={async (value) => {
+                          const updates: any = { taxMode: value };
+                          if (value === 'manual' && !activeDistributor?.manualTaxRate) {
+                            updates.manualTaxRate = 21;
+                            updates.manualTaxLabel = 'VAT';
+                            updates.taxBehavior = 'inclusive';
+                          }
+                          await updateMyDistributorSettings(updates);
+                          showSaveSuccess('taxSettings');
+                        }}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No tax calculation</SelectItem>
+                          <SelectItem value="manual">Manual tax rate</SelectItem>
+                          <SelectItem value="stripe_tax">Stripe Tax (automatic)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        {activeDistributor?.taxMode === 'manual' && 'You set a fixed VAT rate that applies to all orders.'}
+                        {activeDistributor?.taxMode === 'stripe_tax' && 'Stripe calculates the correct VAT rate automatically based on buyer and seller location.'}
+                        {(!activeDistributor?.taxMode || activeDistributor?.taxMode === 'none') && 'No VAT will be calculated or shown on invoices. Prices are treated as final amounts.'}
+                      </p>
+                    </div>
+
+                    {activeDistributor?.taxMode === 'manual' && (
+                      <div className="p-4 rounded-lg bg-muted/50 space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-sm">VAT Rate (%)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="50"
+                              step="0.1"
+                              placeholder="21"
+                              defaultValue={activeDistributor.manualTaxRate || ''}
+                              onBlur={async (e) => {
+                                const rate = parseFloat(e.target.value);
+                                if (!isNaN(rate) && rate >= 0) {
+                                  await updateMyDistributorSettings({ manualTaxRate: rate });
+                                }
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-sm">Tax Label</Label>
+                            <Select
+                              value={activeDistributor.manualTaxLabel || 'VAT'}
+                              onValueChange={async (value) => {
+                                await updateMyDistributorSettings({ manualTaxLabel: value });
+                              }}
+                            >
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="BTW">BTW (Nederland, België)</SelectItem>
+                                <SelectItem value="IVA">IVA (Spanje, Italië, Portugal)</SelectItem>
+                                <SelectItem value="MwSt">MwSt (Duitsland, Oostenrijk)</SelectItem>
+                                <SelectItem value="TVA">TVA (Frankrijk, Luxemburg)</SelectItem>
+                                <SelectItem value="VAT">VAT (International)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-sm">Price Behavior</Label>
+                          <Select
+                            value={activeDistributor.taxBehavior || 'inclusive'}
+                            onValueChange={async (value) => {
+                              await updateMyDistributorSettings({ taxBehavior: value as any });
+                            }}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="inclusive">Prices include VAT (recommended for B2C)</SelectItem>
+                              <SelectItem value="exclusive">Prices exclude VAT (added at checkout)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {activeDistributor.taxBehavior === 'exclusive'
+                              ? 'VAT will be added on top of your listed prices at checkout.'
+                              : 'Your listed prices already include VAT. The invoice will show the VAT breakdown.'}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">B2B customers with a valid EU VAT number in a different country will automatically receive 0% VAT (reverse charge).</p>
+                      </div>
+                    )}
+
+                    {activeDistributor?.taxMode === 'stripe_tax' && (
+                      <div className="p-4 rounded-lg bg-muted/50 space-y-4">
+                        <div>
+                          <Label className="text-sm">Price Behavior</Label>
+                          <Select
+                            value={activeDistributor.taxBehavior || 'inclusive'}
+                            onValueChange={async (value) => {
+                              await updateMyDistributorSettings({ taxBehavior: value as any });
+                            }}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="inclusive">Prices include VAT</SelectItem>
+                              <SelectItem value="exclusive">Prices exclude VAT</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-start gap-3 p-3 rounded-lg border bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
+                          <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+                          <div className="text-sm">
+                            <p className="font-medium text-blue-800 dark:text-blue-300">Configure your tax registrations in Stripe</p>
+                            <p className="text-blue-700 dark:text-blue-400 mt-1">
+                              Add your VAT registrations (per country) in the Stripe Dashboard to enable automatic tax calculation. Stripe charges 0.5% per transaction for this service.
+                            </p>
+                            {activeDistributor.stripeAccountId && (
+                              <a href="https://dashboard.stripe.com/tax/registrations" target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-blue-700 dark:text-blue-300 underline hover:no-underline font-medium">
+                                Open Stripe Tax Settings
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Invoice Settings (contains Payment Terms + Payment Accounts) */}
               {isMaster && (
                 <Card>
                   <CardHeader className="pb-4">
@@ -1432,7 +1851,7 @@ export default function SettingsPage() {
                       <FileText className="h-5 w-5 text-primary" />
                       <CardTitle className="text-lg">Invoice Settings</CardTitle>
                     </div>
-                    <CardDescription className="text-sm">Customize the content that appears on your invoices.</CardDescription>
+                    <CardDescription className="text-sm">Payment terms, invoice notes, bank/payment accounts, and footer shown on your invoices.</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Form {...invoiceSettingsForm}>
@@ -1657,441 +2076,6 @@ export default function SettingsPage() {
                   </CardContent>
                 </Card>
               )}
-
-              {/* Order Settings - Master only */}
-              {isMaster && (
-                <Card>
-                  <CardHeader className="pb-4">
-                    <div className="flex items-center gap-3">
-                      <Receipt className="h-5 w-5 text-primary" />
-                      <CardTitle className="text-lg">Order Settings</CardTitle>
-                    </div>
-                    <CardDescription className="text-sm">Configure how clients can place orders.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex flex-row items-center justify-between rounded-lg border p-3">
-                      <div className="space-y-0.5">
-                        <Label className="text-sm">Allow Order Requests</Label>
-                        <p className="text-xs text-muted-foreground">Clients can request orders without immediate payment. You approve or reject before they pay.</p>
-                      </div>
-                      <Switch
-                        checked={activeDistributor?.allowOrderRequests || false}
-                        onCheckedChange={async (checked) => {
-                          await updateMyDistributorSettings({ allowOrderRequests: checked });
-                          showSaveSuccess('orderSettings');
-                        }}
-                      />
-                    </div>
-                    {activeDistributor?.allowOrderRequests && (
-                      <div className="rounded-lg border p-3 space-y-2">
-                        <div>
-                          <Label className="text-sm">Payment link on approval</Label>
-                          <p className="text-xs text-muted-foreground">How orders are billed after you approve a Request Order. "Invoice only" means the client pays externally (bank transfer, etc.) and you manually mark paid.</p>
-                        </div>
-                        <Select
-                          value={activeDistributor?.paymentLinkMode || 'always'}
-                          onValueChange={async (value) => {
-                            await updateMyDistributorSettings({ paymentLinkMode: value as 'always' | 'optional' | 'never' });
-                            showSaveSuccess('orderSettings');
-                          }}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="always">Always send Stripe payment link</SelectItem>
-                            <SelectItem value="optional">Ask per order (invoice-only or Stripe)</SelectItem>
-                            <SelectItem value="never">Never — always invoice-only</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Shipping Settings - Master only */}
-              {isMaster && (
-                <Card>
-                  <CardHeader className="pb-4">
-                    <div className="flex items-center gap-3">
-                      <Truck className="h-5 w-5 text-primary" />
-                      <CardTitle className="text-lg">Shipping</CardTitle>
-                    </div>
-                    <CardDescription className="text-sm">Configure shipping methods and rates for your orders.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="rounded-lg border border-dashed p-6 text-center">
-                      <Truck className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                      <p className="text-sm font-medium">Shipping Settings Coming Soon</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Configure shipping carriers, zones, and rates for your store.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Tax/VAT Settings - Master only */}
-              {isMaster && (
-                <Card>
-                  <CardHeader className="pb-4">
-                    <div className="flex items-center gap-3">
-                      <Receipt className="h-5 w-5 text-primary" />
-                      <CardTitle className="text-lg">Tax / VAT</CardTitle>
-                    </div>
-                    <CardDescription className="text-sm">Configure how VAT is calculated on orders and invoices.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Tax Mode Selection */}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Tax Calculation Method</Label>
-                      <Select
-                        value={activeDistributor?.taxMode || 'none'}
-                        onValueChange={async (value) => {
-                          const updates: any = { taxMode: value };
-                          // Set defaults when switching to manual
-                          if (value === 'manual' && !activeDistributor?.manualTaxRate) {
-                            updates.manualTaxRate = 21;
-                            updates.manualTaxLabel = 'VAT';
-                            updates.taxBehavior = 'inclusive';
-                          }
-                          await updateMyDistributorSettings(updates);
-                          showSaveSuccess('taxSettings');
-                        }}
-                      >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No tax calculation</SelectItem>
-                          <SelectItem value="manual">Manual tax rate</SelectItem>
-                          <SelectItem value="stripe_tax">Stripe Tax (automatic)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        {activeDistributor?.taxMode === 'manual' && 'You set a fixed VAT rate that applies to all orders.'}
-                        {activeDistributor?.taxMode === 'stripe_tax' && 'Stripe calculates the correct VAT rate automatically based on buyer and seller location.'}
-                        {(!activeDistributor?.taxMode || activeDistributor?.taxMode === 'none') && 'No VAT will be calculated or shown on invoices. Prices are treated as final amounts.'}
-                      </p>
-                    </div>
-
-                    {/* Manual Tax Settings */}
-                    {activeDistributor?.taxMode === 'manual' && (
-                      <div className="p-4 rounded-lg bg-muted/50 space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <Label className="text-sm">VAT Rate (%)</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              max="50"
-                              step="0.1"
-                              placeholder="21"
-                              defaultValue={activeDistributor.manualTaxRate || ''}
-                              onBlur={async (e) => {
-                                const rate = parseFloat(e.target.value);
-                                if (!isNaN(rate) && rate >= 0) {
-                                  await updateMyDistributorSettings({ manualTaxRate: rate });
-                                }
-                              }}
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-sm">Tax Label</Label>
-                            <Select
-                              value={activeDistributor.manualTaxLabel || 'VAT'}
-                              onValueChange={async (value) => {
-                                await updateMyDistributorSettings({ manualTaxLabel: value });
-                              }}
-                            >
-                              <SelectTrigger><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="BTW">BTW (Nederland, België)</SelectItem>
-                                <SelectItem value="IVA">IVA (Spanje, Italië, Portugal)</SelectItem>
-                                <SelectItem value="MwSt">MwSt (Duitsland, Oostenrijk)</SelectItem>
-                                <SelectItem value="TVA">TVA (Frankrijk, Luxemburg)</SelectItem>
-                                <SelectItem value="VAT">VAT (International)</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-sm">Price Behavior</Label>
-                          <Select
-                            value={activeDistributor.taxBehavior || 'inclusive'}
-                            onValueChange={async (value) => {
-                              await updateMyDistributorSettings({ taxBehavior: value as any });
-                            }}
-                          >
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="inclusive">Prices include VAT (recommended for B2C)</SelectItem>
-                              <SelectItem value="exclusive">Prices exclude VAT (added at checkout)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {activeDistributor.taxBehavior === 'exclusive'
-                              ? 'VAT will be added on top of your listed prices at checkout.'
-                              : 'Your listed prices already include VAT. The invoice will show the VAT breakdown.'}
-                          </p>
-                        </div>
-                        <p className="text-xs text-muted-foreground">B2B customers with a valid EU VAT number in a different country will automatically receive 0% VAT (reverse charge).</p>
-                      </div>
-                    )}
-
-                    {/* Stripe Tax Settings */}
-                    {activeDistributor?.taxMode === 'stripe_tax' && (
-                      <div className="p-4 rounded-lg bg-muted/50 space-y-4">
-                        <div>
-                          <Label className="text-sm">Price Behavior</Label>
-                          <Select
-                            value={activeDistributor.taxBehavior || 'inclusive'}
-                            onValueChange={async (value) => {
-                              await updateMyDistributorSettings({ taxBehavior: value as any });
-                            }}
-                          >
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="inclusive">Prices include VAT</SelectItem>
-                              <SelectItem value="exclusive">Prices exclude VAT</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex items-start gap-3 p-3 rounded-lg border bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
-                          <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
-                          <div className="text-sm">
-                            <p className="font-medium text-blue-800 dark:text-blue-300">Configure your tax registrations in Stripe</p>
-                            <p className="text-blue-700 dark:text-blue-400 mt-1">
-                              Add your VAT registrations (per country) in the Stripe Dashboard to enable automatic tax calculation. Stripe charges 0.5% per transaction for this service.
-                            </p>
-                            {activeDistributor.stripeAccountId && (
-                              <a href="https://dashboard.stripe.com/tax/registrations" target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-blue-700 dark:text-blue-300 underline hover:no-underline font-medium">
-                                Open Stripe Tax Settings
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Shipping Settings - Master only */}
-              {isMaster && (
-                <Card>
-                  <CardHeader className="pb-4">
-                    <div className="flex items-center gap-3">
-                      <Truck className="h-5 w-5 text-primary" />
-                      <CardTitle className="text-lg">Shipping</CardTitle>
-                    </div>
-                    <CardDescription className="text-sm">Configure shipping zones and weight-based rates.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Enable Shipping Costs</Label>
-                        <p className="text-xs text-muted-foreground">Calculate shipping based on weight and destination.</p>
-                      </div>
-                      <Switch checked={shippingConfig.enabled} onCheckedChange={(checked) => setShippingConfig(prev => ({ ...prev, enabled: checked }))} />
-                    </div>
-
-                    {shippingConfig.enabled && (
-                      <>
-                        <Separator />
-                        <div className="grid sm:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label>Free Shipping Threshold (EUR)</Label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              placeholder="e.g. 100"
-                              value={shippingConfig.freeShippingThreshold || ''}
-                              onChange={(e) => setShippingConfig(prev => ({ ...prev, freeShippingThreshold: e.target.value ? parseFloat(e.target.value) : undefined }))}
-                            />
-                            <p className="text-xs text-muted-foreground">Leave empty to disable. Orders above this amount get free shipping.</p>
-                          </div>
-                          <div className="flex items-center gap-3 pt-6">
-                            <Switch checked={shippingConfig.allowPickup || false} onCheckedChange={(checked) => setShippingConfig(prev => ({ ...prev, allowPickup: checked }))} />
-                            <div>
-                              <Label>Allow Pickup</Label>
-                              <p className="text-xs text-muted-foreground">Let clients choose to pick up their order (no shipping cost).</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <Separator />
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <Label className="text-base font-semibold">Shipping Zones</Label>
-                            <div className="flex gap-2">
-                              <Button type="button" size="sm" variant="outline" onClick={() => addShippingZone('nl')} className="text-xs">+ NL</Button>
-                              <Button type="button" size="sm" variant="outline" onClick={() => addShippingZone('eu')} className="text-xs">+ EU</Button>
-                              <Button type="button" size="sm" variant="outline" onClick={() => addShippingZone('world')} className="text-xs">+ World</Button>
-                              <Button type="button" size="sm" variant="outline" onClick={() => addShippingZone()}><Plus className="h-3 w-3 mr-1" />Custom</Button>
-                            </div>
-                          </div>
-
-                          {shippingConfig.zones.length === 0 && (
-                            <p className="text-sm text-muted-foreground text-center py-4 border rounded-lg border-dashed">No shipping zones configured. Add a zone or use a preset above.</p>
-                          )}
-
-                          {shippingConfig.zones.map((zone) => (
-                            <Card key={zone.id} className="border-muted">
-                              <CardContent className="pt-4 space-y-4">
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="flex-1 space-y-3">
-                                    <div>
-                                      <Label className="text-xs">Zone Name</Label>
-                                      <Input
-                                        value={zone.name}
-                                        onChange={(e) => updateShippingZone(zone.id, { name: e.target.value })}
-                                        placeholder="e.g. Netherlands, EU, World"
-                                        className="mt-1"
-                                      />
-                                    </div>
-                                    <div>
-                                      <Label className="text-xs">Countries</Label>
-                                      <div className="mt-1 flex flex-wrap gap-1.5 p-2 border rounded-md min-h-[40px] max-h-[120px] overflow-y-auto">
-                                        {zone.countries.map((country) => (
-                                          <span key={country} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full">
-                                            {country}
-                                            <button type="button" onClick={() => updateShippingZone(zone.id, { countries: zone.countries.filter(c => c !== country) })} className="hover:text-destructive">
-                                              <X className="h-3 w-3" />
-                                            </button>
-                                          </span>
-                                        ))}
-                                      </div>
-                                      <Select onValueChange={(val) => {
-                                        if (!zone.countries.includes(val)) {
-                                          updateShippingZone(zone.id, { countries: [...zone.countries, val].sort() });
-                                        }
-                                      }}>
-                                        <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Add country..." /></SelectTrigger>
-                                        <SelectContent className="max-h-[200px]">
-                                          {countries.filter(c => !zone.countries.includes(c)).map(c => (
-                                            <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  </div>
-                                  <Button type="button" size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeShippingZone(zone.id)}>
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-
-                                <div>
-                                  <Label className="text-xs">Rate Tiers (weight-based)</Label>
-                                  <div className="mt-1 space-y-2">
-                                    <div className="grid grid-cols-[1fr_1fr_1fr_32px] gap-2 text-[10px] text-muted-foreground font-medium px-1">
-                                      <span>Min Weight (kg)</span><span>Max Weight (kg)</span><span>Price (EUR)</span><span></span>
-                                    </div>
-                                    {zone.rateTiers.map((tier) => (
-                                      <div key={tier.id} className="grid grid-cols-[1fr_1fr_1fr_32px] gap-2">
-                                        <Input
-                                          type="number"
-                                          step="0.1"
-                                          min="0"
-                                          value={tier.minWeightGrams / 1000}
-                                          onChange={(e) => updateRateTier(zone.id, tier.id, { minWeightGrams: Math.round(parseFloat(e.target.value || '0') * 1000) })}
-                                          className="h-8 text-xs"
-                                        />
-                                        <Input
-                                          type="number"
-                                          step="0.1"
-                                          min="0"
-                                          value={tier.maxWeightGrams / 1000}
-                                          onChange={(e) => updateRateTier(zone.id, tier.id, { maxWeightGrams: Math.round(parseFloat(e.target.value || '0') * 1000) })}
-                                          className="h-8 text-xs"
-                                        />
-                                        <Input
-                                          type="number"
-                                          step="0.01"
-                                          min="0"
-                                          value={tier.price}
-                                          onChange={(e) => updateRateTier(zone.id, tier.id, { price: parseFloat(e.target.value || '0') })}
-                                          className="h-8 text-xs"
-                                          placeholder="€"
-                                        />
-                                        <Button type="button" size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeRateTier(zone.id, tier.id)} disabled={zone.rateTiers.length <= 1}>
-                                          <X className="h-3 w-3" />
-                                        </Button>
-                                      </div>
-                                    ))}
-                                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => addRateTier(zone.id)}>
-                                      <Plus className="h-3 w-3 mr-1" />Add Tier
-                                    </Button>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-
-                        <div className="flex justify-end pt-2">
-                          <Button type="button" size="sm" onClick={handleSaveShipping} disabled={isSavingShipping}>
-                            {isSavingShipping ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : saveSuccess === 'shipping' ? <CheckCircle2 className="h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                            {saveSuccess === 'shipping' ? 'Saved!' : 'Save Shipping Settings'}
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-          )}
-
-          {/* ==================== PAYMENT TAB ==================== */}
-          {isMaster && (
-            <TabsContent value="payment" className="space-y-4">
-              {/* Stripe Checkout disable (Scale / managed only) */}
-              {(activeDistributor?.subscriptionTier === 'scale' || activeDistributor?.isSubscriptionExempt === true) && (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center gap-3">
-                      <AlertCircle className="h-5 w-5 text-primary" />
-                      <CardTitle className="text-lg">Online checkout</CardTitle>
-                    </div>
-                    <CardDescription className="text-sm">
-                      For high-volume wholesale orders you may prefer to take payment directly by bank transfer rather than via Stripe. When disabled, the storefront checkout shows only "Request Order" — you then approve each order with an invoice and manually mark it paid once the payment arrives.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex flex-row items-center justify-between rounded-lg border p-3">
-                      <div className="space-y-0.5">
-                        <Label className="text-sm">Disable Stripe / online checkout</Label>
-                        <p className="text-xs text-muted-foreground">
-                          Hides Stripe (and PayPal) from the checkout for all your customers. Existing active payment links stay valid until their 24h expiry.
-                        </p>
-                      </div>
-                      <Switch
-                        checked={activeDistributor?.stripeCheckoutDisabled === true}
-                        onCheckedChange={async (checked) => {
-                          await updateMyDistributorSettings({ stripeCheckoutDisabled: checked });
-                          showSaveSuccess('payment');
-                        }}
-                      />
-                    </div>
-                    {activeDistributor?.stripeCheckoutDisabled && (
-                      <p className="text-xs text-amber-700 dark:text-amber-400">
-                        Online checkout is currently off. Customers will only see "Request Order" at checkout. You approve each order with an invoice email and mark it paid manually once the bank transfer arrives.
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Pointer to sections still in Business tab (will be moved in a follow-up) */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm text-muted-foreground">Also on this page</CardTitle>
-                  <CardDescription className="text-xs">
-                    Payment Providers, Order Settings (incl. payment-link mode), Tax / VAT, Payment Accounts, and Payment Terms are all shown on the Business tab today and will be fully consolidated here in a follow-up update. For now, switch to the <strong>Business</strong> tab to edit those fields.
-                  </CardDescription>
-                </CardHeader>
-              </Card>
             </TabsContent>
           )}
 
