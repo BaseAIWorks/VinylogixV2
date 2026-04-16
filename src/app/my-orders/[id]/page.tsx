@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, ArrowLeft, Package, Truck, MapPin, Loader2, Clock, CheckCircle, XCircle, Hourglass } from "lucide-react";
+import { Download, ArrowLeft, Package, Truck, MapPin, Loader2, Clock, CheckCircle, XCircle, Hourglass, Wallet, Copy } from "lucide-react";
+import { markdownToSafeHtml } from "@/lib/markdown-utils";
 import { format } from "date-fns";
 import Image from "next/image";
 import { formatPriceForDisplay } from "@/lib/utils";
@@ -303,6 +304,119 @@ export default function ClientOrderDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* How to Pay — visible when the order is awaiting payment and
+                there's no active Stripe link (invoice-only flow). Shows the
+                distributor's payment terms + IBAN/BIC so the customer can
+                transfer directly. */}
+            {(() => {
+              const isAwaitingExternalPayment =
+                order.status === 'awaiting_payment' &&
+                order.paymentStatus !== 'paid' &&
+                !order.paymentLink;
+              if (!isAwaitingExternalPayment) return null;
+
+              const accounts = distributor?.paymentAccounts && distributor.paymentAccounts.length > 0
+                ? distributor.paymentAccounts
+                : (distributor?.iban || distributor?.bic || distributor?.bankName)
+                  ? [{ id: 'legacy', type: 'bank' as const, bankName: distributor.bankName, iban: distributor.iban, bic: distributor.bic }]
+                  : [];
+              const hasAccounts = accounts.length > 0;
+              const hasTerms = !!(distributor?.invoicePaymentTerms && distributor.invoicePaymentTerms.trim());
+              if (!hasAccounts && !hasTerms) return null;
+
+              const orderRef = order.orderNumber || order.id.slice(0, 8);
+              const copyToClipboard = (text: string) => {
+                if (navigator.clipboard) {
+                  navigator.clipboard.writeText(text);
+                  toast({ title: 'Copied', description: `${text} copied to clipboard.` });
+                }
+              };
+
+              return (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-3">
+                      <Wallet className="h-5 w-5 text-primary" />
+                      How to pay
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Transfer the order total to the account below and include{' '}
+                      <strong className="text-foreground">#{orderRef}</strong>{' '}
+                      as payment reference so your distributor can match your payment.
+                    </p>
+
+                    {hasAccounts && (
+                      <div className="space-y-2">
+                        {accounts.map((acc) => (
+                          <div key={acc.id} className="rounded-lg border p-3 space-y-1.5 bg-muted/30">
+                            {acc.type === 'bank' && (
+                              <>
+                                <div className="font-semibold text-sm">{acc.label || acc.bankName || 'Bank account'}</div>
+                                {acc.accountHolder && (
+                                  <div className="text-xs text-muted-foreground">Account holder: {acc.accountHolder}</div>
+                                )}
+                                {acc.iban && (
+                                  <div className="flex items-center justify-between gap-2">
+                                    <code className="font-mono text-sm tracking-wide">{acc.iban}</code>
+                                    <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copyToClipboard(acc.iban!)}>
+                                      <Copy className="h-3 w-3 mr-1" /> IBAN
+                                    </Button>
+                                  </div>
+                                )}
+                                {acc.bic && (
+                                  <div className="text-xs text-muted-foreground font-mono">BIC: {acc.bic}</div>
+                                )}
+                              </>
+                            )}
+                            {acc.type === 'paypal' && (
+                              <>
+                                <div className="font-semibold text-sm">{acc.label || 'PayPal'}</div>
+                                {acc.paypalEmail && (
+                                  <div className="flex items-center justify-between gap-2">
+                                    <code className="font-mono text-sm">{acc.paypalEmail}</code>
+                                    <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => copyToClipboard(acc.paypalEmail!)}>
+                                      <Copy className="h-3 w-3 mr-1" /> Copy
+                                    </Button>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                            {acc.type === 'other' && (
+                              <>
+                                <div className="font-semibold text-sm">{acc.label || 'Payment'}</div>
+                                {acc.details && (
+                                  <div className="text-xs text-muted-foreground whitespace-pre-line">{acc.details}</div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground pt-1">
+                          <span>Amount to transfer</span>
+                          <span className="font-semibold text-foreground">€ {formatPriceForDisplay(order.totalAmount)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {hasTerms && (
+                      <div
+                        className="rounded-md border-l-4 border-amber-500 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200 [&>p]:my-0"
+                        dangerouslySetInnerHTML={{ __html: markdownToSafeHtml(distributor!.invoicePaymentTerms!) }}
+                      />
+                    )}
+
+                    {!hasAccounts && hasTerms && (
+                      <p className="text-xs text-muted-foreground italic">
+                        Contact your distributor for exact payment instructions.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {/* Shipping Address */}
             <Card>
