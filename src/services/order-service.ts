@@ -264,7 +264,7 @@ export async function updateOrderItemStatuses(
     }
   }
 
-  // Preserve original totals on first adjustment
+  // Preserve original totals on first adjustment (for display only — strike-through)
   const originalTotalAmount = orderData.originalTotalAmount ?? orderData.totalAmount;
   const originalSubtotalAmount = orderData.originalSubtotalAmount ?? orderData.subtotalAmount;
 
@@ -274,23 +274,78 @@ export async function updateOrderItemStatuses(
     return status === 'available' || status === 'back_order';
   });
 
-  const newSubtotal = activeItems.reduce((sum, item) => sum + (item.priceAtTimeOfOrder * item.quantity), 0);
-
-  // Recalculate tax proportionally if tax data exists
-  let newTaxAmount = orderData.taxAmount;
-  let newTotal = newSubtotal;
-  if (originalSubtotalAmount && originalSubtotalAmount > 0 && orderData.taxAmount !== undefined) {
-    const ratio = newSubtotal / originalSubtotalAmount;
-    newTaxAmount = Math.round(orderData.taxAmount * ratio * 100) / 100;
-    newTotal = newSubtotal + newTaxAmount;
-  } else {
-    newTotal = newSubtotal;
-  }
-
-  // Add existing shipping cost to total (shipping stays the same when items change,
-  // since order items don't carry weight data — recalculation would require fetching records)
+  // Sum of priceAtTimeOfOrder × quantity. This sum is in the SAME convention as
+  // the stored price (inclusive of tax if the distributor operates inclusive,
+  // exclusive otherwise) — it matches how recalculateOrderTax treats itemTotal.
+  const itemTotal = activeItems.reduce((sum, item) => sum + (item.priceAtTimeOfOrder * item.quantity), 0);
   const shippingCost = orderData.shippingCost || 0;
-  newTotal = newTotal + shippingCost;
+
+  // Use the tax rate that was SAVED on the order at time of approval/creation,
+  // not the distributor's current setting — historical orders should keep
+  // their original tax treatment even if the distributor later changes rate.
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const storedRate = orderData.taxRate;
+  const inclusive = orderData.taxInclusive === true;
+  const reverseCharge = orderData.isReverseCharge === true;
+  const hasBreakdown = Array.isArray(orderData.taxBreakdown) && orderData.taxBreakdown.length > 0;
+
+  let newSubtotal: number; // always tax-exclusive (matches recalculateOrderTax convention)
+  let newTaxAmount: number | undefined;
+  let newTotal: number;
+  let newTaxBreakdown: Order['taxBreakdown'] | undefined;
+
+  if (hasBreakdown && originalSubtotalAmount && originalSubtotalAmount > 0 && orderData.taxAmount !== undefined) {
+    // Multi-rate order (typically Stripe Tax). We can't re-derive individual
+    // rates without re-hitting Stripe Tax, so we proportionally scale every
+    // bucket by the item-subtotal ratio and keep the totals consistent.
+    const inclusiveItems = inclusive;
+    const productsExcl = inclusiveItems ? round2(itemTotal / (1 + ((storedRate || 0) / 100))) : itemTotal;
+    const shippingExcl = inclusiveItems && storedRate ? round2(shippingCost / (1 + (storedRate / 100))) : shippingCost;
+    const ratio = originalSubtotalAmount > 0 ? (productsExcl / originalSubtotalAmount) : 1;
+    newTaxBreakdown = orderData.taxBreakdown!.map(t => ({
+      ...t,
+      amount: round2((t.amount || 0) * ratio),
+    }));
+    newTaxAmount = round2(newTaxBreakdown.reduce((s, t) => s + (t.amount || 0), 0));
+    newSubtotal = productsExcl;
+    newTotal = inclusiveItems
+      ? round2(itemTotal + shippingCost) // inclusive total is items+shipping; tax is a component within
+      : round2(newSubtotal + shippingExcl + newTaxAmount);
+  } else if (typeof storedRate === 'number' && (storedRate > 0 || reverseCharge)) {
+    // Single-rate order — do the exact math using the historical rate.
+    if (inclusive) {
+      const productsExcl = round2(itemTotal / (1 + (storedRate / 100)));
+      const shippingExcl = round2(shippingCost / (1 + (storedRate / 100)));
+      newSubtotal = productsExcl;
+      if (reverseCharge) {
+        newTaxAmount = 0;
+        newTotal = round2(productsExcl + shippingExcl);
+      } else {
+        newTaxAmount = round2((itemTotal + shippingCost) - (productsExcl + shippingExcl));
+        newTotal = round2(itemTotal + shippingCost);
+      }
+    } else {
+      newSubtotal = itemTotal;
+      if (reverseCharge) {
+        newTaxAmount = 0;
+        newTotal = round2(newSubtotal + shippingCost);
+      } else {
+        newTaxAmount = round2((newSubtotal + shippingCost) * (storedRate / 100));
+        newTotal = round2(newSubtotal + shippingCost + newTaxAmount);
+      }
+    }
+  } else if (originalSubtotalAmount && originalSubtotalAmount > 0 && orderData.taxAmount !== undefined) {
+    // Legacy order that has a taxAmount but no rate we can trust — fall back
+    // to the previous proportional approximation so we don't break old data.
+    const ratio = itemTotal / originalSubtotalAmount;
+    newSubtotal = itemTotal;
+    newTaxAmount = round2(orderData.taxAmount * ratio);
+    newTotal = round2(newSubtotal + newTaxAmount + shippingCost);
+  } else {
+    // No tax data on the order — subtotal + shipping = total.
+    newSubtotal = itemTotal;
+    newTotal = round2(newSubtotal + shippingCost);
+  }
 
   const updatePayload: any = {
     items: updatedItems,
@@ -302,6 +357,9 @@ export async function updateOrderItemStatuses(
   };
   if (newTaxAmount !== undefined) {
     updatePayload.taxAmount = newTaxAmount;
+  }
+  if (newTaxBreakdown !== undefined) {
+    updatePayload.taxBreakdown = newTaxBreakdown;
   }
 
   await updateDoc(orderDocRef, updatePayload);
