@@ -87,11 +87,13 @@ export async function POST(
 
     try {
       const { sendOrderApprovedInvoiceOnlyEmail } = await import('@/services/email-service');
-      const distributorName = distributor.companyName || distributor.name || 'Your distributor';
       const replyToEmail = (distData.contactEmail as string | undefined) || undefined;
+      // Pass the full distributor object so the email template can render
+      // the distributor's logo, payment terms, and bank/IBAN directly in
+      // the email body (not just a PDF attachment).
       await sendOrderApprovedInvoiceOnlyEmail(
         { ...previewOrder, status: 'awaiting_payment', approvedAt: new Date().toISOString() },
-        distributorName,
+        distributor,
         base64,
         filename,
         replyToEmail

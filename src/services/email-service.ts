@@ -1,6 +1,6 @@
 import { resend } from '@/lib/resend';
 import { format } from 'date-fns';
-import type { Order, OrderItemStatus } from '@/types';
+import type { Order, OrderItemStatus, Distributor } from '@/types';
 import { formatPriceForDisplay } from '@/lib/utils';
 import { markdownToSafeHtml, escapeHtml } from '@/lib/markdown-utils';
 
@@ -13,6 +13,241 @@ const getBillableItems = (order: Order) =>
     const status = item.itemStatus || 'available';
     return status === 'available' || status === 'back_order';
   });
+
+// ====================================================================
+// Shared render helpers for customer-facing order emails.
+// Produces a clean, consistent layout across approval / paid / update
+// emails with optional distributor branding (logo + contact + colours).
+// ====================================================================
+
+type RenderableDistributor = Partial<Pick<Distributor,
+  'name' | 'companyName' | 'logoUrl' | 'contactEmail' | 'phoneNumber' | 'website' |
+  'addressLine1' | 'city' | 'postcode' | 'country' |
+  'invoicePaymentTerms' | 'paymentAccounts' | 'iban' | 'bic' | 'bankName' | 'invoiceBankDetails'
+>>;
+
+const distributorDisplayName = (d?: RenderableDistributor | null): string => {
+  if (!d) return 'Your distributor';
+  return d.companyName || d.name || 'Your distributor';
+};
+
+const renderDistributorHeader = (distributor?: RenderableDistributor | null, accentColor = '#16a34a'): string => {
+  const name = escapeHtml(distributorDisplayName(distributor));
+  const logo = distributor?.logoUrl;
+  return `
+    <div style="padding: 24px 24px 16px 24px; border-bottom: 1px solid #e5e7eb; text-align: center; background: #ffffff;">
+      ${logo
+        ? `<img src="${escapeHtml(logo)}" alt="${name}" style="max-height: 48px; max-width: 180px; margin: 0 auto 8px auto; display: block;" />`
+        : `<div style="font-size: 18px; font-weight: 700; color: #111827;">${name}</div>`}
+    </div>
+    <div style="background: ${accentColor}; color: white; padding: 6px 24px; text-align: center; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;">
+      ${name}
+    </div>
+  `;
+};
+
+const renderOrderSummary = (order: Order, distributor?: RenderableDistributor | null): string => {
+  const billable = getBillableItems(order);
+  const rows = billable.map(item => {
+    const unit = formatPriceForDisplay(item.priceAtTimeOfOrder);
+    const lineTotal = formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity);
+    return `
+      <tr>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #f3f4f6; vertical-align: top;">
+          <div style="font-weight: 600; color: #111827;">${escapeHtml(item.artist)}</div>
+          <div style="color: #4b5563; font-size: 13px;">${escapeHtml(item.title)}</div>
+        </td>
+        <td style="padding: 10px 8px; border-bottom: 1px solid #f3f4f6; text-align: center; color: #4b5563; font-size: 13px; vertical-align: top;">${item.quantity}</td>
+        <td style="padding: 10px 8px; border-bottom: 1px solid #f3f4f6; text-align: right; color: #4b5563; font-size: 13px; white-space: nowrap; vertical-align: top;">€ ${unit}</td>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #f3f4f6; text-align: right; font-weight: 600; color: #111827; white-space: nowrap; vertical-align: top;">€ ${lineTotal}</td>
+      </tr>
+    `;
+  }).join('');
+
+  // Totals block — subtotal / shipping / tax / grand total.
+  const subtotal = order.subtotalAmount;
+  const shipping = order.shippingCost;
+  const tax = order.taxAmount;
+  const taxLabel = order.taxLabel || 'VAT';
+  const taxRate = order.taxRate;
+  const totalsRows: string[] = [];
+  if (subtotal !== undefined) {
+    totalsRows.push(`
+      <tr>
+        <td style="padding: 4px 12px; text-align: right; color: #6b7280; font-size: 13px;">Subtotal excl. ${escapeHtml(taxLabel)}</td>
+        <td style="padding: 4px 12px; text-align: right; color: #111827; font-size: 13px; white-space: nowrap; width: 120px;">€ ${formatPriceForDisplay(subtotal)}</td>
+      </tr>
+    `);
+  }
+  if (typeof shipping === 'number' && shipping > 0) {
+    totalsRows.push(`
+      <tr>
+        <td style="padding: 4px 12px; text-align: right; color: #6b7280; font-size: 13px;">Shipping${order.shippingZoneName ? ` (${escapeHtml(order.shippingZoneName)})` : ''}</td>
+        <td style="padding: 4px 12px; text-align: right; color: #111827; font-size: 13px; white-space: nowrap;">€ ${formatPriceForDisplay(shipping)}</td>
+      </tr>
+    `);
+  } else if (order.freeShippingApplied) {
+    totalsRows.push(`
+      <tr>
+        <td style="padding: 4px 12px; text-align: right; color: #6b7280; font-size: 13px;">Shipping</td>
+        <td style="padding: 4px 12px; text-align: right; color: #16a34a; font-size: 13px; font-weight: 600;">Free</td>
+      </tr>
+    `);
+  }
+  if (tax !== undefined && tax > 0) {
+    const rateTxt = typeof taxRate === 'number' ? ` (${taxRate}%)` : '';
+    totalsRows.push(`
+      <tr>
+        <td style="padding: 4px 12px; text-align: right; color: #6b7280; font-size: 13px;">${escapeHtml(taxLabel)}${rateTxt}</td>
+        <td style="padding: 4px 12px; text-align: right; color: #111827; font-size: 13px; white-space: nowrap;">€ ${formatPriceForDisplay(tax)}</td>
+      </tr>
+    `);
+  } else if (order.isReverseCharge) {
+    totalsRows.push(`
+      <tr>
+        <td style="padding: 4px 12px; text-align: right; color: #6b7280; font-size: 13px;">${escapeHtml(taxLabel)} (Reverse charge)</td>
+        <td style="padding: 4px 12px; text-align: right; color: #6b7280; font-size: 13px; white-space: nowrap;">€ 0.00</td>
+      </tr>
+    `);
+  }
+
+  const orderRef = escapeHtml(order.orderNumber || order.id.slice(0, 8));
+  let dateStr = '';
+  try { dateStr = format(new Date(order.createdAt), 'dd MMM yyyy'); } catch { /* skip */ }
+
+  return `
+    <div style="padding: 20px 24px; background: white;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; gap: 16px; flex-wrap: wrap;">
+        <div>
+          <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Order</div>
+          <div style="font-size: 18px; font-weight: 700; color: #111827;">#${orderRef}</div>
+        </div>
+        ${dateStr ? `<div style="text-align: right;">
+          <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">Date</div>
+          <div style="font-size: 14px; color: #111827;">${escapeHtml(dateStr)}</div>
+        </div>` : ''}
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+        <thead>
+          <tr>
+            <th style="padding: 8px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; border-bottom: 2px solid #e5e7eb; font-weight: 600;">Item</th>
+            <th style="padding: 8px; text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; border-bottom: 2px solid #e5e7eb; font-weight: 600; width: 50px;">Qty</th>
+            <th style="padding: 8px; text-align: right; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; border-bottom: 2px solid #e5e7eb; font-weight: 600; width: 80px;">Unit</th>
+            <th style="padding: 8px 12px; text-align: right; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; border-bottom: 2px solid #e5e7eb; font-weight: 600; width: 90px;">Total</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <table style="width: 100%; margin-top: 12px; border-collapse: collapse;">
+        ${totalsRows.join('')}
+        <tr>
+          <td style="padding: 10px 12px; text-align: right; color: #111827; font-size: 15px; font-weight: 700; border-top: 2px solid #e5e7eb;">Total</td>
+          <td style="padding: 10px 12px; text-align: right; color: #111827; font-size: 18px; font-weight: 700; white-space: nowrap; border-top: 2px solid #e5e7eb;">€ ${formatPriceForDisplay(order.totalAmount)}</td>
+        </tr>
+      </table>
+
+      ${order.isReverseCharge ? `
+        <p style="margin: 12px 0 0 0; font-size: 11px; color: #6b7280; font-style: italic;">
+          * Reverse charge — VAT to be accounted for by the recipient.
+        </p>
+      ` : ''}
+    </div>
+  `;
+};
+
+// Renders the distributor's payment terms + bank/paypal account details as an
+// email block. Only used by invoice-only flows where the customer must pay
+// externally; never emits anything when no payment accounts are configured.
+const renderPaymentDetailsSection = (distributor: RenderableDistributor | undefined | null, orderRef: string): string => {
+  if (!distributor) return '';
+
+  const accounts = distributor.paymentAccounts && distributor.paymentAccounts.length > 0
+    ? distributor.paymentAccounts
+    : (distributor.iban || distributor.bic || distributor.bankName)
+      ? [{ id: 'legacy', type: 'bank' as const, bankName: distributor.bankName, iban: distributor.iban, bic: distributor.bic }]
+      : [];
+
+  const hasAccounts = accounts.length > 0;
+  const hasTerms = !!(distributor.invoicePaymentTerms && distributor.invoicePaymentTerms.trim());
+  if (!hasAccounts && !hasTerms) return '';
+
+  const accountsHtml = accounts.map(acc => {
+    if (acc.type === 'bank') {
+      const lines: string[] = [];
+      const label = acc.label || acc.bankName || 'Bank account';
+      lines.push(`<div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${escapeHtml(label)}</div>`);
+      if (acc.accountHolder) lines.push(`<div style="font-size: 13px; color: #4b5563;">Account holder: ${escapeHtml(acc.accountHolder)}</div>`);
+      if (acc.iban) lines.push(`<div style="font-size: 14px; color: #111827; font-family: monospace; letter-spacing: 0.05em; margin-top: 2px;"><strong>IBAN:</strong> ${escapeHtml(acc.iban)}</div>`);
+      if (acc.bic) lines.push(`<div style="font-size: 13px; color: #4b5563; font-family: monospace;"><strong>BIC:</strong> ${escapeHtml(acc.bic)}</div>`);
+      return `<div style="padding: 12px 14px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 8px;">${lines.join('')}</div>`;
+    }
+    if (acc.type === 'paypal') {
+      const label = acc.label || 'PayPal';
+      const emailText = acc.paypalEmail ? `<div style="font-size: 14px; color: #111827; margin-top: 2px;">${escapeHtml(acc.paypalEmail)}</div>` : '';
+      return `<div style="padding: 12px 14px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 8px;"><div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${escapeHtml(label)}</div>${emailText}</div>`;
+    }
+    const label = acc.label || 'Payment';
+    const details = (acc as any).details ? `<div style="font-size: 13px; color: #4b5563; margin-top: 2px; white-space: pre-line;">${escapeHtml((acc as any).details)}</div>` : '';
+    return `<div style="padding: 12px 14px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 8px;"><div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${escapeHtml(label)}</div>${details}</div>`;
+  }).join('');
+
+  const termsHtml = hasTerms
+    ? `<div style="margin-top: 8px; padding: 12px 14px; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 4px; font-size: 13px; color: #78350f;">${markdownToSafeHtml(distributor.invoicePaymentTerms!)}</div>`
+    : '';
+
+  return `
+    <div style="padding: 20px 24px; background: white; border-top: 1px solid #e5e7eb;">
+      <div style="font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 8px;">How to pay</div>
+      <p style="margin: 0 0 10px 0; font-size: 13px; color: #4b5563;">Please transfer the total to the account below and include <strong>#${escapeHtml(orderRef)}</strong> in the payment reference so we can match your payment.</p>
+      ${accountsHtml}
+      ${termsHtml}
+    </div>
+  `;
+};
+
+const renderDistributorFooter = (distributor?: RenderableDistributor | null): string => {
+  const name = escapeHtml(distributorDisplayName(distributor));
+  const contactParts: string[] = [];
+  if (distributor?.contactEmail) contactParts.push(`<a href="mailto:${escapeHtml(distributor.contactEmail)}" style="color: #6b7280;">${escapeHtml(distributor.contactEmail)}</a>`);
+  if (distributor?.phoneNumber) contactParts.push(escapeHtml(distributor.phoneNumber));
+  if (distributor?.website) contactParts.push(`<a href="${escapeHtml(distributor.website)}" style="color: #6b7280;">${escapeHtml(distributor.website.replace(/^https?:\/\//, ''))}</a>`);
+  const contactLine = contactParts.length ? `<div style="font-size: 12px; color: #6b7280; margin-top: 6px;">${contactParts.join(' · ')}</div>` : '';
+  return `
+    <div style="padding: 20px 24px; text-align: center; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb;">
+      <div>This email was sent by <strong>${name}</strong> via Vinylogix.</div>
+      ${contactLine}
+    </div>
+  `;
+};
+
+const renderEmailShell = (opts: {
+  distributor?: RenderableDistributor | null;
+  title: string;
+  intro: string;
+  accentColor?: string;
+  bodyHtml: string;
+}): string => {
+  const accent = opts.accentColor || '#16a34a';
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin: 0; padding: 20px; background: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; color: #111827;">
+  <div style="max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+    ${renderDistributorHeader(opts.distributor, accent)}
+    <div style="padding: 24px 24px 8px 24px; background: white;">
+      <h1 style="margin: 0 0 8px 0; font-size: 20px; color: #111827;">${escapeHtml(opts.title)}</h1>
+      <p style="margin: 0; font-size: 14px; color: #4b5563; line-height: 1.55;">${opts.intro}</p>
+    </div>
+    ${opts.bodyHtml}
+    ${renderDistributorFooter(opts.distributor)}
+  </div>
+</body>
+</html>
+  `;
+};
 
 interface DistributorInfo {
   name: string;
@@ -653,59 +888,64 @@ export async function sendOrderRequestNotification(order: Order, distributorEmai
 /**
  * Send order approved email to client with payment link
  */
-export async function sendOrderApprovedEmail(order: Order, paymentLink?: string): Promise<void> {
+export async function sendOrderApprovedEmail(
+  order: Order,
+  paymentLink?: string,
+  distributor?: RenderableDistributor | null,
+  invoicePdf?: { base64: string; filename: string }
+): Promise<void> {
+  const distributorName = distributorDisplayName(distributor);
+  const orderRef = order.orderNumber || order.id.slice(0, 8);
+  const replyTo = distributor?.contactEmail || undefined;
+
+  const payButton = paymentLink ? `
+    <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
+      <a href="${escapeHtml(paymentLink)}" style="display: inline-block; background: #16a34a; color: white; padding: 14px 44px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; box-shadow: 0 2px 4px rgba(22,163,74,0.25);">Pay Securely</a>
+      <p style="margin: 10px 0 0 0; color: #6b7280; font-size: 12px;">This payment link expires in 24 hours.</p>
+      <p style="margin: 14px 0 0 0; color: #6b7280; font-size: 12px;"><a href="${siteUrl}/my-orders/${order.id}" style="color: #6b7280;">View order details on Vinylogix</a></p>
+    </div>
+  ` : `
+    <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
+      <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #111827; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-size: 14px;">View Order Details</a>
+    </div>
+  `;
+
+  const pdfNote = invoicePdf ? `
+    <div style="padding: 8px 24px; background: white; text-align: center; color: #6b7280; font-size: 12px;">
+      📎 A PDF invoice is attached to this email for your records.
+    </div>
+  ` : '';
+
+  const bodyHtml = renderOrderSummary(order, distributor) + payButton + pdfNote;
+
+  const intro = paymentLink
+    ? `<strong>${escapeHtml(distributorName)}</strong> has approved your order. Click below to complete your payment securely — you'll be charged exactly the amount shown here.`
+    : `<strong>${escapeHtml(distributorName)}</strong> has approved your order.`;
+
+  const html = renderEmailShell({
+    distributor,
+    title: 'Your order has been approved',
+    intro,
+    accentColor: '#16a34a',
+    bodyHtml,
+  });
+
   try {
     await resend.emails.send({
       from: 'Vinylogix Orders <orders@vinylogix.com>',
-      to: order.viewerEmail,
-      subject: `Order Approved #${order.orderNumber || order.id.slice(0, 8)} — Payment Required`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background-color: #d1fae5; border-radius: 8px; padding: 30px; margin-bottom: 20px; }
-              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-              .item { padding: 12px 0; border-bottom: 1px solid #e9ecef; }
-              .total { padding: 16px 0; font-size: 18px; font-weight: 700; }
-              .button { display: inline-block; background-color: #16a34a; color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; }
-              .button-secondary { display: inline-block; background-color: #26222B; color: white; padding: 10px 24px; text-decoration: none; border-radius: 6px; font-size: 14px; }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1>Your Order Has Been Approved!</h1>
-              <p>Great news — the seller has approved your order. Please complete your payment to proceed.</p>
-            </div>
+      to: [order.viewerEmail],
+      ...(replyTo ? { replyTo } : {}),
+      subject: `Order Approved — #${orderRef} · Payment required`,
+      ...(invoicePdf ? { attachments: [{ filename: invoicePdf.filename, content: invoicePdf.base64 }] } : {}),
+      html,
+      text: `Your order #${orderRef} has been approved by ${distributorName}.
 
-            <div class="card">
-              <h2>Order #${order.orderNumber || order.id.slice(0, 8)}</h2>
-              ${getBillableItems(order).map(item => `
-                <div class="item">
-                  <p style="margin: 0; font-weight: 600;">${item.artist} – ${item.title}</p>
-                  <p style="margin: 0; color: #6c757d;">Qty: ${item.quantity} · €${formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</p>
-                </div>
-              `).join('')}
-              <div class="total">Total: €${formatPriceForDisplay(order.totalAmount)}</div>
-            </div>
+Total: € ${formatPriceForDisplay(order.totalAmount)}
+${paymentLink ? `\nPay now: ${paymentLink}\n(link expires in 24 hours)` : ''}
+${invoicePdf ? '\nA PDF invoice is attached for your records.' : ''}
 
-            ${paymentLink ? `
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="${paymentLink}" class="button">Pay Now</a>
-              </div>
-              <p style="text-align: center; color: #6c757d; font-size: 13px;">
-                This payment link expires in 24 hours.
-              </p>
-            ` : ''}
-
-            <div style="text-align: center; margin: 20px 0;">
-              <a href="${siteUrl}/my-orders/${order.id}" class="button-secondary">View Order Details</a>
-            </div>
-          </body>
-        </html>
-      `,
+View your order: ${siteUrl}/my-orders/${order.id}
+`,
     });
     console.log(`Order approved email sent to ${order.viewerEmail}`);
   } catch (error) {
@@ -1102,60 +1342,58 @@ View your order: ${siteUrl}/my-orders/${order.id}
  */
 export async function sendOrderApprovedInvoiceOnlyEmail(
   order: Order,
-  distributorName: string,
+  distributorOrName: string | RenderableDistributor,
   pdfBase64: string,
   filename: string,
   replyToEmail?: string
 ): Promise<void> {
-  const safeDistributor = escapeHtml(distributorName);
+  // Accept either a full distributor object (preferred — enables branding +
+  // payment details in the email body) or just a name (legacy callers).
+  const distributor: RenderableDistributor | null =
+    typeof distributorOrName === 'object' && distributorOrName !== null
+      ? distributorOrName
+      : null;
+  const distributorName = distributor
+    ? distributorDisplayName(distributor)
+    : (distributorOrName as string);
   const orderRef = order.orderNumber || order.id.slice(0, 8);
+  const effectiveReplyTo = replyToEmail || distributor?.contactEmail || undefined;
+
+  const orderSummary = renderOrderSummary(order, distributor);
+  const paymentSection = renderPaymentDetailsSection(distributor, orderRef);
+  const viewButton = `
+    <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
+      <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #111827; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-size: 14px;">View Order Details</a>
+      <p style="margin: 10px 0 0 0; color: #6b7280; font-size: 12px;">📎 A PDF invoice is attached to this email.</p>
+    </div>
+  `;
+
+  const bodyHtml = orderSummary + paymentSection + viewButton;
+
+  const html = renderEmailShell({
+    distributor,
+    title: 'Your order has been approved',
+    intro: `<strong>${escapeHtml(distributorName)}</strong> has approved your order. The invoice is attached as a PDF. Payment details are below — please include your order number as reference so your payment can be matched.`,
+    accentColor: '#16a34a',
+    bodyHtml,
+  });
 
   try {
     await resend.emails.send({
       from: 'Vinylogix Orders <orders@vinylogix.com>',
       to: [order.viewerEmail],
-      ...(replyToEmail ? { replyTo: replyToEmail } : {}),
+      ...(effectiveReplyTo ? { replyTo: effectiveReplyTo } : {}),
       subject: `Order Approved — Invoice #${orderRef}`,
       attachments: [{ filename, content: pdfBase64 }],
-      html: `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background: #16a34a; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
-    <h1 style="margin: 0; font-size: 20px;">Order Approved</h1>
-  </div>
-  <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
-    <p>Hello ${escapeHtml(order.customerName || '')},</p>
-    <p><strong>${safeDistributor}</strong> has approved your order <strong>#${escapeHtml(orderRef)}</strong>. The invoice is attached as a PDF.</p>
-
-    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 16px 0;">
-      <p style="margin: 0 0 8px 0; font-size: 13px; color: #6b7280;">Order total</p>
-      <p style="margin: 0; font-size: 20px; font-weight: 700;">€ ${formatPriceForDisplay(order.totalAmount)}</p>
-    </div>
-
-    <p><strong>How to pay:</strong> the invoice PDF contains ${safeDistributor}'s payment details. Please transfer the total using the reference shown on the invoice. Your order number (<strong>#${escapeHtml(orderRef)}</strong>) should be included in the transfer reference so the payment can be matched.</p>
-
-    <p>Once ${safeDistributor} has confirmed receipt of your payment, you'll receive a second email and your order will be shipped.</p>
-
-    <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 0;">View Order Details</a>
-  </div>
-  <div style="text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px;">
-    <p>This email was sent from Vinylogix on behalf of ${safeDistributor}</p>
-  </div>
-</body>
-</html>
-      `,
+      html,
       text: `Order Approved — Invoice #${orderRef}
-
-Hello ${order.customerName || ''},
 
 ${distributorName} has approved your order #${orderRef}.
 Total: € ${formatPriceForDisplay(order.totalAmount)}
 
 How to pay: the invoice PDF is attached. Please transfer the total using the payment
-details on the invoice, and include your order number (#${orderRef}) in the transfer
-reference.
+details on the invoice and on this email, and include your order number (#${orderRef})
+in the transfer reference so the payment can be matched.
 
 Once ${distributorName} has confirmed receipt of your payment, you'll be notified and
 your order will be shipped.

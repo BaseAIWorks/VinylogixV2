@@ -3,6 +3,21 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { requireAuth, authErrorResponse } from '@/lib/auth-helpers';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { createPaymentSessionForOrder } from '@/lib/stripe-order-session';
+import { getInvoicePdfBase64 } from '@/lib/invoice-utils';
+import type { Order, Distributor } from '@/types';
+
+// Convert admin Firestore Timestamps to ISO strings before handing to
+// helpers typed against Order / Distributor (which expect ISO).
+function hydrateTimestamps<T extends Record<string, any>>(data: T, fields: string[]): T {
+  const copy: Record<string, any> = { ...data };
+  for (const field of fields) {
+    const v = copy[field];
+    if (v && typeof v.toDate === 'function') {
+      copy[field] = v.toDate().toISOString();
+    }
+  }
+  return copy as T;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -66,14 +81,39 @@ export async function POST(req: NextRequest) {
       appliedFeePercentage: result.appliedFeePercentage,
     });
 
-    // Send approval email with payment link to client (non-blocking)
-    try {
-      const { sendOrderApprovedEmail } = await import('@/services/email-service');
-      const orderData = { ...order, id: orderId, orderNumber: order.orderNumber || orderId.slice(0, 8) };
-      sendOrderApprovedEmail(orderData as any, result.sessionUrl).catch(err =>
-        console.error('Failed to send order approved email:', err)
-      );
-    } catch {}
+    // Send approval email with payment link + invoice PDF attached (non-blocking).
+    // Hydrate timestamps so the email renderer can do format() on them, and
+    // generate the invoice PDF server-side so the customer has a copy for
+    // their records regardless of whether they use the Stripe link.
+    (async () => {
+      try {
+        const { sendOrderApprovedEmail } = await import('@/services/email-service');
+        const freshSnap = await orderSnap.ref.get();
+        const freshData = { id: freshSnap.id, ...freshSnap.data() } as any;
+        const hydratedOrder = hydrateTimestamps(freshData, [
+          'createdAt', 'updatedAt', 'paidAt', 'shippedAt', 'approvedAt',
+          'paymentLinkCreatedAt', 'paymentLinkExpiresAt',
+          'itemChangesNotifiedAt', 'invoiceEmailedAt',
+        ]) as Order;
+        const hydratedDistributor = hydrateTimestamps(distributor as any, ['createdAt', 'updatedAt']) as Distributor;
+
+        let invoicePdf: { base64: string; filename: string } | undefined;
+        try {
+          invoicePdf = await getInvoicePdfBase64(hydratedOrder, hydratedDistributor);
+        } catch (pdfErr) {
+          console.error('[payment-link] Invoice PDF generation failed (sending email without attachment):', pdfErr);
+        }
+
+        await sendOrderApprovedEmail(
+          hydratedOrder,
+          result.sessionUrl,
+          hydratedDistributor,
+          invoicePdf
+        );
+      } catch (err) {
+        console.error('Failed to send order approved email:', err);
+      }
+    })();
 
     return NextResponse.json({ paymentLink: result.sessionUrl });
   } catch (error: any) {
