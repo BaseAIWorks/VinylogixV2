@@ -96,7 +96,16 @@ async function settleStockForOrder(adminDb: FirebaseFirestore.Firestore, orderDa
         const fromShelves = Math.min(qty, shelf);
         shelf -= fromShelves;
         qty -= fromShelves;
-        if (qty > 0) storage -= qty;
+        if (qty > 0) {
+          // Match the reserved-path convention: clamp at each decrement so
+          // a physical-stock underrun writes zero rather than negative.
+          const fromStorage = Math.min(qty, storage);
+          storage -= fromStorage;
+          qty -= fromStorage;
+          if (qty > 0) {
+            console.warn(`[mark-paid] Physical stock underran for record ${item.recordId} by ${qty}. Distributor should reconcile.`);
+          }
+        }
         tx.update(ref, {
           stock_shelves: Math.max(0, shelf),
           stock_storage: Math.max(0, storage),

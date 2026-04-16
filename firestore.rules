@@ -98,7 +98,19 @@ service cloud.firestore {
       let accessUnchanged = (!('accessibleDistributorIds' in before) && !('accessibleDistributorIds' in after)) ||
                             (('accessibleDistributorIds' in before) && ('accessibleDistributorIds' in after) && before.accessibleDistributorIds == after.accessibleDistributorIds);
 
-      return roleUnchanged && distributorUnchanged && accessUnchanged;
+      // VAT validation fields can only be written by the server (via the
+      // /api/clients/verify-vat route using the admin SDK). A client must
+      // never be able to mark themselves as VIES-verified — that would
+      // trick the reverse-charge path into charging 0% VAT on their orders.
+      let vatValidatedUnchanged = (!('vatValidated' in before) && !('vatValidated' in after)) ||
+                                  (('vatValidated' in before) && ('vatValidated' in after) && before.vatValidated == after.vatValidated);
+      let vatValidatedAtUnchanged = (!('vatValidatedAt' in before) && !('vatValidatedAt' in after)) ||
+                                    (('vatValidatedAt' in before) && ('vatValidatedAt' in after) && before.vatValidatedAt == after.vatValidatedAt);
+      let vatValidatedNameUnchanged = (!('vatValidatedName' in before) && !('vatValidatedName' in after)) ||
+                                      (('vatValidatedName' in before) && ('vatValidatedName' in after) && before.vatValidatedName == after.vatValidatedName);
+
+      return roleUnchanged && distributorUnchanged && accessUnchanged
+             && vatValidatedUnchanged && vatValidatedAtUnchanged && vatValidatedNameUnchanged;
     }
 
     // Check if ONLY role-related fields are being modified (for masters updating their team)

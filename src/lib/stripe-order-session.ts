@@ -72,10 +72,16 @@ export async function createPaymentSessionForOrder(params: {
   const taxBehavior = distributor.taxBehavior || 'inclusive';
 
   // Platform fee: prefer the stored value from original creation (so regenerate
-  // doesn't accidentally change the fee). If absent, derive from tier + current subtotal.
+  // doesn't accidentally change the fee). Uses typeof === 'number' rather than
+  // truthy checks so a legitimate 0% custom override (superadmin-set, valid
+  // per customPlatformFeePercent range 0.0–6) isn't treated as "unset" and
+  // silently replaced with the tier default on regenerate.
   let platformFeeAmount: number;
   let appliedFeePercentage: number;
-  if (order.platformFeeAmount && typeof order.appliedFeePercentage === 'number') {
+  const hasStoredFee =
+    typeof order.platformFeeAmount === 'number' &&
+    typeof order.appliedFeePercentage === 'number';
+  if (hasStoredFee) {
     platformFeeAmount = order.platformFeeAmount;
     appliedFeePercentage = order.appliedFeePercentage;
   } else {
@@ -84,7 +90,9 @@ export async function createPaymentSessionForOrder(params: {
       (sum: number, item: any) => sum + (item.priceAtTimeOfOrder || 0) * (item.quantity || 1),
       0
     );
-    platformFeeAmount = order.platformFeeAmount || Math.round(itemSubtotal * 100 * feeRate);
+    platformFeeAmount = typeof order.platformFeeAmount === 'number'
+      ? order.platformFeeAmount
+      : Math.round(itemSubtotal * 100 * feeRate);
     appliedFeePercentage = feeRate;
   }
 

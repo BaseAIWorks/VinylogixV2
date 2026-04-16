@@ -35,6 +35,11 @@ const paymentMethodLabels: Record<string, string> = {
   paypal: 'PayPal',
   pending: 'Request',
   manual: 'Manual',
+  bank_transfer: 'Bank transfer',
+  cash: 'Cash',
+  paypal_external: 'PayPal (direct)',
+  stripe_external: 'Stripe (external)',
+  other: 'Other',
 };
 
 const paymentMethodColors: Record<string, string> = {
@@ -42,6 +47,11 @@ const paymentMethodColors: Record<string, string> = {
   paypal: 'bg-blue-500/20 text-blue-600 border-blue-500/30',
   pending: 'bg-yellow-500/20 text-yellow-600 border-yellow-500/30',
   manual: 'bg-gray-500/20 text-gray-600 border-gray-500/30',
+  bank_transfer: 'bg-emerald-500/20 text-emerald-700 border-emerald-500/30',
+  cash: 'bg-green-500/20 text-green-700 border-green-500/30',
+  paypal_external: 'bg-blue-500/20 text-blue-600 border-blue-500/30',
+  stripe_external: 'bg-purple-500/20 text-purple-600 border-purple-500/30',
+  other: 'bg-gray-500/20 text-gray-600 border-gray-500/30',
 };
 
 const StatCard = ({ title, value, subtext, icon: Icon, color }: { title: string; value: string | number; subtext: string; icon: React.ElementType; color?: string }) => (

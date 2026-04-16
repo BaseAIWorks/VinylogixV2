@@ -82,7 +82,9 @@ export async function POST(req: NextRequest) {
           persistSkipReason = 'caller-doc-missing';
           console.error(`[verify-vat] Caller user doc ${auth.uid} not found; cannot persist.`);
         } else if (callerRole !== 'master' && callerRole !== 'worker' && callerRole !== 'superadmin') {
-          persistSkipReason = `caller-role-${callerRole || 'unknown'}`;
+          // Don't leak the caller's actual role to the client in the response —
+          // log it server-side only. The surfaced reason stays generic.
+          persistSkipReason = 'insufficient-role';
           console.warn(`[verify-vat] Caller ${auth.uid} has role "${callerRole}"; vatValidated not persisted for client ${clientUid}.`);
         } else {
           try {
