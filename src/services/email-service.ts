@@ -779,62 +779,54 @@ export async function sendNewOrderNotification(order: Order, distributorEmail: s
 }
 
 /**
- * Send order request confirmation to client (awaiting approval)
+ * Sends the client a confirmation that their Request Order was received and
+ * is awaiting the distributor's approval. Uses the shared branded template so
+ * the client clearly sees which distributor they ordered from.
  */
-export async function sendOrderRequestConfirmation(order: Order): Promise<void> {
+export async function sendOrderRequestConfirmation(
+  order: Order,
+  distributor?: RenderableDistributor | null
+): Promise<void> {
+  const distributorName = distributorDisplayName(distributor);
+  const orderRef = order.orderNumber || order.id.slice(0, 8);
+  const replyTo = distributor?.contactEmail || undefined;
+
+  const cta = `
+    <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
+      <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #111827; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-size: 14px;">View Order Status</a>
+      <p style="margin: 10px 0 0 0; color: #6b7280; font-size: 12px;">No payment is required at this time. You'll be notified when <strong>${escapeHtml(distributorName)}</strong> has reviewed your request.</p>
+    </div>
+  `;
+
+  const bodyHtml = renderOrderSummary(order, distributor) + cta;
+
+  const html = renderEmailShell({
+    distributor,
+    title: 'Order request received',
+    intro: `Thanks for your order! Your request has been submitted to <strong>${escapeHtml(distributorName)}</strong> and is awaiting approval. You'll receive another email once your order is reviewed.`,
+    accentColor: '#d97706',
+    bodyHtml,
+  });
+
   try {
     await resend.emails.send({
       from: 'Vinylogix Orders <noreply@vinylogix.com>',
-      to: order.viewerEmail,
-      subject: `Order Request Received #${order.orderNumber || order.id.slice(0, 8)}`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background-color: #fef3c7; border-radius: 8px; padding: 30px; margin-bottom: 20px; }
-              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-              .item { padding: 12px 0; border-bottom: 1px solid #e9ecef; }
-              .total { padding: 16px 0; font-size: 18px; font-weight: 700; }
-              .button { display: inline-block; background-color: #26222B; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1>Order Request Received</h1>
-              <p>Your order has been submitted and is awaiting approval from the seller. You will receive an email once it has been reviewed.</p>
-            </div>
+      to: [order.viewerEmail],
+      ...(replyTo ? { replyTo } : {}),
+      subject: `Order Request Received — #${orderRef}`,
+      html,
+      text: `Order Request Received — #${orderRef}
 
-            <div class="card">
-              <h2>Order Details</h2>
-              <p><strong>Order Number:</strong> ${order.orderNumber || order.id.slice(0, 8)}</p>
-              <p><strong>Date:</strong> ${format(new Date(order.createdAt), 'PPP')}</p>
-              <p><strong>Status:</strong> Awaiting Approval</p>
-            </div>
+Hello ${order.customerName || ''},
 
-            <div class="card">
-              <h2>Items</h2>
-              ${order.items.map(item => `
-                <div class="item">
-                  <p style="margin: 0; font-weight: 600;">${item.artist} – ${item.title}</p>
-                  <p style="margin: 0; color: #6c757d;">Qty: ${item.quantity} · €${formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</p>
-                </div>
-              `).join('')}
-              <div class="total">Total: €${formatPriceForDisplay(order.totalAmount)}</div>
-            </div>
+Thanks for your order! Your request has been submitted to ${distributorName} and is awaiting approval. You'll receive another email once it's reviewed.
 
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${siteUrl}/my-orders/${order.id}" class="button">View Order Status</a>
-            </div>
+Order total: € ${formatPriceForDisplay(order.totalAmount)}
 
-            <p style="text-align: center; color: #6c757d; font-size: 14px;">
-              No payment is required at this time. You will be notified when the seller has reviewed your order.
-            </p>
-          </body>
-        </html>
-      `,
+No payment is required at this time.
+
+View your order: ${siteUrl}/my-orders/${order.id}
+`,
     });
     console.log(`Order request confirmation sent to ${order.viewerEmail}`);
   } catch (error) {
@@ -843,62 +835,72 @@ export async function sendOrderRequestConfirmation(order: Order): Promise<void> 
 }
 
 /**
- * Send order request notification to distributor (new request to review)
+ * Sends the distributor a "new order to review" notification when a client
+ * submits a Request Order. Uses the shared branded template so the email
+ * matches the look of customer-facing emails the distributor sees in reply
+ * threads.
  */
-export async function sendOrderRequestNotification(order: Order, distributorEmail: string): Promise<void> {
+export async function sendOrderRequestNotification(
+  order: Order,
+  distributorEmail: string,
+  distributor?: RenderableDistributor | null
+): Promise<void> {
+  const orderRef = order.orderNumber || order.id.slice(0, 8);
+
+  const customerBusinessLines: string[] = [];
+  if (order.customerVatNumber) customerBusinessLines.push(`VAT: ${escapeHtml(order.customerVatNumber)}`);
+  if (order.customerChamberOfCommerce) customerBusinessLines.push(`CRN: ${escapeHtml(order.customerChamberOfCommerce)}`);
+  if (order.customerEoriNumber) customerBusinessLines.push(`EORI: ${escapeHtml(order.customerEoriNumber)}`);
+  const customerBusiness = customerBusinessLines.length
+    ? `<div style="font-size: 12px; color: #6b7280; margin-top: 6px;">${customerBusinessLines.join(' · ')}</div>`
+    : '';
+
+  const customerBlock = `
+    <div style="padding: 16px 24px; background: white; border-top: 1px solid #e5e7eb;">
+      <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; font-weight: 600; margin-bottom: 6px;">Customer</div>
+      <div style="font-size: 14px; color: #111827; font-weight: 600;">${escapeHtml(order.customerName || 'Unknown')}</div>
+      ${order.customerCompanyName ? `<div style="font-size: 13px; color: #4b5563;">${escapeHtml(order.customerCompanyName)}</div>` : ''}
+      <div style="font-size: 13px; color: #4b5563;">
+        <a href="mailto:${escapeHtml(order.viewerEmail)}" style="color: #2563eb; text-decoration: none;">${escapeHtml(order.viewerEmail)}</a>
+        ${order.phoneNumber ? ` · ${escapeHtml(order.phoneNumber)}` : ''}
+      </div>
+      ${customerBusiness}
+    </div>
+  `;
+
+  const cta = `
+    <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
+      <a href="${siteUrl}/orders/${order.id}" style="display: inline-block; background: #d97706; color: white; padding: 14px 36px; text-decoration: none; border-radius: 6px; font-size: 15px; font-weight: 600;">Review &amp; Approve Order</a>
+      <p style="margin: 10px 0 0 0; color: #6b7280; font-size: 12px;">Approve to generate the invoice and (optionally) send a payment link; or reject with a reason.</p>
+    </div>
+  `;
+
+  const bodyHtml = customerBlock + renderOrderSummary(order, distributor) + cta;
+
+  const html = renderEmailShell({
+    distributor,
+    title: 'New order request — action required',
+    intro: `A client has submitted an order request that's waiting for your approval. Review the details below and approve or reject from the order page.`,
+    accentColor: '#d97706',
+    bodyHtml,
+  });
+
   try {
     await resend.emails.send({
       from: 'Vinylogix Orders <noreply@vinylogix.com>',
-      to: distributorEmail,
-      subject: `New Order Request #${order.orderNumber || order.id.slice(0, 8)} — Action Required`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background-color: #fef3c7; border-radius: 8px; padding: 30px; margin-bottom: 20px; }
-              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-              .item { padding: 12px 0; border-bottom: 1px solid #e9ecef; }
-              .total { padding: 16px 0; font-size: 18px; font-weight: 700; }
-              .button { display: inline-block; background-color: #d69a2e; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1>New Order Request</h1>
-              <p>A client has submitted an order request that requires your approval.</p>
-            </div>
+      to: [distributorEmail],
+      subject: `New Order Request — #${orderRef} · Action required`,
+      html,
+      text: `New Order Request — #${orderRef}
 
-            <div class="card">
-              <h2>Customer</h2>
-              <p><strong>${order.customerName}</strong></p>
-              <p>${order.viewerEmail}</p>
-              ${order.customerCompanyName ? `<p>${order.customerCompanyName}</p>` : ''}
-            </div>
+A client has submitted a Request Order that needs your review.
 
-            <div class="card">
-              <h2>Order #${order.orderNumber || order.id.slice(0, 8)}</h2>
-              ${order.items.map(item => `
-                <div class="item">
-                  <p style="margin: 0; font-weight: 600;">${item.artist} – ${item.title}</p>
-                  <p style="margin: 0; color: #6c757d;">Qty: ${item.quantity} · €${formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</p>
-                </div>
-              `).join('')}
-              <div class="total">Total: €${formatPriceForDisplay(order.totalAmount)}</div>
-            </div>
+Customer: ${order.customerName || 'Unknown'} (${order.viewerEmail})
+${order.customerCompanyName ? `Company: ${order.customerCompanyName}\n` : ''}${customerBusinessLines.length ? customerBusinessLines.join(' · ') + '\n' : ''}
+Order total: € ${formatPriceForDisplay(order.totalAmount)}
 
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${siteUrl}/orders/${order.id}" class="button">Review & Approve Order</a>
-            </div>
-
-            <p style="text-align: center; color: #6c757d; font-size: 14px;">
-              You can approve or reject this order from the order detail page.
-            </p>
-          </body>
-        </html>
-      `,
+Review: ${siteUrl}/orders/${order.id}
+`,
     });
     console.log(`Order request notification sent to ${distributorEmail}`);
   } catch (error) {

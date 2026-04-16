@@ -835,15 +835,23 @@ export async function createOrderRequestServer(params: {
   const newDocSnap = await orderDocRef.get();
   const order = processOrderTimestampsServer({ ...newDocSnap.data(), id: orderDocRef.id });
 
-  // Send emails (non-blocking)
+  // Send emails (non-blocking). Fetch the distributor once and pass it to
+  // both templates so the client sees distributor branding on their
+  // confirmation and the distributor notification is consistent.
   try {
     const { sendOrderRequestConfirmation, sendOrderRequestNotification } = await import('./email-service');
-    sendOrderRequestConfirmation(order).catch(err => console.error('Failed to send order request confirmation:', err));
-
     const distSnap2 = await adminDb.collection('distributors').doc(distributorId).get();
-    const distEmail = distSnap2.data()?.contactEmail;
+    const distData = distSnap2.exists ? (distSnap2.data() as any) : null;
+    const distEmail = distData?.contactEmail;
+
+    sendOrderRequestConfirmation(order, distData).catch(err =>
+      console.error('Failed to send order request confirmation:', err)
+    );
+
     if (distEmail) {
-      sendOrderRequestNotification(order, distEmail).catch(err => console.error('Failed to send order request notification:', err));
+      sendOrderRequestNotification(order, distEmail, distData).catch(err =>
+        console.error('Failed to send order request notification:', err)
+      );
     }
   } catch (err) {
     console.error('Failed to import email service:', err);
