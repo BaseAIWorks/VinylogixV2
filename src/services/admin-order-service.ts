@@ -74,7 +74,11 @@ export async function getAllOrders(): Promise<Order[]> {
 }
 
 /**
- * Get platform fee statistics
+ * Get platform fee statistics.
+ * - Refunded orders are excluded from totals (the fee was returned to the
+ *   customer, so it should not show up as revenue).
+ * - Returns a per-distributor breakdown so the superadmin can see which
+ *   distributor contributed how much to platform revenue.
  */
 export async function getPlatformFeeStats(): Promise<{
   totalRevenue: number;
@@ -82,6 +86,15 @@ export async function getPlatformFeeStats(): Promise<{
   totalDistributorPayouts: number;
   paidOrderCount: number;
   totalOrderCount: number;
+  refundedOrderCount: number;
+  byDistributor: Array<{
+    distributorId: string;
+    revenue: number;
+    platformFees: number;
+    payout: number;
+    paidOrders: number;
+    refundedOrders: number;
+  }>;
 }> {
   const adminDb = getAdminDb();
   if (!adminDb) {
@@ -95,21 +108,52 @@ export async function getPlatformFeeStats(): Promise<{
     let totalRevenue = 0;
     let totalPlatformFees = 0;
     let paidOrderCount = 0;
+    let refundedOrderCount = 0;
+
+    const perDistributor = new Map<string, { revenue: number; platformFees: number; paidOrders: number; refundedOrders: number }>();
+    const ensureBucket = (id: string) => {
+      let b = perDistributor.get(id);
+      if (!b) {
+        b = { revenue: 0, platformFees: 0, paidOrders: 0, refundedOrders: 0 };
+        perDistributor.set(id, b);
+      }
+      return b;
+    };
 
     querySnapshot.docs.forEach(doc => {
       const order = doc.data();
+      const distributorId = (order.distributorId as string | undefined) || 'unknown';
+      const bucket = ensureBucket(distributorId);
+
       if (order.paymentStatus === 'paid' && order.totalAmount) {
         totalRevenue += order.totalAmount;
         paidOrderCount++;
+        bucket.revenue += order.totalAmount;
+        bucket.paidOrders += 1;
 
-        // Platform fee is stored in cents
         if (order.platformFeeAmount) {
           totalPlatformFees += (order.platformFeeAmount / 100);
+          bucket.platformFees += (order.platformFeeAmount / 100);
         }
+      } else if (order.paymentStatus === 'refunded') {
+        refundedOrderCount++;
+        bucket.refundedOrders += 1;
       }
     });
 
     const totalDistributorPayouts = totalRevenue - totalPlatformFees;
+
+    const byDistributor = Array.from(perDistributor.entries())
+      .map(([distributorId, b]) => ({
+        distributorId,
+        revenue: b.revenue,
+        platformFees: b.platformFees,
+        payout: b.revenue - b.platformFees,
+        paidOrders: b.paidOrders,
+        refundedOrders: b.refundedOrders,
+      }))
+      .filter(row => row.paidOrders > 0 || row.refundedOrders > 0)
+      .sort((a, b) => b.platformFees - a.platformFees);
 
     return {
       totalRevenue,
@@ -117,6 +161,8 @@ export async function getPlatformFeeStats(): Promise<{
       totalDistributorPayouts,
       paidOrderCount,
       totalOrderCount: querySnapshot.size,
+      refundedOrderCount,
+      byDistributor,
     };
   } catch (error) {
     console.error("AdminOrderService: Error calculating platform fee stats:", error);

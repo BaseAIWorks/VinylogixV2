@@ -1094,6 +1094,155 @@ View your order: ${siteUrl}/my-orders/${order.id}
 }
 
 /**
+ * Sends the customer an order-approved email with the invoice PDF attached
+ * but NO Stripe payment link. Used when the distributor's paymentLinkMode is
+ * 'never' or they chose "Approve & Send Invoice Only" at approval time.
+ * The customer pays externally (bank transfer etc.) using the payment details
+ * on the invoice PDF; distributor later does Mark as Paid.
+ */
+export async function sendOrderApprovedInvoiceOnlyEmail(
+  order: Order,
+  distributorName: string,
+  pdfBase64: string,
+  filename: string,
+  replyToEmail?: string
+): Promise<void> {
+  const safeDistributor = escapeHtml(distributorName);
+  const orderRef = order.orderNumber || order.id.slice(0, 8);
+
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      to: [order.viewerEmail],
+      ...(replyToEmail ? { replyTo: replyToEmail } : {}),
+      subject: `Order Approved — Invoice #${orderRef}`,
+      attachments: [{ filename, content: pdfBase64 }],
+      html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: #16a34a; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+    <h1 style="margin: 0; font-size: 20px;">Order Approved</h1>
+  </div>
+  <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+    <p>Hello ${escapeHtml(order.customerName || '')},</p>
+    <p><strong>${safeDistributor}</strong> has approved your order <strong>#${escapeHtml(orderRef)}</strong>. The invoice is attached as a PDF.</p>
+
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+      <p style="margin: 0 0 8px 0; font-size: 13px; color: #6b7280;">Order total</p>
+      <p style="margin: 0; font-size: 20px; font-weight: 700;">€ ${formatPriceForDisplay(order.totalAmount)}</p>
+    </div>
+
+    <p><strong>How to pay:</strong> the invoice PDF contains ${safeDistributor}'s payment details. Please transfer the total using the reference shown on the invoice. Your order number (<strong>#${escapeHtml(orderRef)}</strong>) should be included in the transfer reference so the payment can be matched.</p>
+
+    <p>Once ${safeDistributor} has confirmed receipt of your payment, you'll receive a second email and your order will be shipped.</p>
+
+    <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 0;">View Order Details</a>
+  </div>
+  <div style="text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px;">
+    <p>This email was sent from Vinylogix on behalf of ${safeDistributor}</p>
+  </div>
+</body>
+</html>
+      `,
+      text: `Order Approved — Invoice #${orderRef}
+
+Hello ${order.customerName || ''},
+
+${distributorName} has approved your order #${orderRef}.
+Total: € ${formatPriceForDisplay(order.totalAmount)}
+
+How to pay: the invoice PDF is attached. Please transfer the total using the payment
+details on the invoice, and include your order number (#${orderRef}) in the transfer
+reference.
+
+Once ${distributorName} has confirmed receipt of your payment, you'll be notified and
+your order will be shipped.
+
+View your order: ${siteUrl}/my-orders/${order.id}
+`,
+    });
+    console.log(`Order-approved invoice-only email sent to ${order.viewerEmail} for order ${orderRef}`);
+  } catch (error) {
+    console.error('Failed to send invoice-only approval email:', error);
+    throw error;
+  }
+}
+
+/**
+ * Confirms to the customer that their manually-processed payment (bank
+ * transfer, cash, external PayPal, etc.) has been received by the distributor.
+ * Sent when the distributor clicks "Mark as Paid" with the send-confirmation
+ * option enabled.
+ */
+export async function sendOrderPaidConfirmation(
+  order: Order,
+  distributorName: string,
+  paymentMethodLabel: string
+): Promise<void> {
+  const billable = getBillableItems(order);
+  const safeDistributor = escapeHtml(distributorName);
+  const orderRef = order.orderNumber || order.id.slice(0, 8);
+
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      to: [order.viewerEmail],
+      subject: `Payment Received — Order #${orderRef}`,
+      html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: #16a34a; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+    <h1 style="margin: 0; font-size: 20px;">✓ Payment Received</h1>
+  </div>
+  <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+    <p>Hello ${escapeHtml(order.customerName || '')},</p>
+    <p><strong>${safeDistributor}</strong> has confirmed receipt of your payment for order <strong>#${escapeHtml(orderRef)}</strong>. Thank you!</p>
+
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 16px 0;">
+      <p style="margin: 0 0 8px 0; font-size: 13px; color: #6b7280;">Payment method: <strong style="color: #1f2937;">${escapeHtml(paymentMethodLabel)}</strong></p>
+      ${billable.map(item => `
+        <div style="padding: 6px 0; border-bottom: 1px solid #f3f4f6;">
+          <p style="margin: 0; font-size: 14px;">${escapeHtml(item.artist)} – ${escapeHtml(item.title)} <span style="color: #6b7280;">× ${item.quantity}</span></p>
+        </div>
+      `).join('')}
+      <p style="margin: 12px 0 0 0; font-size: 16px; font-weight: 700;">Total paid: € ${formatPriceForDisplay(order.totalAmount)}</p>
+    </div>
+
+    <p>Your order is now being processed. You'll receive another email when it ships.</p>
+
+    <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 0;">View Order Details</a>
+  </div>
+  <div style="text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px;">
+    <p>This email was sent from Vinylogix on behalf of ${safeDistributor}</p>
+  </div>
+</body>
+</html>
+      `,
+      text: `Payment Received — Order #${orderRef}
+
+Hello ${order.customerName || ''},
+
+${distributorName} has confirmed receipt of your payment for order #${orderRef}.
+Payment method: ${paymentMethodLabel}
+Total paid: € ${formatPriceForDisplay(order.totalAmount)}
+
+Your order is now being processed. You'll receive another email when it ships.
+
+View your order: ${siteUrl}/my-orders/${order.id}
+`,
+    });
+    console.log(`Payment confirmation email sent to ${order.viewerEmail} for order ${orderRef}`);
+  } catch (error) {
+    console.error('Failed to send payment confirmation email:', error);
+    throw error;
+  }
+}
+
+/**
  * Sends the customer a new payment link after the distributor regenerated it —
  * typically because items were adjusted and the old link no longer matched
  * the current order total. Uses getBillableItems so the line list and total

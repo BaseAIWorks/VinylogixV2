@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
       paymentLinkCreatedAt: Timestamp.now(),
       stripeCheckoutSessionId: result.sessionId,
       platformFeeAmount: result.platformFeeAmount,
+      appliedFeePercentage: result.appliedFeePercentage,
     });
 
     // Send approval email with payment link to client (non-blocking)

@@ -214,6 +214,15 @@ export interface Distributor {
   orderIdPrefix?: string;
   allowOrderRequests?: boolean;
 
+  // Payment link policy for Request Order approvals. Controls whether the
+  // distributor automatically sends a Stripe Checkout link with the approval
+  // email or offers an invoice-only path where the customer pays externally
+  // (bank transfer, etc.) and the distributor manually marks as paid.
+  //  - 'always'   : every approval sends a Stripe link (default, current behavior)
+  //  - 'optional' : distributor picks per order at approval time
+  //  - 'never'    : never sends a Stripe link, always invoice-only
+  paymentLinkMode?: 'always' | 'optional' | 'never';
+
   // Shipping configuration
   shippingConfig?: ShippingConfig;
 
@@ -598,7 +607,10 @@ export interface Order {
   orderNumber?: string;
 
   // Payment Fields
-  paymentMethod?: 'stripe' | 'paypal' | 'pending';
+  paymentMethod?: 'stripe' | 'paypal' | 'pending' | 'bank_transfer' | 'cash' | 'paypal_external' | 'stripe_external' | 'other';
+  paymentReference?: string; // Bank transaction ID / memo / external reference (for manual payments)
+  paymentNotes?: string; // Internal notes about the payment (distributor-only)
+  paidBy?: string; // uid of the user who marked the order paid (manual) or 'stripe-webhook'/'paypal-webhook' for automated
   paymentStatus?: 'unpaid' | 'paid' | 'refunded' | 'failed';
   paidAt?: string; // ISO String
   platformFeeAmount?: number; // Platform fee in cents (varies by tier)

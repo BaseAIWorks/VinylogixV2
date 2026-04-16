@@ -16,6 +16,7 @@ export interface CreatePaymentSessionResult {
   sessionUrl: string;
   expiresAt: number; // unix seconds
   platformFeeAmount: number; // cents
+  appliedFeePercentage: number; // e.g. 0.04 for 4% — persisted on order so admin revenue reporting can reconstruct the rate even if tiers change later
   expiredPreviousSessionId?: string; // id of the session we expired, if any
 }
 
@@ -67,15 +68,18 @@ export async function createPaymentSessionForOrder(params: {
   // Platform fee: prefer the stored value from original creation (so regenerate
   // doesn't accidentally change the fee). If absent, derive from tier + current subtotal.
   let platformFeeAmount: number;
-  if (order.platformFeeAmount) {
+  let appliedFeePercentage: number;
+  if (order.platformFeeAmount && typeof order.appliedFeePercentage === 'number') {
     platformFeeAmount = order.platformFeeAmount;
+    appliedFeePercentage = order.appliedFeePercentage;
   } else {
     const feeRate = await getPlatformFeeRate(order.distributorId);
     const itemSubtotal = activeItems.reduce(
       (sum: number, item: any) => sum + (item.priceAtTimeOfOrder || 0) * (item.quantity || 1),
       0
     );
-    platformFeeAmount = Math.round(itemSubtotal * 100 * feeRate);
+    platformFeeAmount = order.platformFeeAmount || Math.round(itemSubtotal * 100 * feeRate);
+    appliedFeePercentage = feeRate;
   }
 
   const expiresAt = Math.floor(Date.now() / 1000) + 86400;
@@ -129,6 +133,7 @@ export async function createPaymentSessionForOrder(params: {
     sessionUrl: session.url,
     expiresAt,
     platformFeeAmount,
+    appliedFeePercentage,
     expiredPreviousSessionId,
   };
 }

@@ -20,7 +20,11 @@ import { format } from "date-fns";
 import Image from "next/image";
 import { formatPriceForDisplay, checkBusinessProfileComplete } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { generateInvoicePdf } from "@/lib/invoice-utils";
 
 
@@ -73,6 +77,12 @@ export default function OrderDetailPage() {
     const [isSendingNotification, setIsSendingNotification] = useState(false);
     const [isEmailingInvoice, setIsEmailingInvoice] = useState(false);
     const [isRegeneratingPaymentLink, setIsRegeneratingPaymentLink] = useState(false);
+    const [isMarkingPaid, setIsMarkingPaid] = useState(false);
+    const [markPaidDialogOpen, setMarkPaidDialogOpen] = useState(false);
+    const [markPaidMethod, setMarkPaidMethod] = useState<'bank_transfer' | 'cash' | 'paypal_external' | 'stripe_external' | 'other'>('bank_transfer');
+    const [markPaidReference, setMarkPaidReference] = useState('');
+    const [markPaidNotes, setMarkPaidNotes] = useState('');
+    const [markPaidSendEmail, setMarkPaidSendEmail] = useState(true);
     const [isRecalculating, setIsRecalculating] = useState(false);
     const [shippingCostInput, setShippingCostInput] = useState<string>('');
     const [isSavingShipping, setIsSavingShipping] = useState(false);
@@ -228,6 +238,7 @@ export default function OrderDetailPage() {
     };
     
     const [isApproving, setIsApproving] = useState(false);
+    const [isApprovingInvoiceOnly, setIsApprovingInvoiceOnly] = useState(false);
 
     const handleApproveOrder = async () => {
         if (!order || !user) return;
@@ -265,6 +276,39 @@ export default function OrderDetailPage() {
             toast({ title: "Error", description: "Could not approve order.", variant: "destructive" });
         } finally {
             setIsApproving(false);
+        }
+    };
+
+    const handleApproveInvoiceOnly = async () => {
+        if (!order) return;
+        setIsApprovingInvoiceOnly(true);
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            const res = await fetch(`/api/orders/${order.id}/approve-invoice-only`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                },
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(data?.error || 'Request failed');
+            }
+            toast({
+                title: 'Order approved',
+                description: `Invoice emailed to ${order.viewerEmail}. No Stripe link sent — client will pay externally, then you mark as paid.`,
+            });
+            fetchOrder();
+        } catch (error: any) {
+            console.error('Failed to approve (invoice-only):', error);
+            toast({
+                title: 'Error',
+                description: error?.message || 'Failed to approve order.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsApprovingInvoiceOnly(false);
         }
     };
 
@@ -407,6 +451,50 @@ export default function OrderDetailPage() {
         }
     };
 
+    const handleMarkPaidSubmit = async () => {
+        if (!order) return;
+        setIsMarkingPaid(true);
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            const res = await fetch(`/api/orders/${order.id}/mark-paid`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    paymentMethod: markPaidMethod,
+                    paymentReference: markPaidReference.trim() || undefined,
+                    paymentNotes: markPaidNotes.trim() || undefined,
+                    sendConfirmationEmail: markPaidSendEmail,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(data?.error || 'Request failed');
+            }
+            toast({
+                title: 'Marked as paid',
+                description: markPaidSendEmail
+                    ? `Order marked paid and confirmation sent to ${order.viewerEmail}.`
+                    : 'Order marked paid. No customer email was sent.',
+            });
+            setMarkPaidDialogOpen(false);
+            setMarkPaidReference('');
+            setMarkPaidNotes('');
+            fetchOrder();
+        } catch (error: any) {
+            console.error('Failed to mark as paid:', error);
+            toast({
+                title: 'Error',
+                description: error?.message || 'Failed to mark order as paid.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsMarkingPaid(false);
+        }
+    };
+
     const handleRegeneratePaymentLink = async () => {
         if (!order) return;
         const notify = window.confirm(
@@ -525,6 +613,64 @@ export default function OrderDetailPage() {
 
     return (
         <div className="space-y-6">
+            {/* Mark-as-Paid dialog (manual payment flow: bank transfer / cash / external) */}
+            <Dialog open={markPaidDialogOpen} onOpenChange={setMarkPaidDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Mark order as paid</DialogTitle>
+                        <DialogDescription>
+                            Use this when the customer paid outside Stripe (e.g. bank transfer). This records the payment, deducts stock, and clears any active Stripe payment link.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label>Payment method</Label>
+                            <RadioGroup value={markPaidMethod} onValueChange={(v) => setMarkPaidMethod(v as any)} className="gap-2">
+                                <div className="flex items-center space-x-2"><RadioGroupItem value="bank_transfer" id="pm-bt" /><Label htmlFor="pm-bt" className="font-normal">Bank transfer</Label></div>
+                                <div className="flex items-center space-x-2"><RadioGroupItem value="cash" id="pm-cash" /><Label htmlFor="pm-cash" className="font-normal">Cash</Label></div>
+                                <div className="flex items-center space-x-2"><RadioGroupItem value="paypal_external" id="pm-pp" /><Label htmlFor="pm-pp" className="font-normal">PayPal (direct)</Label></div>
+                                <div className="flex items-center space-x-2"><RadioGroupItem value="stripe_external" id="pm-se" /><Label htmlFor="pm-se" className="font-normal">Stripe (outside this system)</Label></div>
+                                <div className="flex items-center space-x-2"><RadioGroupItem value="other" id="pm-other" /><Label htmlFor="pm-other" className="font-normal">Other</Label></div>
+                            </RadioGroup>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="mp-ref">Reference <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                            <Input
+                                id="mp-ref"
+                                value={markPaidReference}
+                                onChange={(e) => setMarkPaidReference(e.target.value)}
+                                placeholder="Bank transaction ID, memo, etc."
+                                maxLength={200}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="mp-notes">Internal notes <span className="text-muted-foreground font-normal">(optional, only you see this)</span></Label>
+                            <Textarea
+                                id="mp-notes"
+                                value={markPaidNotes}
+                                onChange={(e) => setMarkPaidNotes(e.target.value)}
+                                placeholder="Reconciliation notes"
+                                maxLength={1000}
+                                rows={2}
+                            />
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Checkbox id="mp-email" checked={markPaidSendEmail} onCheckedChange={(v) => setMarkPaidSendEmail(v === true)} />
+                            <Label htmlFor="mp-email" className="font-normal text-sm">
+                                Email a payment-received confirmation to {order.viewerEmail}
+                            </Label>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setMarkPaidDialogOpen(false)} disabled={isMarkingPaid}>Cancel</Button>
+                        <Button onClick={handleMarkPaidSubmit} disabled={isMarkingPaid}>
+                            {isMarkingPaid ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DollarSign className="mr-2 h-4 w-4" />}
+                            Confirm & Mark Paid
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <Button onClick={() => router.push('/orders')} variant="outline" size="sm" className="mb-4">
@@ -616,18 +762,36 @@ export default function OrderDetailPage() {
                                 )}
                             </DialogContent>
                         </Dialog>
-                        {order.status === 'awaiting_approval' && (
-                            <>
-                                <Button onClick={handleApproveOrder} disabled={isApproving || isUpdating} className="bg-green-600 hover:bg-green-700">
-                                    {isApproving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsUp className="mr-2 h-4 w-4" />}
-                                    Approve & Send Payment Link
-                                </Button>
-                                <Button variant="destructive" onClick={handleRejectOrder} disabled={isApproving || isUpdating}>
-                                    <ThumbsDown className="mr-2 h-4 w-4" /> Reject Order
-                                </Button>
-                            </>
+                        {order.status === 'awaiting_approval' && (() => {
+                            const mode = activeDistributor?.paymentLinkMode || 'always';
+                            const showStripeButton = mode !== 'never';
+                            const showInvoiceOnlyButton = mode === 'optional' || mode === 'never';
+                            const busy = isApproving || isApprovingInvoiceOnly || isUpdating;
+                            return (
+                                <>
+                                    {showStripeButton && (
+                                        <Button onClick={handleApproveOrder} disabled={busy} className="bg-green-600 hover:bg-green-700">
+                                            {isApproving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsUp className="mr-2 h-4 w-4" />}
+                                            Approve & Send Payment Link
+                                        </Button>
+                                    )}
+                                    {showInvoiceOnlyButton && (
+                                        <Button onClick={handleApproveInvoiceOnly} disabled={busy} variant={showStripeButton ? 'outline' : 'default'} className={showStripeButton ? '' : 'bg-green-600 hover:bg-green-700'}>
+                                            {isApprovingInvoiceOnly ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}
+                                            Approve & Send Invoice Only
+                                        </Button>
+                                    )}
+                                    <Button variant="destructive" onClick={handleRejectOrder} disabled={busy}>
+                                        <ThumbsDown className="mr-2 h-4 w-4" /> Reject Order
+                                    </Button>
+                                </>
+                            );
+                        })()}
+                        {(order.status === 'pending' || order.status === 'awaiting_payment') && (
+                            <Button onClick={() => setMarkPaidDialogOpen(true)} disabled={isUpdating}>
+                                <DollarSign className="mr-2 h-4 w-4"/> Mark as Paid
+                            </Button>
                         )}
-                        {(order.status === 'pending' || order.status === 'awaiting_payment') && <Button onClick={() => handleStatusUpdate('paid')} disabled={isUpdating}><DollarSign className="mr-2 h-4 w-4"/> Mark as Paid</Button>}
                         {order.status === 'paid' && <Button onClick={() => handleStatusUpdate('processing')} disabled={isUpdating}><PackageCheck className="mr-2 h-4 w-4"/> Start Processing</Button>}
                         {order.status === 'processing' && <Button onClick={() => handleStatusUpdate('shipped')} disabled={isUpdating}><Truck className="mr-2 h-4 w-4"/> Mark as Shipped</Button>}
                         {order.status !== 'cancelled' && <Button variant="destructive" onClick={() => handleStatusUpdate('cancelled')} disabled={isUpdating}>Cancel Order</Button>}

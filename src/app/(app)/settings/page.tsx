@@ -1706,6 +1706,30 @@ export default function SettingsPage() {
                         }}
                       />
                     </div>
+                    {activeDistributor?.allowOrderRequests && (
+                      <div className="rounded-lg border p-3 space-y-2">
+                        <div>
+                          <Label className="text-sm">Payment link on approval</Label>
+                          <p className="text-xs text-muted-foreground">How orders are billed after you approve a Request Order. "Invoice only" means the client pays externally (bank transfer, etc.) and you manually mark paid.</p>
+                        </div>
+                        <Select
+                          value={activeDistributor?.paymentLinkMode || 'always'}
+                          onValueChange={async (value) => {
+                            await updateMyDistributorSettings({ paymentLinkMode: value as 'always' | 'optional' | 'never' });
+                            showSaveSuccess('orderSettings');
+                          }}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="always">Always send Stripe payment link</SelectItem>
+                            <SelectItem value="optional">Ask per order (invoice-only or Stripe)</SelectItem>
+                            <SelectItem value="never">Never — always invoice-only</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}

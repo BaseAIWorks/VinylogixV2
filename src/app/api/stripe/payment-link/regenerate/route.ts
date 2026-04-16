@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
       paymentLinkCreatedAt: Timestamp.now(),
       stripeCheckoutSessionId: result.sessionId,
       platformFeeAmount: result.platformFeeAmount,
+      appliedFeePercentage: result.appliedFeePercentage,
       updatedAt: Timestamp.now(),
       // Clear any previous mismatch flag — this is a fresh link, reconciled.
       paymentAmountMismatch: FieldValue.delete(),

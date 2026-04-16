@@ -77,6 +77,15 @@ export default function AdminRevenuePage() {
     totalDistributorPayouts: number;
     paidOrderCount: number;
     totalOrderCount: number;
+    refundedOrderCount: number;
+    byDistributor: Array<{
+      distributorId: string;
+      revenue: number;
+      platformFees: number;
+      payout: number;
+      paidOrders: number;
+      refundedOrders: number;
+    }>;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -271,6 +280,53 @@ export default function AdminRevenuePage() {
           <StatCard title="Platform Fees" value={`€ ${formatPriceForDisplay(isFiltered ? filteredStats.fees : (stats?.totalPlatformFees || 0))}`} subtext="Commission earned (2-6% by tier)" icon={DollarSign} color="bg-green-600" />
           <StatCard title="Distributor Payouts" value={`€ ${formatPriceForDisplay(isFiltered ? (filteredStats.revenue - filteredStats.fees) : (stats?.totalDistributorPayouts || 0))}`} subtext="Paid to sellers" icon={Users} color="bg-blue-500" />
         </div>
+
+        {/* Per-distributor breakdown */}
+        {stats?.byDistributor && stats.byDistributor.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" />
+                Revenue by Distributor
+                {stats.refundedOrderCount > 0 && (
+                  <span className="text-xs text-muted-foreground font-normal">
+                    · {stats.refundedOrderCount} refunded order{stats.refundedOrderCount === 1 ? '' : 's'} excluded
+                  </span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Distributor</TableHead>
+                    <TableHead className="text-right">Paid orders</TableHead>
+                    <TableHead className="text-right">Revenue</TableHead>
+                    <TableHead className="text-right">Platform fees</TableHead>
+                    <TableHead className="text-right">Payout</TableHead>
+                    <TableHead className="text-right">Refunded</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stats.byDistributor.map(row => {
+                    const dist = distributors.find(d => d.id === row.distributorId);
+                    const name = dist?.companyName || dist?.name || (row.distributorId === 'unknown' ? 'Unknown' : row.distributorId.slice(0, 8));
+                    return (
+                      <TableRow key={row.distributorId}>
+                        <TableCell className="font-medium">{name}</TableCell>
+                        <TableCell className="text-right">{row.paidOrders}</TableCell>
+                        <TableCell className="text-right">€ {formatPriceForDisplay(row.revenue)}</TableCell>
+                        <TableCell className="text-right font-medium text-green-600 dark:text-green-500">€ {formatPriceForDisplay(row.platformFees)}</TableCell>
+                        <TableCell className="text-right">€ {formatPriceForDisplay(row.payout)}</TableCell>
+                        <TableCell className="text-right text-muted-foreground">{row.refundedOrders || '—'}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Revenue Chart */}
         {revenueTrendData.length > 1 && (
