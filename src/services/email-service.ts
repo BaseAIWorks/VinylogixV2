@@ -517,7 +517,7 @@ ${createDistributorPromoText()}
 export async function sendOrderConfirmation(order: Order): Promise<void> {
   try {
     await resend.emails.send({
-      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      from: 'Vinylogix Orders <noreply@vinylogix.com>',
       to: order.viewerEmail,
       subject: `Order Confirmation #${order.orderNumber || order.id.slice(0, 8)}`,
       html: `
@@ -589,7 +589,7 @@ export async function sendShippingNotification(order: Order): Promise<void> {
 
   try {
     await resend.emails.send({
-      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      from: 'Vinylogix Orders <noreply@vinylogix.com>',
       to: order.viewerEmail,
       subject: `Your order #${order.orderNumber || order.id.slice(0, 8)} has shipped!`,
       html: `
@@ -725,7 +725,7 @@ export async function sendNewOrderNotification(order: Order, distributorEmail: s
       : order.totalAmount.toFixed(2);
 
     await resend.emails.send({
-      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      from: 'Vinylogix Orders <noreply@vinylogix.com>',
       to: distributorEmail,
       subject: `New Order Received #${order.orderNumber || order.id.slice(0, 8)}`,
       html: `
@@ -784,7 +784,7 @@ export async function sendNewOrderNotification(order: Order, distributorEmail: s
 export async function sendOrderRequestConfirmation(order: Order): Promise<void> {
   try {
     await resend.emails.send({
-      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      from: 'Vinylogix Orders <noreply@vinylogix.com>',
       to: order.viewerEmail,
       subject: `Order Request Received #${order.orderNumber || order.id.slice(0, 8)}`,
       html: `
@@ -848,7 +848,7 @@ export async function sendOrderRequestConfirmation(order: Order): Promise<void> 
 export async function sendOrderRequestNotification(order: Order, distributorEmail: string): Promise<void> {
   try {
     await resend.emails.send({
-      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      from: 'Vinylogix Orders <noreply@vinylogix.com>',
       to: distributorEmail,
       subject: `New Order Request #${order.orderNumber || order.id.slice(0, 8)} — Action Required`,
       html: `
@@ -953,7 +953,7 @@ export async function sendOrderApprovedEmail(
 
   try {
     await resend.emails.send({
-      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      from: 'Vinylogix Orders <noreply@vinylogix.com>',
       to: [order.viewerEmail],
       ...(replyTo ? { replyTo } : {}),
       subject: `Order Approved — #${orderRef} · Payment required`,
@@ -980,7 +980,7 @@ View your order: ${siteUrl}/my-orders/${order.id}
 export async function sendOrderRejectedEmail(order: Order, reason?: string): Promise<void> {
   try {
     await resend.emails.send({
-      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      from: 'Vinylogix Orders <noreply@vinylogix.com>',
       to: order.viewerEmail,
       subject: `Order Update #${order.orderNumber || order.id.slice(0, 8)}`,
       html: `
@@ -1401,7 +1401,7 @@ export async function sendOrderApprovedInvoiceOnlyEmail(
 
   try {
     await resend.emails.send({
-      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      from: 'Vinylogix Orders <noreply@vinylogix.com>',
       to: [order.viewerEmail],
       ...(effectiveReplyTo ? { replyTo: effectiveReplyTo } : {}),
       subject: `Order Approved — Invoice #${orderRef}`,
@@ -1474,7 +1474,7 @@ export async function sendOrderPaidConfirmation(
 
   try {
     await resend.emails.send({
-      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      from: 'Vinylogix Orders <noreply@vinylogix.com>',
       to: [order.viewerEmail],
       ...(effectiveReplyTo ? { replyTo: effectiveReplyTo } : {}),
       subject: `Payment Received — Order #${orderRef}`,
@@ -1546,7 +1546,7 @@ export async function sendUpdatedPaymentLinkEmail(
 
   try {
     await resend.emails.send({
-      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      from: 'Vinylogix Orders <noreply@vinylogix.com>',
       to: [order.viewerEmail],
       ...(effectiveReplyTo ? { replyTo: effectiveReplyTo } : {}),
       subject: `Updated Payment Link — Order #${orderRef}`,
@@ -1622,7 +1622,7 @@ export async function sendInvoiceToCustomerEmail(
 
   try {
     await resend.emails.send({
-      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      from: 'Vinylogix Orders <noreply@vinylogix.com>',
       to: [order.viewerEmail],
       ...(effectiveReplyTo ? { replyTo: effectiveReplyTo } : {}),
       subject: `Updated Invoice — Order #${orderRef}`,
