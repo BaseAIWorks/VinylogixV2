@@ -84,23 +84,47 @@ export async function createPaymentSessionForOrder(params: {
 
   const expiresAt = Math.floor(Date.now() / 1000) + 86400;
 
+  // Build product line items, then append a shipping line item when the order
+  // has a shipping fee. Previously shipping was only reflected in the stored
+  // order.totalAmount but was NOT part of the Stripe session — Stripe only
+  // charged the product subtotal, and the webhook's amount-mismatch check
+  // would flag the paid order as on_hold. Including shipping here makes the
+  // Stripe charge match what the invoice/email promise.
+  const productLineItems = activeItems.map((item: any) => ({
+    price_data: {
+      currency: 'eur' as const,
+      product_data: {
+        name: `${item.artist} \u2013 ${item.title}`,
+        ...(taxMode === 'stripe_tax' && {
+          tax_code: distributor.defaultTaxCode || 'txcd_99999999',
+        }),
+      },
+      unit_amount: Math.round((item.priceAtTimeOfOrder || 0) * 100),
+      ...(taxMode !== 'none' && { tax_behavior: taxBehavior as 'inclusive' | 'exclusive' }),
+    },
+    quantity: item.quantity || 1,
+  }));
+
+  const shippingCost: number = order.shippingCost || 0;
+  const shippingLineItems = shippingCost > 0 ? [{
+    price_data: {
+      currency: 'eur' as const,
+      product_data: {
+        name: `Shipping${order.shippingZoneName ? ` (${order.shippingZoneName})` : ''}`,
+        // Stripe Tax has a dedicated code for shipping so it uses the
+        // jurisdictionally-correct rate instead of the product rate.
+        ...(taxMode === 'stripe_tax' && { tax_code: 'txcd_92010001' }),
+      },
+      unit_amount: Math.round(shippingCost * 100),
+      ...(taxMode !== 'none' && { tax_behavior: taxBehavior as 'inclusive' | 'exclusive' }),
+    },
+    quantity: 1,
+  }] : [];
+
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
     expires_at: expiresAt,
-    line_items: activeItems.map((item: any) => ({
-      price_data: {
-        currency: 'eur',
-        product_data: {
-          name: `${item.artist} \u2013 ${item.title}`,
-          ...(taxMode === 'stripe_tax' && {
-            tax_code: distributor.defaultTaxCode || 'txcd_99999999',
-          }),
-        },
-        unit_amount: Math.round((item.priceAtTimeOfOrder || 0) * 100),
-        ...(taxMode !== 'none' && { tax_behavior: taxBehavior }),
-      },
-      quantity: item.quantity || 1,
-    })),
+    line_items: [...productLineItems, ...shippingLineItems],
     ...(taxMode === 'stripe_tax' && distributor.stripeAccountId && {
       automatic_tax: {
         enabled: true,
