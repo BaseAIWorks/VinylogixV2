@@ -33,14 +33,20 @@ export interface InvoiceOptions {
   showPaymentInfo?: boolean;
 }
 
-/**
- * Generates a professional invoice PDF with distributor branding
- */
-export async function generateInvoicePdf(
+// Items that are counted on the invoice: excludes items marked not_available or out_of_stock,
+// matching how order totals are recalculated in order-service.updateOrderItemStatuses.
+export function getInvoiceActiveItems(order: Order) {
+  return (order.items || []).filter(item => {
+    const status = item.itemStatus || 'available';
+    return status === 'available' || status === 'back_order';
+  });
+}
+
+async function buildInvoicePdfDoc(
   order: Order,
   distributor: Distributor,
   options?: InvoiceOptions
-): Promise<void> {
+): Promise<{ doc: jsPDF; filename: string }> {
   const customerCompanyName = order.customerCompanyName;
   const customerVatNumber = order.customerVatNumber;
   const customerEoriNumber = order.customerEoriNumber;
@@ -438,8 +444,9 @@ export async function generateInvoicePdf(
   // ORDER ITEMS TABLE
   // ============================================
 
+  const activeItems = getInvoiceActiveItems(order);
   const tableColumn = ["Item", "Qty", "Unit Price", "Total"];
-  const tableRows = (order.items || []).map((item) => [
+  const tableRows = activeItems.map((item) => [
     `${item.artist} \u2013 ${item.title}`,
     item.quantity.toString(),
     `\u20AC ${formatPriceForDisplay(item.priceAtTimeOfOrder)}`,
@@ -574,8 +581,8 @@ export async function generateInvoicePdf(
     doc.text('* Reverse charge — VAT to be accounted for by the recipient.', margin, currentY);
   }
 
-  // Total items
-  const totalQty = (order.items || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+  // Total items (excludes items marked not_available / out_of_stock)
+  const totalQty = activeItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
   currentY += 5;
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
@@ -663,9 +670,36 @@ export async function generateInvoicePdf(
   }
 
   // ============================================
-  // DOWNLOAD
+  // RETURN
   // ============================================
 
   const filename = options?.downloadName || `Invoice-${invoiceNumber}.pdf`;
+  return { doc, filename };
+}
+
+/**
+ * Generates a professional invoice PDF with distributor branding and triggers a browser download.
+ */
+export async function generateInvoicePdf(
+  order: Order,
+  distributor: Distributor,
+  options?: InvoiceOptions
+): Promise<void> {
+  const { doc, filename } = await buildInvoicePdfDoc(order, distributor, options);
   doc.save(filename);
+}
+
+/**
+ * Builds the same invoice PDF and returns it as a base64 string (without the data URI prefix),
+ * plus the filename. Used to attach the invoice to an email sent to the customer.
+ */
+export async function getInvoicePdfBase64(
+  order: Order,
+  distributor: Distributor,
+  options?: InvoiceOptions
+): Promise<{ base64: string; filename: string }> {
+  const { doc, filename } = await buildInvoicePdfDoc(order, distributor, options);
+  const dataUri = doc.output('datauristring');
+  const base64 = dataUri.includes(',') ? dataUri.split(',')[1] : dataUri;
+  return { base64, filename };
 }

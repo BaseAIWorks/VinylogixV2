@@ -7,7 +7,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Separator } from "@/components/ui/separator";
 import type { Order, OrderStatus, OrderItemStatus, VinylRecord } from "@/types";
 import { getOrderById, updateOrderStatus, updateOrderItemStatuses, recalculateOrderTax, getOrdersByViewerId } from "@/services/order-service";
-import { sendOrderItemChangesEmail } from "@/services/email-service";
 import { getRecordById } from "@/services/record-service";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect, useCallback } from "react";
@@ -22,7 +21,7 @@ import Image from "next/image";
 import { formatPriceForDisplay, checkBusinessProfileComplete } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { generateInvoicePdf } from "@/lib/invoice-utils";
+import { generateInvoicePdf, getInvoicePdfBase64 } from "@/lib/invoice-utils";
 
 
 const statusConfig: Record<OrderStatus, { icon: React.ElementType, color: string, label: string }> = {
@@ -72,12 +71,19 @@ export default function OrderDetailPage() {
     const [itemQuantityChanges, setItemQuantityChanges] = useState<Record<string, number>>({});
     const [isSavingItemStatuses, setIsSavingItemStatuses] = useState(false);
     const [isSendingNotification, setIsSendingNotification] = useState(false);
-    const [notificationSent, setNotificationSent] = useState(false);
+    const [isEmailingInvoice, setIsEmailingInvoice] = useState(false);
     const [isRecalculating, setIsRecalculating] = useState(false);
     const [shippingCostInput, setShippingCostInput] = useState<string>('');
     const [isSavingShipping, setIsSavingShipping] = useState(false);
     const hasUnsavedItemChanges = Object.keys(itemStatusChanges).length > 0 || Object.keys(itemQuantityChanges).length > 0;
     const hasItemStatusChanges = order?.items.some(item => item.itemStatus && item.itemStatus !== 'available') ?? false;
+    const itemChangesNotifiedAt = order?.itemChangesNotifiedAt;
+    const invoiceEmailedAt = order?.invoiceEmailedAt;
+    // "Needs (re-)notification" when the order was modified AFTER the last notification,
+    // or when no notification was sent yet.
+    const needsItemChangesNotification = hasItemStatusChanges && (
+      !itemChangesNotifiedAt || (order?.updatedAt && new Date(order.updatedAt) > new Date(itemChangesNotifiedAt))
+    );
 
     const fetchOrder = useCallback(async () => {
         if (!orderId || !user) {
@@ -279,6 +285,41 @@ export default function OrderDetailPage() {
         }
     };
 
+    const handleEmailInvoice = async () => {
+        if (!order || !activeDistributor) {
+            toast({ title: "Error", description: "Unable to send invoice. Distributor information not available.", variant: "destructive" });
+            return;
+        }
+        if (!order.viewerEmail) {
+            toast({ title: "Missing email", description: "This order has no customer email address.", variant: "destructive" });
+            return;
+        }
+        setIsEmailingInvoice(true);
+        try {
+            const { base64, filename } = await getInvoicePdfBase64(order, activeDistributor);
+            const token = await auth.currentUser?.getIdToken();
+            const res = await fetch(`/api/orders/${order.id}/send-invoice`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ pdfBase64: base64, filename }),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data?.error || 'Request failed');
+            }
+            toast({ title: "Invoice emailed", description: `Sent to ${order.viewerEmail}` });
+            fetchOrder();
+        } catch (error: any) {
+            console.error("Failed to email invoice:", error);
+            toast({ title: "Error", description: error?.message || "Failed to email invoice.", variant: "destructive" });
+        } finally {
+            setIsEmailingInvoice(false);
+        }
+    };
+
     const handleItemStatusChange = (recordId: string, newStatus: OrderItemStatus) => {
         const currentSavedStatus = order?.items.find(i => i.recordId === recordId)?.itemStatus || 'available';
         if (newStatus === currentSavedStatus) {
@@ -317,7 +358,6 @@ export default function OrderDetailPage() {
             setOrder(updatedOrder);
             setItemStatusChanges({});
             setItemQuantityChanges({});
-            setNotificationSent(false);
             toast({ title: "Order items updated", description: "Quantities and statuses saved. Totals recalculated." });
         } catch (error) {
             toast({ title: "Error", description: "Failed to update order items.", variant: "destructive" });
@@ -327,14 +367,26 @@ export default function OrderDetailPage() {
     };
 
     const handleNotifyClient = async () => {
-        if (!order || !activeDistributor) return;
+        if (!order) return;
         setIsSendingNotification(true);
         try {
-            await sendOrderItemChangesEmail(order, activeDistributor.companyName || activeDistributor.name || 'Your distributor');
-            setNotificationSent(true);
+            const token = await auth.currentUser?.getIdToken();
+            const res = await fetch(`/api/orders/${order.id}/notify-item-changes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                },
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data?.error || 'Request failed');
+            }
             toast({ title: "Client notified", description: `Email sent to ${order.viewerEmail}` });
-        } catch (error) {
-            toast({ title: "Error", description: "Failed to send notification email.", variant: "destructive" });
+            fetchOrder();
+        } catch (error: any) {
+            console.error("Failed to send notification:", error);
+            toast({ title: "Error", description: error?.message || "Failed to send notification email.", variant: "destructive" });
         } finally {
             setIsSendingNotification(false);
         }
@@ -430,6 +482,10 @@ export default function OrderDetailPage() {
                 {canManageOrder && (
                     <div className="flex items-center gap-2 flex-wrap">
                         <Button variant="outline" onClick={handleDownloadInvoice}><FileDown className="mr-2 h-4 w-4" /> Download Invoice</Button>
+                        <Button variant="outline" onClick={handleEmailInvoice} disabled={isEmailingInvoice || !order.viewerEmail} title={invoiceEmailedAt ? `Last emailed on ${format(new Date(invoiceEmailedAt), 'dd MMM yyyy HH:mm')}` : 'Email the invoice PDF to the customer'}>
+                            {isEmailingInvoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                            {invoiceEmailedAt ? 'Resend Invoice' : 'Email Invoice'}
+                        </Button>
                         <Dialog onOpenChange={(open) => { if(open) generatePackingSlip() }}>
                             <DialogTrigger asChild>
                                 <Button variant="outline"><Printer className="mr-2 h-4 w-4" /> Print Packing Slip</Button>
@@ -598,22 +654,35 @@ export default function OrderDetailPage() {
                             </Table>
 
                             {/* Save / Notify buttons */}
-                            {(hasUnsavedItemChanges || (hasItemStatusChanges && !notificationSent)) && (
-                                <div className="flex items-center gap-3 mt-4 p-3 bg-muted/50 rounded-lg">
+                            {(hasUnsavedItemChanges || hasItemStatusChanges) && (
+                                <div className="flex flex-wrap items-center gap-3 mt-4 p-3 bg-muted/50 rounded-lg">
                                     {hasUnsavedItemChanges && (
                                         <Button onClick={handleSaveItemStatuses} disabled={isSavingItemStatuses} size="sm">
                                             {isSavingItemStatuses ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                                             Save Changes
                                         </Button>
                                     )}
-                                    {!hasUnsavedItemChanges && hasItemStatusChanges && !notificationSent && (
+                                    {!hasUnsavedItemChanges && hasItemStatusChanges && (
                                         <Button onClick={handleNotifyClient} disabled={isSendingNotification} variant="outline" size="sm">
                                             {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
-                                            Notify Client of Changes
+                                            {itemChangesNotifiedAt ? 'Resend Change Notification' : 'Notify Client of Changes'}
                                         </Button>
                                     )}
                                     {hasUnsavedItemChanges && <span className="text-xs text-muted-foreground">You have unsaved item status changes</span>}
+                                    {!hasUnsavedItemChanges && itemChangesNotifiedAt && (
+                                        <span className={`text-xs ${needsItemChangesNotification ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>
+                                            {needsItemChangesNotification
+                                                ? `Items changed since last notification on ${format(new Date(itemChangesNotifiedAt), 'dd MMM HH:mm')} — consider resending`
+                                                : `Client notified on ${format(new Date(itemChangesNotifiedAt), 'dd MMM yyyy HH:mm')}`}
+                                        </span>
+                                    )}
                                 </div>
+                            )}
+                            {invoiceEmailedAt && (
+                                <p className="text-xs text-muted-foreground mt-2">
+                                    Invoice emailed to customer on {format(new Date(invoiceEmailedAt), 'dd MMM yyyy HH:mm')}
+                                    {order.invoiceEmailedCount && order.invoiceEmailedCount > 1 ? ` (${order.invoiceEmailedCount}×)` : ''}
+                                </p>
                             )}
 
                             <Separator className="my-4" />

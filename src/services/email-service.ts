@@ -6,6 +6,14 @@ import { markdownToSafeHtml, escapeHtml } from '@/lib/markdown-utils';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
 
+// Items that a customer should actually see / be billed for — excludes items the
+// distributor marked as not_available or out_of_stock. Matches totals in order-service.
+const getBillableItems = (order: Order) =>
+  (order.items || []).filter(item => {
+    const status = item.itemStatus || 'available';
+    return status === 'available' || status === 'back_order';
+  });
+
 interface DistributorInfo {
   name: string;
   companyName?: string;
@@ -285,7 +293,7 @@ export async function sendOrderConfirmation(order: Order): Promise<void> {
 
             <div class="card">
               <h2>Items Ordered</h2>
-              ${order.items.map(item => `
+              ${getBillableItems(order).map(item => `
                 <div class="item">
                   <p style="margin: 0; font-weight: 600;">${item.title}</p>
                   <p style="margin: 0; color: #6c757d;">${item.artist} • Qty: ${item.quantity} • €${formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</p>
@@ -674,7 +682,7 @@ export async function sendOrderApprovedEmail(order: Order, paymentLink?: string)
 
             <div class="card">
               <h2>Order #${order.orderNumber || order.id.slice(0, 8)}</h2>
-              ${order.items.map(item => `
+              ${getBillableItems(order).map(item => `
                 <div class="item">
                   <p style="margin: 0; font-weight: 600;">${item.artist} – ${item.title}</p>
                   <p style="margin: 0; color: #6c757d;">Qty: ${item.quantity} · €${formatPriceForDisplay(item.priceAtTimeOfOrder * item.quantity)}</p>
@@ -1081,6 +1089,74 @@ View your order: ${siteUrl}/my-orders/${order.id}
     console.log(`Order item changes email sent to ${order.viewerEmail}`);
   } catch (error) {
     console.error('Failed to send order item changes email:', error);
+    throw error;
+  }
+}
+
+/**
+ * Sends the distributor's invoice PDF to the customer as an email attachment.
+ * Used after a distributor adjusts items on an already-approved order so the
+ * customer receives an up-to-date invoice reflecting the current order list.
+ */
+export async function sendInvoiceToCustomerEmail(
+  order: Order,
+  distributorName: string,
+  pdfBase64: string,
+  filename: string,
+  replyToEmail?: string
+): Promise<void> {
+  const billable = getBillableItems(order);
+  const itemCount = billable.reduce((sum, i) => sum + (i.quantity || 0), 0);
+  const safeDistributor = escapeHtml(distributorName);
+  const orderRef = order.orderNumber || order.id.slice(0, 8);
+
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix Orders <orders@vinylogix.com>',
+      to: [order.viewerEmail],
+      ...(replyToEmail ? { replyTo: replyToEmail } : {}),
+      subject: `Updated Invoice — Order #${orderRef}`,
+      attachments: [
+        {
+          filename,
+          content: pdfBase64,
+        },
+      ],
+      html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: #1f2937; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+    <h1 style="margin: 0; font-size: 20px;">Updated Invoice</h1>
+  </div>
+  <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb;">
+    <p>Hello ${escapeHtml(order.customerName || '')},</p>
+    <p><strong>${safeDistributor}</strong> has sent you an updated invoice for order <strong>#${escapeHtml(orderRef)}</strong>.</p>
+    <p>The updated invoice reflects the current order list (${itemCount} item${itemCount === 1 ? '' : 's'}) and is attached to this email as a PDF.</p>
+    <p style="margin: 20px 0;"><strong>Order total:</strong> € ${formatPriceForDisplay(order.totalAmount)}</p>
+    <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 0;">View Order Details</a>
+    <p style="margin-top: 20px;">If you have any questions about this invoice, please contact <strong>${safeDistributor}</strong> directly.</p>
+  </div>
+  <div style="text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px;">
+    <p>This email was sent from Vinylogix on behalf of ${safeDistributor}</p>
+  </div>
+</body>
+</html>
+      `,
+      text: `Updated Invoice — Order #${orderRef}
+
+Hello ${order.customerName || ''},
+
+${distributorName} has sent you an updated invoice for order #${orderRef}.
+The updated invoice (${itemCount} item${itemCount === 1 ? '' : 's'}, total € ${formatPriceForDisplay(order.totalAmount)}) is attached as a PDF.
+
+View your order: ${siteUrl}/my-orders/${order.id}
+`,
+    });
+    console.log(`Invoice email sent to ${order.viewerEmail} for order ${orderRef}`);
+  } catch (error) {
+    console.error('Failed to send invoice email:', error);
     throw error;
   }
 }

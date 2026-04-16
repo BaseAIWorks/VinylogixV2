@@ -634,6 +634,12 @@ export interface Order {
   originalTotalAmount?: number; // Preserved when items are marked unavailable
   originalSubtotalAmount?: number;
 
+  // Customer-facing notification tracking (for resend UX)
+  itemChangesNotifiedAt?: string; // ISO — last time the "items updated" email was sent
+  itemChangesNotifiedCount?: number;
+  invoiceEmailedAt?: string; // ISO — last time the invoice PDF was emailed to the customer
+  invoiceEmailedCount?: number;
+
   // Shipping Tracking Fields
   carrier?: 'postnl' | 'dhl' | 'ups' | 'fedex' | 'dpd' | 'gls' | 'other';
   trackingNumber?: string;
