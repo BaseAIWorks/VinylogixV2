@@ -141,12 +141,20 @@ export default function CheckoutPage() {
     const taxBehavior = distributor?.taxBehavior || 'inclusive';
     const taxRate = distributor?.manualTaxRate || 0;
     const taxLabel = distributor?.manualTaxLabel || 'VAT';
-    const reverseChargePreview = useMemo(() => isReverseChargeApplicable(
+    // Reverse charge actually applied (requires VIES-verified VAT number) —
+    // matches server behaviour so preview totals equal final invoice.
+    const reverseChargeAppliesNow = useMemo(() => isReverseChargeApplicable(
+        user?.vatNumber,
+        user?.country,
+        distributor?.country,
+        { validated: user?.vatValidated === true, requireValidated: true }
+    ), [user?.vatNumber, user?.country, user?.vatValidated, distributor?.country]);
+    const reverseChargeWouldQualify = useMemo(() => isReverseChargeApplicable(
         user?.vatNumber,
         user?.country,
         distributor?.country
     ), [user?.vatNumber, user?.country, distributor?.country]);
-    const vatUnverifiedHint = !!user?.vatNumber && !user?.vatValidated && reverseChargePreview;
+    const vatUnverifiedHint = !!user?.vatNumber && !user?.vatValidated && reverseChargeWouldQualify;
 
     // For a manual-tax distributor, derive a proper subtotal-excl / VAT / total
     // breakdown that matches the order the customer will actually receive.
@@ -156,8 +164,8 @@ export default function CheckoutPage() {
         }
         // Apply tax math to the items portion then add shipping in the same
         // convention. The actual order uses the same logic server-side.
-        const itemsResult = calculateTax(cartTotal, taxRate, taxBehavior, reverseChargePreview);
-        if (reverseChargePreview) {
+        const itemsResult = calculateTax(cartTotal, taxRate, taxBehavior, reverseChargeAppliesNow);
+        if (reverseChargeAppliesNow) {
             return {
                 subtotalExcl: itemsResult.subtotal,
                 taxAmount: 0,
@@ -177,7 +185,7 @@ export default function CheckoutPage() {
             taxAmount: itemsResult.taxAmount + shippingCost * (taxRate / 100),
             total: cartTotal + shippingCost + itemsResult.taxAmount + shippingCost * (taxRate / 100),
         };
-    }, [taxMode, taxRate, taxBehavior, reverseChargePreview, cartTotal, shippingCost]);
+    }, [taxMode, taxRate, taxBehavior, reverseChargeAppliesNow, cartTotal, shippingCost]);
     const hasShippingZone = distributor?.shippingConfig?.enabled ? !!findShippingZone(distributor.shippingConfig, user.country) : true;
 
     // Check available payment methods
@@ -507,7 +515,7 @@ export default function CheckoutPage() {
                                    </div>
                                  )}
                                  <div className="flex justify-between text-sm text-muted-foreground">
-                                   <span>{reverseChargePreview ? `${taxLabel} (Reverse charge)` : `${taxLabel} ${taxRate}%`}</span>
+                                   <span>{reverseChargeAppliesNow ? `${taxLabel} (Reverse charge)` : `${taxLabel} ${taxRate}%`}</span>
                                    <span>€ {formatPriceForDisplay(taxPreview.taxAmount)}</span>
                                  </div>
                                  <Separator className="my-1" />
@@ -542,7 +550,7 @@ export default function CheckoutPage() {
                                </>
                              )}
                            </div>
-                           {taxMode === 'manual' && taxRate > 0 && reverseChargePreview && (
+                           {taxMode === 'manual' && taxRate > 0 && reverseChargeAppliesNow && (
                                <p className="text-xs text-muted-foreground italic mt-2">
                                  <AlertCircle className="inline h-3 w-3 mr-1" />
                                  {taxLabel} to be accounted for by the recipient (intra-EU reverse charge).
@@ -550,7 +558,7 @@ export default function CheckoutPage() {
                            )}
                            {vatUnverifiedHint && (
                                <p className="text-xs text-amber-600 dark:text-amber-500 italic mt-1">
-                                 Your VAT number isn't VIES-verified yet. Verify it in your profile so reverse charge is applied on the final invoice.
+                                 You may qualify for 0% reverse charge. Ask your distributor to verify your VAT number via VIES so it's applied on future invoices.
                                </p>
                            )}
                            {taxMode === 'stripe_tax' && (

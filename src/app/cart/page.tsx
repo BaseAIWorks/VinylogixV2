@@ -30,18 +30,31 @@ export default function CartPage() {
     const taxRate = activeDistributor?.manualTaxRate || 0;
     const taxLabel = activeDistributor?.manualTaxLabel || 'VAT';
 
-    const reverseChargePreview = isReverseChargeApplicable(
+    // Cart preview uses the SAME legal check the server uses when the order is
+    // actually placed (requireValidated: true). Showing 0% reverse charge on
+    // an unverified VAT number would mislead the customer, because the final
+    // invoice still applies full VAT until their VAT is VIES-verified by the
+    // distributor. The hint below guides them to fix that.
+    const reverseChargeAppliesNow = isReverseChargeApplicable(
+        user?.vatNumber,
+        user?.country,
+        activeDistributor?.country,
+        { validated: user?.vatValidated === true, requireValidated: true }
+    );
+    // Would the VAT qualify for reverse charge if it were verified? Used to
+    // decide whether to show the "verify to save VAT" amber hint.
+    const reverseChargeWouldQualify = isReverseChargeApplicable(
         user?.vatNumber,
         user?.country,
         activeDistributor?.country
     );
-    const vatUnverifiedHint = !!user?.vatNumber && !user?.vatValidated && reverseChargePreview;
+    const vatUnverifiedHint = !!user?.vatNumber && !user?.vatValidated && reverseChargeWouldQualify;
 
     let previewSubtotalExcl = cartTotal;
     let previewTax = 0;
     let previewTotal = cartTotal;
     if (taxMode === 'manual' && taxRate > 0) {
-        const result = calculateTax(cartTotal, taxRate, taxBehavior, reverseChargePreview);
+        const result = calculateTax(cartTotal, taxRate, taxBehavior, reverseChargeAppliesNow);
         previewSubtotalExcl = result.subtotal;
         previewTax = result.taxAmount;
         previewTotal = result.total;
@@ -214,7 +227,7 @@ export default function CartPage() {
                                             </div>
                                             <div className="flex justify-between text-muted-foreground mt-1">
                                                 <span>
-                                                    {reverseChargePreview
+                                                    {reverseChargeAppliesNow
                                                         ? `${taxLabel} (Reverse charge)`
                                                         : `${taxLabel} ${taxRate}%`}
                                                 </span>
@@ -224,7 +237,7 @@ export default function CartPage() {
                                                 <span>Total</span>
                                                 <span className="text-primary">€ {formatPriceForDisplay(previewTotal)}</span>
                                             </div>
-                                            {reverseChargePreview && (
+                                            {reverseChargeAppliesNow && (
                                                 <p className="text-xs text-muted-foreground italic mt-2 flex items-start gap-1">
                                                     <Info className="h-3 w-3 mt-0.5 shrink-0" />
                                                     <span>{taxLabel} to be accounted for by the recipient (intra-EU reverse charge).</span>
@@ -232,7 +245,7 @@ export default function CartPage() {
                                             )}
                                             {vatUnverifiedHint && (
                                                 <p className="text-xs text-amber-600 dark:text-amber-500 italic mt-1">
-                                                    Your VAT number isn't VIES-verified yet. Verify it in your profile so reverse charge is applied on the final invoice.
+                                                    You may qualify for 0% reverse charge. Ask your distributor to verify your VAT number via VIES so it's applied on future invoices.
                                                 </p>
                                             )}
                                             <p className="text-xs text-muted-foreground mt-1">
