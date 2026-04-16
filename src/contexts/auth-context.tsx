@@ -513,7 +513,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             useDifferentBillingAddress: userData.useDifferentBillingAddress,
             chamberOfCommerce: userData.chamberOfCommerce,
             vatNumber: userData.vatNumber,
+            vatValidated: userData.vatValidated,
+            vatValidatedAt: userData.vatValidatedAt,
+            vatValidatedName: userData.vatValidatedName,
             eoriNumber: userData.eoriNumber,
+            website: userData.website,
             notes: userData.notes,
             discogsUsername: userData.discogsUsername,
             discogsUserId: userData.discogsUserId,
@@ -1249,6 +1253,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       allowedUpdates.vatNumber = data.vatNumber;
     if (data.eoriNumber !== undefined)
       allowedUpdates.eoriNumber = data.eoriNumber;
+    if (data.website !== undefined)
+      allowedUpdates.website = data.website;
     if (data.notes !== undefined) allowedUpdates.notes = data.notes;
     if (data.profileComplete !== undefined)
       allowedUpdates.profileComplete = data.profileComplete;

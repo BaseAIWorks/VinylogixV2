@@ -353,6 +353,7 @@ export type User = {
   vatValidatedAt?: string; // ISO date string
   vatValidatedName?: string; // Company name returned by VIES
   eoriNumber?: string;
+  website?: string;
   notes?: string;
   discogsUsername?: string;
   discogsUserId?: number;
@@ -563,7 +564,11 @@ export interface FirestoreUser {
   useDifferentBillingAddress?: boolean;
   chamberOfCommerce?: string;
   vatNumber?: string;
+  vatValidated?: boolean;
+  vatValidatedAt?: string; // ISO date string
+  vatValidatedName?: string; // Company name returned by VIES
   eoriNumber?: string;
+  website?: string;
   notes?: string;
   discogsUsername?: string;
   discogsUserId?: number;

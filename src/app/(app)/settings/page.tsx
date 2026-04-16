@@ -47,6 +47,7 @@ const profileFormSchema = z.object({
   lastName: z.string().optional(),
   companyName: z.string().optional(),
   phoneNumber: z.string().optional(),
+  mobileNumber: z.string().optional(),
   addressLine1: z.string().optional(),
   addressLine2: z.string().optional(),
   postcode: z.string().optional(),
@@ -59,6 +60,12 @@ const profileFormSchema = z.object({
   billingPostcode: z.string().optional(),
   billingCity: z.string().optional(),
   billingCountry: z.string().optional(),
+  // Business-identity (B2B) fields — shown on viewer Account tab so
+  // clients can provide VAT/EORI/CRN/website info for invoicing.
+  chamberOfCommerce: z.string().optional(),
+  vatNumber: z.string().optional(),
+  eoriNumber: z.string().optional(),
+  website: z.string().optional(),
 });
 
 const brandingFormSchema = z.object({
@@ -365,6 +372,7 @@ export default function SettingsPage() {
             lastName: user.lastName || "",
             companyName: user.companyName || "",
             phoneNumber: user.phoneNumber || "",
+            mobileNumber: user.mobileNumber || "",
             addressLine1: user.addressLine1 || "",
             addressLine2: user.addressLine2 || "",
             postcode: user.postcode || "",
@@ -377,6 +385,10 @@ export default function SettingsPage() {
             billingPostcode: user.billingPostcode || "",
             billingCity: user.billingCity || "",
             billingCountry: user.billingCountry || "",
+            chamberOfCommerce: user.chamberOfCommerce || "",
+            vatNumber: user.vatNumber || "",
+            eoriNumber: user.eoriNumber || "",
+            website: user.website || "",
         });
     }
   }, [user, profileForm]);
@@ -2522,14 +2534,19 @@ export default function SettingsPage() {
 
                     {/* Only show company/phone fields for viewers (clients) since business users have this in Business tab */}
                     {user?.role === 'viewer' && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField control={profileForm.control} name="companyName" render={({ field }) => (
-                          <FormItem><FormLabel className="text-sm">Company Name</FormLabel><FormControl><Input placeholder="Company Name (optional)" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField control={profileForm.control} name="companyName" render={({ field }) => (
+                            <FormItem><FormLabel className="text-sm">Company Name</FormLabel><FormControl><Input placeholder="Company Name (optional)" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                          )} />
+                          <FormField control={profileForm.control} name="phoneNumber" render={({ field }) => (
+                            <FormItem><FormLabel className="text-sm">Phone Number</FormLabel><FormControl><Input placeholder="Phone Number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                          )} />
+                        </div>
+                        <FormField control={profileForm.control} name="mobileNumber" render={({ field }) => (
+                          <FormItem><FormLabel className="text-sm">Mobile Number</FormLabel><FormControl><Input placeholder="Mobile Number (optional)" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                         )} />
-                        <FormField control={profileForm.control} name="phoneNumber" render={({ field }) => (
-                          <FormItem><FormLabel className="text-sm">Phone Number</FormLabel><FormControl><Input placeholder="Phone Number" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                      </div>
+                      </>
                     )}
 
                     {/* Shipping address - only for viewers (clients) */}
@@ -2610,6 +2627,64 @@ export default function SettingsPage() {
                             )} />
                           </div>
                         )}
+                      </>
+                    )}
+
+                    {/* Business Details — only for clients. Helps them provide
+                        B2B info (VAT, EORI, CRN, website) so distributors can
+                        issue correct invoices + apply reverse-charge where eligible. */}
+                    {user?.role === 'viewer' && (
+                      <>
+                        <Separator className="my-4" />
+                        <div>
+                          <h4 className="text-sm font-medium">Business Details</h4>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Optional — helps distributors issue correct invoices and apply the right VAT treatment (EU reverse charge if applicable).
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField control={profileForm.control} name="chamberOfCommerce" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Chamber of Commerce / CRN</FormLabel>
+                              <FormControl><Input placeholder="e.g. KVK / CIF / SIREN" {...field} value={field.value ?? ''} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                          <FormField control={profileForm.control} name="eoriNumber" render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">EORI Number</FormLabel>
+                              <FormControl><Input placeholder="For international trade (optional)" {...field} value={field.value ?? ''} /></FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )} />
+                        </div>
+
+                        <FormField control={profileForm.control} name="vatNumber" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm flex items-center gap-2">
+                              VAT Number
+                              {user?.vatValidated && user?.vatValidatedName && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 border border-green-500/30 px-2 py-0.5 text-[10px] font-medium text-green-700">
+                                  <Check className="h-3 w-3" /> Verified — {user.vatValidatedName}
+                                </span>
+                              )}
+                            </FormLabel>
+                            <FormControl><Input placeholder="e.g. NL123456789B01" {...field} value={field.value ?? ''} /></FormControl>
+                            <FormDescription className="text-xs">
+                              EU VAT number in country-prefix format. Verification is performed by your distributor — leave it here and they'll validate it against VIES.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+
+                        <FormField control={profileForm.control} name="website" render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm">Website</FormLabel>
+                            <FormControl><Input placeholder="https://example.com" {...field} value={field.value ?? ''} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )} />
                       </>
                     )}
 
