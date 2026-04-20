@@ -1327,28 +1327,6 @@ export default function SettingsPage() {
                       <Truck className="h-5 w-5 text-primary" />
                       <CardTitle className="text-lg">Shipping</CardTitle>
                     </div>
-                    <CardDescription className="text-sm">Configure shipping methods and rates for your orders.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="rounded-lg border border-dashed p-6 text-center">
-                      <Truck className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                      <p className="text-sm font-medium">Shipping Settings Coming Soon</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Configure shipping carriers, zones, and rates for your store.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Shipping Settings - Master only */}
-              {isMaster && (
-                <Card>
-                  <CardHeader className="pb-4">
-                    <div className="flex items-center gap-3">
-                      <Truck className="h-5 w-5 text-primary" />
-                      <CardTitle className="text-lg">Shipping</CardTitle>
-                    </div>
                     <CardDescription className="text-sm">Configure shipping zones and weight-based rates.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
