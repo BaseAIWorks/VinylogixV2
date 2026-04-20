@@ -177,6 +177,10 @@ export async function POST(
       paidAt: Timestamp.now(),
       paidBy: caller.uid,
       updatedAt: Timestamp.now(),
+      // Manual payments don't go through Stripe/PayPal Connect, so no platform fee applies.
+      // Clear any fee that may have been stamped when a payment link was generated earlier.
+      platformFeeAmount: FieldValue.delete(),
+      appliedFeePercentage: FieldValue.delete(),
       // Remove payment-link fields so UI doesn't show a dead link next to a paid order
       paymentLink: FieldValue.delete(),
       stripeCheckoutSessionId: FieldValue.delete(),

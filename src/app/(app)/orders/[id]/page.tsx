@@ -47,6 +47,16 @@ const itemStatusConfig: Record<OrderItemStatus, { label: string; color: string }
     back_order: { label: 'Back Order', color: 'bg-amber-500/20 text-amber-700 border-amber-500/30' },
 };
 
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+    bank_transfer: 'Bank transfer',
+    cash: 'Cash',
+    paypal_external: 'PayPal (direct)',
+    stripe_external: 'Stripe (external)',
+    stripe: 'Stripe',
+    paypal: 'PayPal',
+    other: 'Other',
+};
+
 type PackingSlipItem = {
     recordId: string;
     title: string;
@@ -1322,7 +1332,17 @@ export default function OrderDetailPage() {
                     </Card>
 
                     {/* Payment Details Card */}
-                    {order.paymentStatus === 'paid' && order.platformFeeAmount && (
+                    {order.paymentStatus === 'paid' && (() => {
+                        // Platform fee only applies when payment was processed through the
+                        // built-in Stripe or PayPal Connect flows. Manual methods
+                        // (bank_transfer, cash, *_external, other) bypass the platform entirely.
+                        const feeBearingMethods = ['stripe', 'paypal'];
+                        const hasPlatformFee =
+                            !!order.platformFeeAmount &&
+                            (!order.paymentMethod || feeBearingMethods.includes(order.paymentMethod));
+                        const platformFee = hasPlatformFee ? (order.platformFeeAmount as number) / 100 : 0;
+                        const payout = order.totalAmount - platformFee;
+                        return (
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-3">
@@ -1340,17 +1360,44 @@ export default function OrderDetailPage() {
                                         <span>(incl. shipping: €{formatPriceForDisplay(order.shippingCost)})</span>
                                     </div>
                                 )}
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Platform Fee ({order.appliedFeePercentage || 4}%):</span>
-                                    <span className="text-red-600">-€{formatPriceForDisplay(order.platformFeeAmount / 100)}</span>
-                                </div>
+                                {hasPlatformFee && (
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Platform Fee ({order.appliedFeePercentage || 4}%):</span>
+                                        <span className="text-red-600">-€{formatPriceForDisplay(platformFee)}</span>
+                                    </div>
+                                )}
                                 <Separator />
                                 <div className="flex justify-between">
                                     <span className="font-semibold">Your Payout:</span>
                                     <span className="font-semibold text-green-600">
-                                        €{formatPriceForDisplay(order.totalAmount - (order.platformFeeAmount / 100))}
+                                        €{formatPriceForDisplay(payout)}
                                     </span>
                                 </div>
+                                {order.paymentMethod && (
+                                    <>
+                                        <Separator />
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Method:</span>
+                                            <span className="font-medium">
+                                                {PAYMENT_METHOD_LABELS[order.paymentMethod] || order.paymentMethod}
+                                            </span>
+                                        </div>
+                                        {order.paymentReference && (
+                                            <div className="flex justify-between gap-3">
+                                                <span className="text-muted-foreground shrink-0">Reference:</span>
+                                                <span className="font-medium text-right break-all">{order.paymentReference}</span>
+                                            </div>
+                                        )}
+                                        {order.paymentNotes && (
+                                            <div className="space-y-1">
+                                                <p className="text-muted-foreground">Notes:</p>
+                                                <p className="whitespace-pre-wrap bg-muted rounded px-2 py-1.5 text-xs">
+                                                    {order.paymentNotes}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                                 {order.paidAt && (
                                     <p className="text-xs text-muted-foreground pt-2">
                                         Paid on {format(new Date(order.paidAt), 'PPP')}
@@ -1366,7 +1413,8 @@ export default function OrderDetailPage() {
                                 )}
                             </CardContent>
                         </Card>
-                    )}
+                        );
+                    })()}
                 </div>
             </div>
         </div>
