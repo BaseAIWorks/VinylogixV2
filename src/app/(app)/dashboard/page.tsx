@@ -928,17 +928,17 @@ function FulfillmentTile({
   const content = (
     <div
       className={cn(
-        "flex items-center gap-3 p-3 rounded-lg border transition-colors",
+        "flex items-center gap-3 p-3 sm:p-3 rounded-lg border transition-colors min-h-[68px]",
         highlight ? "border-orange-300 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20" : "bg-background",
-        href && "hover:border-primary cursor-pointer"
+        href && "hover:border-primary cursor-pointer active:scale-[0.98]"
       )}
     >
       <div className={cn("p-2 rounded-lg shrink-0", tone)}>
         <Icon className="h-4 w-4" />
       </div>
-      <div>
+      <div className="min-w-0">
         <div className="text-2xl font-bold leading-none">{count}</div>
-        <div className="text-[11px] text-muted-foreground mt-1">{label}</div>
+        <div className="text-[11px] text-muted-foreground mt-1 truncate">{label}</div>
       </div>
     </div>
   );
@@ -1068,108 +1068,129 @@ function FulfillmentSection({
               const isMine = order.assigneeUid === currentUserUid;
               const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
 
-              // Action per row: unassigned paid → Claim, mine processing →
-              // Mark packed, mine ready_to_ship → link to /fulfillment
-              // (shipping needs the carrier/tracking dialog which lives
-              // there — no dialog on the dashboard to keep it lean).
-              let action: React.ReactNode = null;
-              if (!order.assigneeUid && order.status === 'paid') {
-                action = (
+              // Pick the right primary action for this row. `action` is null
+              // when the user can't do anything directly (e.g. someone else
+              // owns it) — the row is still tap-able to open the order.
+              type RowAction =
+                | { kind: "button"; label: string; handler: () => void; variant: "default" | "outline" }
+                | { kind: "link"; label: string; href: string; variant: "default" | "outline" }
+                | null;
+              const action: RowAction =
+                !order.assigneeUid && order.status === "paid"
+                  ? { kind: "button", label: "Claim", handler: () => onClaim(order.id), variant: "default" }
+                  : isMine && order.status === "processing"
+                  ? { kind: "button", label: "Mark packed", handler: () => onMarkPacked(order.id), variant: "default" }
+                  : isMine && order.status === "ready_to_ship"
+                  ? { kind: "link", label: "Ship →", href: "/fulfillment", variant: "outline" }
+                  : null;
+
+              // Responsive action render. On mobile (< sm, 640px) the button
+              // becomes a full-width row below the meta so the touch target
+              // is finger-sized and unmissable. On sm+ it sits inline right.
+              const renderAction = (onMobile: boolean) => {
+                if (!action) return null;
+                const commonClass = onMobile
+                  ? "w-full h-10 text-sm"
+                  : "h-8 text-xs";
+                if (action.kind === "button") {
+                  return (
+                    <Button
+                      size="sm"
+                      variant={action.variant}
+                      className={commonClass}
+                      onClick={(e) => { e.stopPropagation(); action.handler(); }}
+                    >
+                      {action.label}
+                    </Button>
+                  );
+                }
+                return (
                   <Button
                     size="sm"
-                    variant="default"
-                    className="h-7 text-xs"
-                    onClick={(e) => { e.stopPropagation(); onClaim(order.id); }}
-                  >
-                    Claim
-                  </Button>
-                );
-              } else if (isMine && order.status === 'processing') {
-                action = (
-                  <Button
-                    size="sm"
-                    variant="default"
-                    className="h-7 text-xs"
-                    onClick={(e) => { e.stopPropagation(); onMarkPacked(order.id); }}
-                  >
-                    Mark packed
-                  </Button>
-                );
-              } else if (isMine && order.status === 'ready_to_ship') {
-                action = (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs"
+                    variant={action.variant}
+                    className={commonClass}
                     asChild
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <Link href="/fulfillment">Ship →</Link>
+                    <Link href={action.href}>{action.label}</Link>
                   </Button>
                 );
-              }
+              };
 
               return (
                 <div
                   key={order.id}
-                  className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer"
+                  className="p-3 hover:bg-muted/50 cursor-pointer"
                   onClick={() => onViewOrder(order.id)}
                 >
-                  {/* Assignee chip */}
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span
-                          className={cn(
-                            "inline-flex items-center justify-center h-7 w-7 rounded-full text-[10px] font-semibold shrink-0",
-                            dashboardAssigneeTone(order.assigneeEmail),
-                            isMine && "ring-2 ring-primary ring-offset-1"
-                          )}
-                        >
-                          {order.assigneeUid ? dashboardAssigneeInitials(order.assigneeEmail) : <UserIcon className="h-3 w-3" />}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {order.assigneeUid
-                          ? isMine ? "You" : order.assigneeEmail
-                          : "Unassigned"}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  <div className="flex items-start gap-3">
+                    {/* Assignee chip — bumped from 28px to 36px on mobile so
+                        it scans better at arm's-length on a phone. */}
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span
+                            className={cn(
+                              "inline-flex items-center justify-center rounded-full text-[11px] font-semibold shrink-0 mt-0.5",
+                              "h-9 w-9 sm:h-7 sm:w-7 sm:text-[10px]",
+                              dashboardAssigneeTone(order.assigneeEmail),
+                              isMine && "ring-2 ring-primary ring-offset-1"
+                            )}
+                          >
+                            {order.assigneeUid
+                              ? dashboardAssigneeInitials(order.assigneeEmail)
+                              : <UserIcon className="h-4 w-4 sm:h-3 sm:w-3" />}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {order.assigneeUid
+                            ? isMine ? "You" : order.assigneeEmail
+                            : "Unassigned"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
 
-                  {/* Order identity */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm font-medium truncate">
-                        {order.orderNumber || order.id.slice(0, 8)}
-                      </span>
-                      <Badge variant="outline" className={`text-[10px] capitalize ${statusColors[order.status]}`}>
-                        {order.status.replace(/_/g, ' ')}
-                      </Badge>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-sm font-medium">
+                          {order.orderNumber || order.id.slice(0, 8)}
+                        </span>
+                        <Badge variant="outline" className={`text-[10px] capitalize ${statusColors[order.status]}`}>
+                          {order.status.replace(/_/g, ' ')}
+                        </Badge>
+                        {orderAge > 0 && (
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-[10px]",
+                              orderAge > 3
+                                ? "bg-red-100 text-red-700 border-red-200"
+                                : orderAge > 1
+                                ? "bg-yellow-100 text-yellow-700 border-yellow-200"
+                                : ""
+                            )}
+                          >
+                            <Clock className="h-3 w-3 mr-1" />{orderAge}d
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">
+                        {order.customerName} · {totalItems} item{totalItems !== 1 ? 's' : ''} · €{formatPriceForDisplay(order.totalAmount)}
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {order.customerName} · {totalItems} item{totalItems !== 1 ? 's' : ''} · €{formatPriceForDisplay(order.totalAmount)}
+
+                    {/* Desktop: inline right-aligned action */}
+                    <div className="hidden sm:block shrink-0">
+                      {renderAction(false)}
                     </div>
                   </div>
 
-                  {/* Age badge — signals which orders are getting stale */}
-                  {orderAge > 0 && (
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[10px]",
-                        orderAge > 3
-                          ? "bg-red-100 text-red-700 border-red-200"
-                          : orderAge > 1
-                          ? "bg-yellow-100 text-yellow-700 border-yellow-200"
-                          : ""
-                      )}
-                    >
-                      <Clock className="h-3 w-3 mr-1" />{orderAge}d
-                    </Badge>
+                  {/* Mobile: full-width action below the meta row */}
+                  {action && (
+                    <div className="sm:hidden mt-2.5">
+                      {renderAction(true)}
+                    </div>
                   )}
-
-                  {action}
                 </div>
               );
             })}

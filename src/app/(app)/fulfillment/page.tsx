@@ -351,8 +351,10 @@ export default function FulfillmentPage() {
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      {/* Stats Cards — 2 cols on phone, 3 on tablet portrait, 5 on tablet
+          landscape and up. Without the intermediate step the 5th tile lands
+          on its own row at tablet width which looks off. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
@@ -432,7 +434,10 @@ export default function FulfillmentPage() {
                 </CardDescription>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            {/* Table view is hidden on mobile — the 7-column table with
+                horizontal scroll is painful on a phone and the kanban's
+                single-lane tab view is strictly better there. */}
+            <div className="hidden sm:flex items-center gap-2">
               <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "kanban" | "table")}>
                 <TabsList className="grid grid-cols-2 w-[160px]">
                   <TabsTrigger value="kanban" className="text-xs">
@@ -465,7 +470,26 @@ export default function FulfillmentPage() {
                 showCheckboxes
               />
             ) : (
-              <div className="overflow-x-auto">
+              <>
+                {/* Mobile fallback: users who picked "Table" on desktop and
+                    resized to a phone get the kanban instead — the 7-column
+                    table is unusable on narrow screens. */}
+                <div className="sm:hidden">
+                  <KanbanBoard
+                    orders={orders}
+                    currentUserUid={user?.uid || ""}
+                    onClaim={handleClaim}
+                    onMarkPacked={handleMarkPacked}
+                    onMarkShipped={handleOpenShipDialog}
+                    onMarkDelivered={handleMarkDelivered}
+                    onViewOrder={handleViewOrder}
+                    selectedOrders={selectedOrders}
+                    onSelectOrder={toggleOrderSelection}
+                    onSelectAll={handleSelectAllInColumn}
+                    showCheckboxes
+                  />
+                </div>
+              <div className="overflow-x-auto hidden sm:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -559,6 +583,7 @@ export default function FulfillmentPage() {
                   </TableBody>
                 </Table>
               </div>
+              </>
             )
           ) : (
             <EmptyState
@@ -585,27 +610,31 @@ export default function FulfillmentPage() {
           them fresh. Submitting fires the customer shipping email on the
           first shipped transition only (see markOrderShipped). */}
       <Dialog open={!!shipDialogOrder} onOpenChange={(open) => { if (!open) setShipDialogOrder(null); }}>
-        <DialogContent>
+        {/* Mobile: fill the viewport. Desktop: centered card as usual.
+            Warehouse workers punching a tracking code into an input on a
+            tiny sheet is painful — full-width on phone matches how iOS /
+            Android keyboards behave anyway. */}
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-lg p-5 sm:p-6">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-left">
               Ship order{" "}
               <span className="font-mono">
                 {shipDialogOrder?.orderNumber || shipDialogOrder?.id.slice(0, 8)}
               </span>
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-left">
               Record the carrier and tracking number. The customer will receive
               a shipping notification with these details.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="ship-carrier">Carrier</Label>
+              <Label htmlFor="ship-carrier" className="text-sm">Carrier</Label>
               <Select
                 value={shipDialogCarrier ?? ""}
                 onValueChange={(v) => setShipDialogCarrier(v as Order["carrier"])}
               >
-                <SelectTrigger id="ship-carrier">
+                <SelectTrigger id="ship-carrier" className="h-11 sm:h-10">
                   <SelectValue placeholder="Select carrier" />
                 </SelectTrigger>
                 <SelectContent>
@@ -621,12 +650,18 @@ export default function FulfillmentPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ship-tracking">Tracking number</Label>
+              <Label htmlFor="ship-tracking" className="text-sm">Tracking number</Label>
               <Input
                 id="ship-tracking"
                 placeholder="e.g. 3SKABA1234567890"
                 value={shipDialogTracking}
                 onChange={(e) => setShipDialogTracking(e.target.value)}
+                // iOS keyboard: show numeric+letter keyboard best suited to
+                // tracking codes (alphanumeric, no punctuation needed).
+                autoComplete="off"
+                autoCapitalize="characters"
+                inputMode="text"
+                className="h-11 sm:h-10 font-mono text-base sm:text-sm"
               />
               <p className="text-xs text-muted-foreground">
                 Optional but recommended — without a tracking number the customer
@@ -634,11 +669,23 @@ export default function FulfillmentPage() {
               </p>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShipDialogOrder(null)} disabled={isShipping}>
+          {/* Footer: stacked buttons on mobile so primary is fat and bottom,
+              cancel above. Inline on sm+. Primary first DOM order so mobile
+              taps it naturally at the bottom of the sheet. */}
+          <DialogFooter className="flex-col-reverse gap-2 sm:gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => setShipDialogOrder(null)}
+              disabled={isShipping}
+              className="h-11 sm:h-10 w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button onClick={handleConfirmShipped} disabled={isShipping}>
+            <Button
+              onClick={handleConfirmShipped}
+              disabled={isShipping}
+              className="h-11 sm:h-10 w-full sm:w-auto"
+            >
               {isShipping && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Mark shipped
             </Button>

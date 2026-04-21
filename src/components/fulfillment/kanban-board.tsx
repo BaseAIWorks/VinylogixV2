@@ -252,20 +252,23 @@ function KanbanCard({
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex gap-1 pt-1">
+        {/* Actions. On mobile we guarantee 40px-tall touch targets (finger-
+            sized) and let a secondary action wrap to its own row so the
+            primary is always full-width and unmissable. Desktop keeps the
+            compact 28px row. */}
+        <div className="flex flex-wrap gap-1.5 pt-1">
           {primary && (
             <Button
               variant="default"
               size="sm"
-              className="flex-1 h-7 text-xs"
+              className="flex-1 basis-full md:basis-auto h-10 md:h-7 text-sm md:text-xs"
               onClick={(e) => {
                 e.stopPropagation();
                 primary.onClick();
               }}
             >
               {primary.label}
-              <ChevronRight className="h-3 w-3 ml-1" />
+              <ChevronRight className="h-3.5 w-3.5 md:h-3 md:w-3 ml-1" />
             </Button>
           )}
 
@@ -277,7 +280,7 @@ function KanbanCard({
             <Button
               variant="outline"
               size="sm"
-              className="h-7 text-xs"
+              className="h-10 md:h-7 text-sm md:text-xs flex-1 md:flex-none"
               onClick={(e) => {
                 e.stopPropagation();
                 onMarkShipped(order.id);
@@ -295,7 +298,7 @@ function KanbanCard({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 text-xs"
+                  className="h-10 md:h-7 text-sm md:text-xs flex-1 md:flex-none"
                   onClick={(e) => e.stopPropagation()}
                 >
                   Take over
@@ -311,9 +314,9 @@ function KanbanCard({
                     owner stays recorded in the order's handover history.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => onClaim(order.id)}>
+                <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2 sm:gap-0">
+                  <AlertDialogCancel className="h-11 sm:h-10 mt-0">Cancel</AlertDialogCancel>
+                  <AlertDialogAction className="h-11 sm:h-10" onClick={() => onClaim(order.id)}>
                     Take over
                   </AlertDialogAction>
                 </AlertDialogFooter>
@@ -391,66 +394,163 @@ export function KanbanBoard({
     return grouped;
   }, [orders]);
 
-  return (
-    <ScrollArea className="w-full">
-      <div className="flex gap-4 pb-4 min-w-max">
-        {columns.map((column) => {
-          const columnOrders = ordersByStatus[column.id];
-          const Icon = column.icon;
-          const allSelected =
-            selectedOrders &&
-            columnOrders.length > 0 &&
-            columnOrders.every((o) => selectedOrders.has(o.id));
+  // Mobile shows one lane at a time — operators working from a phone in
+  // the warehouse can't usefully use 4-lane horizontal scroll. Default the
+  // mobile selector to the lane that actually has work: Paid first, then
+  // Processing, Ready to Ship, Shipped. Fallback to the first lane.
+  const defaultMobileLane = React.useMemo<OrderStatus>(() => {
+    const withWork = columns.find(c => ordersByStatus[c.id].length > 0);
+    return (withWork?.id as OrderStatus) ?? columns[0].id;
+  }, [ordersByStatus]);
 
-          return (
-            <div
-              key={column.id}
-              className={cn("w-[280px] shrink-0 rounded-lg p-3", column.bgColor)}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Icon className={cn("h-4 w-4", column.color)} />
-                  <h3 className="font-semibold text-sm">{column.title}</h3>
-                  <Badge variant="secondary" className="text-xs">
-                    {columnOrders.length}
-                  </Badge>
-                </div>
-                {showCheckboxes && onSelectAll && columnOrders.length > 0 && (
-                  <Checkbox
-                    checked={allSelected}
-                    onCheckedChange={() => onSelectAll(column.id)}
-                  />
-                )}
-              </div>
+  const [mobileLane, setMobileLane] = React.useState<OrderStatus>(defaultMobileLane);
 
-              <div className="space-y-2">
-                {columnOrders.length > 0 ? (
-                  columnOrders.map((order) => (
-                    <KanbanCard
-                      key={order.id}
-                      order={order}
-                      currentUserUid={currentUserUid}
-                      onClaim={onClaim}
-                      onMarkPacked={onMarkPacked}
-                      onMarkShipped={onMarkShipped}
-                      onMarkDelivered={onMarkDelivered}
-                      onViewOrder={onViewOrder}
-                      isSelected={selectedOrders?.has(order.id)}
-                      onSelect={onSelectOrder}
-                      showCheckbox={showCheckboxes}
-                    />
-                  ))
-                ) : (
-                  <div className="text-center py-8 text-sm text-muted-foreground">
-                    No orders
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+  // If the selected mobile lane empties (e.g. after claiming/packing the
+  // last order in it) roll forward to the next lane with work so the
+  // operator doesn't land on an empty column.
+  React.useEffect(() => {
+    if (ordersByStatus[mobileLane].length === 0) {
+      const next = columns.find(c => ordersByStatus[c.id].length > 0);
+      if (next && next.id !== mobileLane) setMobileLane(next.id as OrderStatus);
+    }
+  }, [ordersByStatus, mobileLane]);
+
+  const renderLane = (column: KanbanColumn, compact = false) => {
+    const columnOrders = ordersByStatus[column.id];
+    return columnOrders.length > 0 ? (
+      columnOrders.map((order) => (
+        <KanbanCard
+          key={order.id}
+          order={order}
+          currentUserUid={currentUserUid}
+          onClaim={onClaim}
+          onMarkPacked={onMarkPacked}
+          onMarkShipped={onMarkShipped}
+          onMarkDelivered={onMarkDelivered}
+          onViewOrder={onViewOrder}
+          isSelected={selectedOrders?.has(order.id)}
+          onSelect={onSelectOrder}
+          showCheckbox={showCheckboxes}
+        />
+      ))
+    ) : (
+      <div className={cn("text-center text-sm text-muted-foreground", compact ? "py-6" : "py-8")}>
+        No orders
       </div>
-      <ScrollBar orientation="horizontal" />
-    </ScrollArea>
+    );
+  };
+
+  return (
+    <>
+      {/* MOBILE: single-lane view with tab strip. The tab strip shows count
+          badges on each lane so operators can see at a glance where work is
+          piling up, without scrolling sideways through 4 panes. */}
+      <div className="md:hidden space-y-3">
+        <div
+          className="flex gap-1 p-1 bg-muted rounded-lg overflow-x-auto scrollbar-thin"
+          role="tablist"
+          aria-label="Fulfillment lanes"
+        >
+          {columns.map((column) => {
+            const Icon = column.icon;
+            const isActive = mobileLane === column.id;
+            const count = ordersByStatus[column.id].length;
+            return (
+              <button
+                key={column.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setMobileLane(column.id as OrderStatus)}
+                className={cn(
+                  // 40px tall touch target, no horizontal squeeze so the
+                  // labels stay legible with the count badge attached.
+                  "flex-1 min-w-max h-10 px-3 rounded-md text-xs font-medium flex items-center justify-center gap-1.5 transition-colors",
+                  isActive
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Icon className={cn("h-4 w-4", isActive && column.color)} />
+                <span className="whitespace-nowrap">{column.title}</span>
+                <Badge
+                  variant={isActive ? "default" : "secondary"}
+                  className="text-[10px] h-4 px-1.5 leading-none"
+                >
+                  {count}
+                </Badge>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Selected lane body. Subtle bg tint re-uses each lane's colour so
+            the user knows which lane they're looking at without a big header. */}
+        <div
+          className={cn(
+            "rounded-lg p-3 space-y-2",
+            columns.find(c => c.id === mobileLane)?.bgColor
+          )}
+        >
+          {showCheckboxes && onSelectAll && ordersByStatus[mobileLane].length > 0 && (
+            <div className="flex items-center justify-between pb-1 border-b mb-2">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={
+                    !!selectedOrders &&
+                    ordersByStatus[mobileLane].every(o => selectedOrders.has(o.id))
+                  }
+                  onCheckedChange={() => onSelectAll(mobileLane)}
+                />
+                Select all in this lane
+              </label>
+            </div>
+          )}
+          {renderLane(columns.find(c => c.id === mobileLane)!, true)}
+        </div>
+      </div>
+
+      {/* DESKTOP / TABLET: keep the 4-column horizontal layout. md+ users
+          typically have screen real-estate to see all lanes at once which
+          gives a better birds-eye view for the master role. */}
+      <ScrollArea className="w-full hidden md:block">
+        <div className="flex gap-4 pb-4 min-w-max">
+          {columns.map((column) => {
+            const columnOrders = ordersByStatus[column.id];
+            const Icon = column.icon;
+            const allSelected =
+              selectedOrders &&
+              columnOrders.length > 0 &&
+              columnOrders.every((o) => selectedOrders.has(o.id));
+
+            return (
+              <div
+                key={column.id}
+                className={cn("w-[280px] shrink-0 rounded-lg p-3", column.bgColor)}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Icon className={cn("h-4 w-4", column.color)} />
+                    <h3 className="font-semibold text-sm">{column.title}</h3>
+                    <Badge variant="secondary" className="text-xs">
+                      {columnOrders.length}
+                    </Badge>
+                  </div>
+                  {showCheckboxes && onSelectAll && columnOrders.length > 0 && (
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={() => onSelectAll(column.id)}
+                    />
+                  )}
+                </div>
+
+                <div className="space-y-2">{renderLane(column)}</div>
+              </div>
+            );
+          })}
+        </div>
+        <ScrollBar orientation="horizontal" />
+      </ScrollArea>
+    </>
   );
 }
