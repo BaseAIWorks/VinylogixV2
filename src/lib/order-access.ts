@@ -20,7 +20,7 @@ export async function requireOrderAccess(req: NextRequest, orderId: string) {
 
   const adminDb = getAdminDb();
   if (!adminDb) {
-    throw new AuthError('Service unavailable.', 500);
+    throw new AuthError('Service unavailable.', 503);
   }
 
   const callerSnap = await adminDb.collection('users').doc(caller.uid).get();

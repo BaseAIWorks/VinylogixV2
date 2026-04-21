@@ -282,10 +282,22 @@ export default function RecordDetailPage() {
     // Only auto-trigger while we haven't already failed on this record. Without
     // this guard a rate-limited / unavailable response would put us into an
     // infinite retry loop (loader spinning forever, 500s stacking up).
-    if (record && !record.artistBio && !isGeneratingAiInfo && !aiInfoError) {
+    //
+    // Also: only masters auto-trigger generation. Letting every role (worker,
+    // viewer, client) auto-fire the Gemini call multiplies quota usage by
+    // page views — a single busy day would blow the free tier. Workers and
+    // viewers still *see* bios that were generated earlier; they just don't
+    // trigger new ones on page load. Masters can use the "Re-generate" button.
+    if (
+      record &&
+      !record.artistBio &&
+      !isGeneratingAiInfo &&
+      !aiInfoError &&
+      user?.role === 'master'
+    ) {
       generateAndStoreInfo();
     }
-  }, [record, isGeneratingAiInfo, aiInfoError, generateAndStoreInfo]);
+  }, [record, isGeneratingAiInfo, aiInfoError, generateAndStoreInfo, user?.role]);
 
   const fetchDiscogsData = useCallback(async () => {
     if (!record || !record.discogs_id) return;

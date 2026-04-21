@@ -921,6 +921,17 @@ export default function OrderDetailPage() {
                 </div>
                 {canManageOrder && (
                     <div className="flex items-center gap-2 flex-wrap">
+                        {order.trackingToken && (
+                            <Button
+                                variant="outline"
+                                asChild
+                                title="Open the public tracking page your customer sees"
+                            >
+                                <a href={`/t/${order.trackingToken}`} target="_blank" rel="noopener noreferrer">
+                                    <ExternalLink className="mr-2 h-4 w-4" /> Customer view
+                                </a>
+                            </Button>
+                        )}
                         {(order.paymentStatus === 'paid' || order.paymentStatus === 'partially_refunded') && (
                             <Button variant="outline" onClick={() => setRefundDialogOpen(true)}>
                                 <RefreshCw className="mr-2 h-4 w-4" /> Record Refund

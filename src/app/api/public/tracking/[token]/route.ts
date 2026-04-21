@@ -55,9 +55,14 @@ export async function GET(
           email: d.contactEmail,
           phone: d.phoneNumber,
         };
+      } else {
+        // Helps catch data-integrity issues: an order references a
+        // distributor doc that no longer exists. Customer page still renders,
+        // just without contact info.
+        console.warn(`[public-tracking] Distributor ${o.distributorId} referenced by order ${doc.id} not found`);
       }
-    } catch {
-      /* best effort */
+    } catch (err) {
+      console.warn(`[public-tracking] Failed to load distributor ${o.distributorId}:`, err);
     }
   }
 

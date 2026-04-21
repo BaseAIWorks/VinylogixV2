@@ -242,7 +242,13 @@ export interface MonthlyRevenuePoint {
 }
 
 export function aggregateRevenueByMonth(orders: Order[], from?: Date, to?: Date): MonthlyRevenuePoint[] {
-  const paid = orders.filter(o => o.paymentStatus === 'paid' && isWithinRange(o, from, to, 'paidAt'));
+  // Include partially-refunded orders — they still contributed to revenue
+  // in the period they were paid, minus whatever was refunded. Keeping them
+  // here makes the chart consistent with `summarizePaidOrders`.
+  const paid = orders.filter(o =>
+    (o.paymentStatus === 'paid' || o.paymentStatus === 'partially_refunded') &&
+    isWithinRange(o, from, to, 'paidAt')
+  );
   const byMonth = new Map<string, MonthlyRevenuePoint>();
   for (const o of paid) {
     const d = parseDateSafe(o.paidAt);
@@ -271,7 +277,10 @@ export interface VatBreakdownRow {
 }
 
 export function aggregateVatBreakdown(orders: Order[], from?: Date, to?: Date): VatBreakdownRow[] {
-  const paid = orders.filter(o => o.paymentStatus === 'paid' && isWithinRange(o, from, to, 'paidAt'));
+  const paid = orders.filter(o =>
+    (o.paymentStatus === 'paid' || o.paymentStatus === 'partially_refunded') &&
+    isWithinRange(o, from, to, 'paidAt')
+  );
   const byRate = new Map<string, VatBreakdownRow>();
   let reverseChargeCount = 0;
   let reverseChargeSubtotal = 0;
@@ -323,7 +332,10 @@ export interface TopCustomerRow {
 }
 
 export function topCustomersByRevenue(orders: Order[], from?: Date, to?: Date, limit = 10): TopCustomerRow[] {
-  const paid = orders.filter(o => o.paymentStatus === 'paid' && isWithinRange(o, from, to, 'paidAt'));
+  const paid = orders.filter(o =>
+    (o.paymentStatus === 'paid' || o.paymentStatus === 'partially_refunded') &&
+    isWithinRange(o, from, to, 'paidAt')
+  );
   const byCustomer = new Map<string, TopCustomerRow>();
   for (const o of paid) {
     const key = o.viewerId || o.viewerEmail;
@@ -381,7 +393,33 @@ export interface VatReturnSummaryRow {
   orderCount: number;
 }
 
-function extractCountry(address: string | undefined): string {
+// ISO-3166-1 alpha-2 country codes used in EU VAT numbers, plus a few common
+// non-EU codes. Used as a first-pass way to infer the customer's country
+// from their VAT number before falling back to the free-text billing address.
+const VAT_NUMBER_COUNTRIES = new Set([
+  'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'EL', 'ES', 'FI', 'FR',
+  'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO',
+  'SE', 'SI', 'SK', 'XI', 'GB', 'CH', 'NO', 'US', 'CA',
+]);
+
+function countryFromVatNumber(vat: string | undefined): string {
+  if (!vat) return '';
+  const prefix = vat.trim().slice(0, 2).toUpperCase();
+  return VAT_NUMBER_COUNTRIES.has(prefix) ? prefix : '';
+}
+
+function extractCountry(order: {
+  customerVatNumber?: string;
+  billingAddress?: string;
+  shippingAddress?: string;
+}): string {
+  // Prefer the VAT number prefix — it's a structured, authoritative source
+  // for tax jurisdiction. Fall back to parsing the last line of the address
+  // only when no VAT number is set. Free-text addresses are brittle for tax
+  // reporting (varies between "NL", "Netherlands", "Nederland", etc.).
+  const fromVat = countryFromVatNumber(order.customerVatNumber);
+  if (fromVat) return fromVat;
+  const address = order.billingAddress || order.shippingAddress;
   if (!address) return '';
   const lines = address.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
   return lines[lines.length - 1] || '';
@@ -403,7 +441,7 @@ export function buildVatReturn(orders: Order[], from: Date, to: Date): {
   let rcBase = 0;
 
   for (const o of paid) {
-    const country = extractCountry(o.billingAddress || o.shippingAddress);
+    const country = extractCountry(o);
     const sub = deriveSubtotal(o);
     const multiplier = o.paymentStatus === 'refunded' ? -1 : 1;
 
@@ -430,16 +468,21 @@ export function buildVatReturn(orders: Order[], from: Date, to: Date): {
       for (const tb of o.taxBreakdown) {
         const rateLabel = `${(tb.rate * 100).toFixed(0)}%`;
         const summaryKey = `${rateLabel}|${tb.jurisdiction || country || 'unknown'}`;
+        // Guard against zero-rated or missing-rate entries: `tb.amount / tb.rate`
+        // would otherwise yield Infinity / NaN. When the rate is 0 we can't
+        // infer the base from just tax amount — leave it at 0 and let the
+        // non-taxBreakdown fallback (or manual accounting) reconcile the line.
+        const base = tb.rate > 0 ? (tb.amount / tb.rate) * multiplier : 0;
         rows.push({
           orderNumber: o.orderNumber || o.id.slice(0, 8),
           paidAt: o.paidAt || '',
           customer: o.customerName || o.viewerEmail,
           customerVatNumber: o.customerVatNumber || '',
           customerCountry: country,
-          subtotalExVat: (tb.amount / tb.rate) * multiplier,
+          subtotalExVat: base,
           vatRate: rateLabel,
           vatAmount: tb.amount * multiplier,
-          total: (tb.amount / tb.rate + tb.amount) * multiplier,
+          total: base + tb.amount * multiplier,
           reverseCharge: 'no',
           currency: 'EUR',
         });
@@ -451,7 +494,7 @@ export function buildVatReturn(orders: Order[], from: Date, to: Date): {
           vatAmount: 0,
           orderCount: 0,
         };
-        entry.baseAmount += (tb.amount / tb.rate) * multiplier;
+        entry.baseAmount += base;
         entry.vatAmount += tb.amount * multiplier;
         entry.orderCount += 1;
         summaryMap.set(summaryKey, entry);

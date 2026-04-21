@@ -42,6 +42,9 @@ export async function generateRecordInfo(input: GenerateRecordInfoInput): Promis
     const msg = String(err?.message || err || '');
     const status = err?.status ?? err?.cause?.status;
     if (status === 429 || /429|Too Many Requests|Resource exhausted|quota/i.test(msg)) {
+      // Logged separately from generic failures so we can track how often
+      // we hit Gemini quota over time.
+      console.warn('[generateRecordInfo] rate_limited (429) from Gemini');
       return { ok: false, error: 'rate_limited', message: 'AI quota reached. Try again in a minute.' };
     }
     console.error('[generateRecordInfo] failed:', err);

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
 import crypto from 'crypto';
 import { authErrorResponse } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
 import { requireOrderAccess } from '@/lib/order-access';
 
+const REFUND_METHODS = new Set(['stripe', 'paypal', 'bank_transfer', 'cash', 'other']);
 type RefundMethod = 'stripe' | 'paypal' | 'bank_transfer' | 'cash' | 'other';
 
 export async function POST(
@@ -27,56 +28,75 @@ export async function POST(
     if (typeof amount !== 'number' || !isFinite(amount) || amount <= 0) {
       return NextResponse.json({ error: 'Refund amount must be a positive number.' }, { status: 400 });
     }
-
-    const { caller, orderData, orderRef } = await requireOrderAccess(req, orderId);
-
-    if (orderData.paymentStatus !== 'paid' && orderData.paymentStatus !== 'partially_refunded') {
-      return NextResponse.json(
-        { error: 'Only paid (or partially refunded) orders can be refunded.' },
-        { status: 400 }
-      );
+    if (method !== undefined && !REFUND_METHODS.has(method)) {
+      return NextResponse.json({ error: 'Invalid refund method.' }, { status: 400 });
     }
 
-    const existing: any[] = Array.isArray(orderData.refunds) ? orderData.refunds : [];
-    const alreadyRefunded = existing.reduce((sum, r) => sum + (r.amount || 0), 0);
-    const remaining = orderData.totalAmount - alreadyRefunded;
+    const { caller, orderRef, adminDb } = await requireOrderAccess(req, orderId);
 
-    // Allow a small rounding tolerance (1 cent)
-    if (amount > remaining + 0.01) {
-      return NextResponse.json(
-        { error: `Refund exceeds remaining balance. Maximum refundable: €${remaining.toFixed(2)}.` },
-        { status: 400 }
-      );
-    }
+    // Transaction: re-read the order inside the tx so a concurrent refund
+    // can't slip past the remaining-balance check. Without this, two parallel
+    // requests on a €15 order could each see "€0 already refunded" and both
+    // approve a €10 refund, over-refunding the customer.
+    const result = await adminDb.runTransaction(async (tx) => {
+      const snap = await tx.get(orderRef);
+      if (!snap.exists) {
+        throw new HttpError('Order not found.', 404);
+      }
+      const current = snap.data() as any;
 
-    const newRefund = {
-      id: crypto.randomBytes(8).toString('hex'),
-      amount: Math.round(amount * 100) / 100,
-      reason: reason?.trim().slice(0, 500) || undefined,
-      method: method || orderData.paymentMethod || 'other',
-      refundedAt: new Date().toISOString(),
-      refundedBy: caller.uid,
-      notes: notes?.trim().slice(0, 1000) || undefined,
-    };
+      if (current.paymentStatus !== 'paid' && current.paymentStatus !== 'partially_refunded') {
+        throw new HttpError('Only paid (or partially refunded) orders can be refunded.', 400);
+      }
 
-    const totalRefunded = alreadyRefunded + newRefund.amount;
-    const isFullyRefunded = Math.abs(totalRefunded - orderData.totalAmount) < 0.01;
+      const existing: any[] = Array.isArray(current.refunds) ? current.refunds : [];
+      const alreadyRefunded = existing.reduce((sum, r) => sum + (r.amount || 0), 0);
+      const remaining = current.totalAmount - alreadyRefunded;
+      if (amount > remaining + 0.01) {
+        throw new HttpError(
+          `Refund exceeds remaining balance. Maximum refundable: €${remaining.toFixed(2)}.`,
+          400
+        );
+      }
 
-    await orderRef.update({
-      refunds: FieldValue.arrayUnion(newRefund),
-      paymentStatus: isFullyRefunded ? 'refunded' : 'partially_refunded',
-      updatedAt: Timestamp.now(),
+      const newRefund = {
+        id: crypto.randomBytes(8).toString('hex'),
+        amount: Math.round(amount * 100) / 100,
+        reason: reason?.trim().slice(0, 500) || undefined,
+        method: method || current.paymentMethod || 'other',
+        refundedAt: new Date().toISOString(),
+        refundedBy: caller.uid,
+        notes: notes?.trim().slice(0, 1000) || undefined,
+      };
+
+      const totalRefunded = alreadyRefunded + newRefund.amount;
+      const isFullyRefunded = Math.abs(totalRefunded - current.totalAmount) < 0.01;
+
+      tx.update(orderRef, {
+        refunds: [...existing, newRefund],
+        paymentStatus: isFullyRefunded ? 'refunded' : 'partially_refunded',
+        updatedAt: Timestamp.now(),
+      });
+
+      return { newRefund, totalRefunded, isFullyRefunded };
     });
 
     return NextResponse.json({
       success: true,
-      refund: newRefund,
-      totalRefunded,
-      paymentStatus: isFullyRefunded ? 'refunded' : 'partially_refunded',
+      refund: result.newRefund,
+      totalRefunded: result.totalRefunded,
+      paymentStatus: result.isFullyRefunded ? 'refunded' : 'partially_refunded',
     });
   } catch (error: any) {
+    if (error instanceof HttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     if (error?.status) return authErrorResponse(error);
     console.error('Error in refund route:', error);
     return NextResponse.json({ error: error?.message || 'Failed to record refund.' }, { status: 500 });
   }
+}
+
+class HttpError extends Error {
+  constructor(message: string, public status: number) { super(message); }
 }
