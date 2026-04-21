@@ -5,6 +5,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
+import { generateTrackingToken } from '@/lib/tracking-token';
 
 const ORDERS_COLLECTION = 'orders';
 const RECORDS_COLLECTION = 'vinylRecords';
@@ -279,6 +280,7 @@ export async function createOrderFromCheckout(session: Stripe.Checkout.Session):
   }
 
   const newOrderData: any = {
+    trackingToken: generateTrackingToken(),
     distributorId,
     viewerId,
     viewerEmail: customerEmail,
@@ -491,6 +493,7 @@ export async function createOrderFromPayPal(params: {
   }
 
   const newOrderData: any = {
+    trackingToken: generateTrackingToken(),
     distributorId,
     viewerId: paypalViewerId,
     viewerEmail: pendingData.viewerEmail || payerEmail,
@@ -741,6 +744,7 @@ export async function createOrderRequestServer(params: {
   };
 
   const newOrderData: any = {
+    trackingToken: generateTrackingToken(),
     distributorId,
     viewerId,
     viewerEmail: params.customerEmail,

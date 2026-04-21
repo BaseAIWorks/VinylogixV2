@@ -1,34 +1,19 @@
-import crypto from 'crypto';
-import { getAdminDb } from '@/lib/firebase-admin';
-
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
 
 /**
  * 32 hex chars (128 bits) of crypto-random entropy. Unguessable.
+ * Uses Web Crypto (available in both browser and Node runtimes) so this
+ * module stays free of Node-only deps and can be imported from any file.
  */
 export function generateTrackingToken(): string {
-  return crypto.randomBytes(16).toString('hex');
-}
-
-/**
- * Returns the order's trackingToken, generating and persisting one if missing.
- * Idempotent — safe to call multiple times. Returns null only if admin DB is unavailable
- * or the order doesn't exist.
- */
-export async function ensureTrackingToken(orderId: string): Promise<string | null> {
-  const adminDb = getAdminDb();
-  if (!adminDb) return null;
-
-  const ref = adminDb.collection('orders').doc(orderId);
-  const snap = await ref.get();
-  if (!snap.exists) return null;
-
-  const existing = (snap.data() as any)?.trackingToken as string | undefined;
-  if (existing && /^[a-f0-9]{32}$/.test(existing)) return existing;
-
-  const token = generateTrackingToken();
-  await ref.update({ trackingToken: token });
-  return token;
+  const bytes = new Uint8Array(16);
+  const c: Crypto | undefined =
+    (typeof globalThis !== 'undefined' && (globalThis as any).crypto) as Crypto | undefined;
+  if (!c || typeof c.getRandomValues !== 'function') {
+    throw new Error('Web Crypto is not available in this environment.');
+  }
+  c.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
 }
 
 export function buildTrackingUrl(token: string): string {

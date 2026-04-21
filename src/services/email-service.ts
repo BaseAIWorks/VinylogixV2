@@ -3,19 +3,19 @@ import { format } from 'date-fns';
 import type { Order, OrderItemStatus, Distributor } from '@/types';
 import { formatPriceForDisplay } from '@/lib/utils';
 import { markdownToSafeHtml, escapeHtml } from '@/lib/markdown-utils';
-import { ensureTrackingToken, buildTrackingUrl } from '@/lib/tracking-token';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
 
-// Best-effort: returns a public tracking URL, generating the token if missing.
-// Falls back to the logged-in "my orders" URL if admin access is unavailable.
-async function getTrackingUrl(order: Order): Promise<string> {
-  try {
-    const token = order.trackingToken || await ensureTrackingToken(order.id);
-    if (token) return buildTrackingUrl(token);
-  } catch {
-    /* ignore — fallthrough to authed URL */
-  }
+// Returns the best "view my order" URL we can build from the order alone.
+// - If the order already carries a trackingToken → use the public /t/[token]
+//   page so customers don't need to log in.
+// - Otherwise → fall back to the authed /my-orders/[id] path.
+// Token generation is a server-only concern (needs firebase-admin) and lives
+// in `src/lib/tracking-token.ts`. Callers that want to guarantee a token
+// exists before the email renders should call `ensureTrackingToken(orderId)`
+// from their server route and pass the updated order in.
+function getTrackingUrl(order: Order): string {
+  if (order.trackingToken) return `${siteUrl}/t/${order.trackingToken}`;
   return `${siteUrl}/my-orders/${order.id}`;
 }
 
@@ -557,7 +557,7 @@ ${createDistributorPromoText()}
  * Send order confirmation email to client
  */
 export async function sendOrderConfirmation(order: Order): Promise<void> {
-  const trackingUrl = await getTrackingUrl(order);
+  const trackingUrl = getTrackingUrl(order);
   try {
     await resend.emails.send({
       from: 'Vinylogix Orders <noreply@vinylogix.com>',
@@ -629,7 +629,7 @@ export async function sendOrderConfirmation(order: Order): Promise<void> {
  * Called by the scheduled cron or manually from the order page.
  */
 export async function sendPaymentReminderEmail(order: Order, reminderNumber: number): Promise<void> {
-  const trackingUrl = await getTrackingUrl(order);
+  const trackingUrl = getTrackingUrl(order);
   const paymentUrl = order.paymentLink || trackingUrl;
   const reminderLabel = reminderNumber === 1
     ? "Friendly reminder"
@@ -793,7 +793,7 @@ export async function sendWeeklyDigestEmail(params: {
 export async function sendShippingNotification(order: Order): Promise<void> {
   if (!order.trackingNumber) return;
 
-  const trackingUrl = await getTrackingUrl(order);
+  const trackingUrl = getTrackingUrl(order);
 
   try {
     await resend.emails.send({
