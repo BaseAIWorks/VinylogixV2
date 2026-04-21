@@ -59,6 +59,7 @@ import {
   arrayRemove,
   DocumentSnapshot,
   onSnapshot,
+  getFirestore,
 } from 'firebase/firestore';
 import { getOrders, getOrdersByViewerId } from '@/services/order-service';
 import {
@@ -1049,7 +1050,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       );
       const newUserId = userCredential.user.uid;
 
-      const userDocRef = doc(db, 'users', newUserId);
+      // IMPORTANT: use the SECONDARY app's Firestore instance for the user
+      // doc write. That request authenticates as the newly-created user
+      // (secondaryAuth.currentUser.uid == newUserId), which satisfies the
+      // `/users/{userId}` create rule `allow create: if isOwner(userId)`.
+      // Using the primary `db` here would execute as the master and get
+      // rejected with permission-denied — leaving an orphaned Firebase
+      // Auth user with no matching Firestore doc (the "email already
+      // registered" loop).
+      const secondaryDb = getFirestore(secondaryApp);
+      const userDocRef = doc(secondaryDb, 'users', newUserId);
       const newTimestamp = Timestamp.now();
       const newUserFirestoreData: FirestoreUser = {
         email,
@@ -1079,6 +1089,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               country: details.country || '',
               chamberOfCommerce: details.chamberOfCommerce || '',
               vatNumber: details.vatNumber || '',
+              // Worker permissions — omitted when not provided so viewers
+              // / clients don't end up with a stray empty object.
+              ...(details.permissions ? { permissions: details.permissions } : {}),
             }
           : {}),
       };
