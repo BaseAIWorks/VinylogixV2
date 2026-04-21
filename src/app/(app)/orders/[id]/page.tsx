@@ -97,6 +97,16 @@ export default function OrderDetailPage() {
 
     const [isSendingReminder, setIsSendingReminder] = useState(false);
 
+    // Shipping dialog state
+    const [shipDialogOpen, setShipDialogOpen] = useState(false);
+    const [isSavingShipping, setIsSavingShipping] = useState(false);
+    const [isResendingTracking, setIsResendingTracking] = useState(false);
+    const [shipCarrier, setShipCarrier] = useState<'postnl' | 'dhl' | 'ups' | 'fedex' | 'dpd' | 'gls' | 'other'>('postnl');
+    const [shipInput, setShipInput] = useState<string>('');
+    const [shipEta, setShipEta] = useState<string>('');
+    const [shipSendEmail, setShipSendEmail] = useState<boolean>(true);
+    const [shipWarning, setShipWarning] = useState<string | null>(null);
+
     // Refund state
     const [refundDialogOpen, setRefundDialogOpen] = useState(false);
     const [isRefunding, setIsRefunding] = useState(false);
@@ -539,6 +549,102 @@ export default function OrderDetailPage() {
         }
     };
 
+    // Prefill the ship dialog whenever it opens for an already-shipped order,
+    // so edits start from the existing info instead of blank.
+    useEffect(() => {
+        if (!shipDialogOpen || !order) return;
+        setShipWarning(null);
+        if (order.carrier) setShipCarrier(order.carrier as any);
+        setShipInput(order.trackingNumber || '');
+        setShipEta(order.estimatedDeliveryDate ? order.estimatedDeliveryDate.slice(0, 10) : '');
+        setShipSendEmail(!order.trackingNumber); // first-time = default on; editing = default off
+    }, [shipDialogOpen, order]);
+
+    const handleShipInputChange = async (value: string) => {
+        setShipInput(value);
+        setShipWarning(null);
+        // If the distributor pasted a full URL, auto-detect carrier + number.
+        if (/^https?:\/\//i.test(value.trim())) {
+            const { parseTrackingInput } = await import('@/lib/shipping-carriers');
+            const parsed = parseTrackingInput(value);
+            if (parsed) {
+                setShipCarrier(parsed.carrier);
+                setShipInput(parsed.trackingNumber);
+                return;
+            }
+            setShipWarning("Couldn't recognize that URL. Pick a carrier and paste just the tracking number.");
+            return;
+        }
+        // Soft validation warning based on current carrier
+        if (value.trim()) {
+            const { validateTrackingNumber } = await import('@/lib/shipping-carriers');
+            const check = validateTrackingNumber(shipCarrier, value);
+            if (check.warning) setShipWarning(check.warning);
+        }
+    };
+
+    const handleShipSubmit = async () => {
+        if (!order) return;
+        const trimmed = shipInput.trim();
+        if (!trimmed) {
+            toast({ title: "Tracking number required", variant: "destructive" });
+            return;
+        }
+        setIsSavingShipping(true);
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            const res = await fetch(`/api/orders/${order.id}/ship`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    carrier: shipCarrier,
+                    trackingNumber: trimmed,
+                    estimatedDeliveryDate: shipEta || undefined,
+                    sendEmail: shipSendEmail,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || "Failed to save shipping info");
+            toast({
+                title: data.action === 'shipped' ? "Marked as shipped" : "Tracking updated",
+                description: data.emailed ? `Email sent to ${order.viewerEmail}.` : "No email sent.",
+            });
+            setShipDialogOpen(false);
+            const fetched = await getOrderById(order.id);
+            if (fetched) setOrder(fetched);
+        } catch (err: any) {
+            toast({ title: "Error", description: err.message || "Failed to save shipping info.", variant: "destructive" });
+        } finally {
+            setIsSavingShipping(false);
+        }
+    };
+
+    const handleResendTrackingEmail = async () => {
+        if (!order) return;
+        setIsResendingTracking(true);
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            const res = await fetch(`/api/orders/${order.id}/ship`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ resendOnly: true }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || "Failed to resend tracking email");
+            toast({ title: "Email sent", description: `Tracking email resent to ${order.viewerEmail}.` });
+        } catch (err: any) {
+            toast({ title: "Error", description: err.message || "Failed to resend.", variant: "destructive" });
+        } finally {
+            setIsResendingTracking(false);
+        }
+    };
+
     const handleSendReminderNow = async () => {
         if (!order) return;
         setIsSendingReminder(true);
@@ -911,6 +1017,74 @@ export default function OrderDetailPage() {
                 </DialogContent>
             </Dialog>
 
+            {/* Shipping info dialog (mark as shipped OR edit tracking info) */}
+            <Dialog open={shipDialogOpen} onOpenChange={setShipDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {order.trackingNumber ? 'Edit tracking info' : 'Mark as shipped'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {order.trackingNumber
+                                ? 'Update carrier or tracking number. Emailing the customer again is optional.'
+                                : 'Enter the shipment details. The customer will be emailed a tracking link.'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label>Carrier</Label>
+                            <Select value={shipCarrier} onValueChange={(v) => setShipCarrier(v as any)}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="postnl">PostNL</SelectItem>
+                                    <SelectItem value="dhl">DHL</SelectItem>
+                                    <SelectItem value="ups">UPS</SelectItem>
+                                    <SelectItem value="fedex">FedEx</SelectItem>
+                                    <SelectItem value="dpd">DPD</SelectItem>
+                                    <SelectItem value="gls">GLS</SelectItem>
+                                    <SelectItem value="other">Other</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="ship-number">Tracking number or URL</Label>
+                            <Input
+                                id="ship-number"
+                                value={shipInput}
+                                onChange={(e) => handleShipInputChange(e.target.value)}
+                                placeholder="Paste tracking number or the full carrier URL"
+                                maxLength={500}
+                            />
+                            {shipWarning && <p className="text-xs text-amber-600">{shipWarning}</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="ship-eta">
+                                Estimated delivery <span className="text-muted-foreground font-normal">(optional)</span>
+                            </Label>
+                            <Input
+                                id="ship-eta"
+                                type="date"
+                                value={shipEta}
+                                onChange={(e) => setShipEta(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Checkbox id="ship-email" checked={shipSendEmail} onCheckedChange={(v) => setShipSendEmail(v === true)} />
+                            <Label htmlFor="ship-email" className="font-normal text-sm">
+                                Email tracking info to {order.viewerEmail}
+                            </Label>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShipDialogOpen(false)} disabled={isSavingShipping}>Cancel</Button>
+                        <Button onClick={handleShipSubmit} disabled={isSavingShipping || !shipInput.trim()}>
+                            {isSavingShipping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Truck className="mr-2 h-4 w-4" />}
+                            {order.trackingNumber ? 'Save changes' : 'Mark as shipped'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <Button onClick={() => router.push('/orders')} variant="outline" size="sm" className="mb-4">
@@ -1055,7 +1229,22 @@ export default function OrderDetailPage() {
                             </Button>
                         )}
                         {order.status === 'paid' && <Button onClick={() => handleStatusUpdate('processing')} disabled={isUpdating}><PackageCheck className="mr-2 h-4 w-4"/> Start Processing</Button>}
-                        {order.status === 'processing' && <Button onClick={() => handleStatusUpdate('shipped')} disabled={isUpdating}><Truck className="mr-2 h-4 w-4"/> Mark as Shipped</Button>}
+                        {order.status === 'processing' && (
+                            <Button onClick={() => setShipDialogOpen(true)} disabled={isUpdating}>
+                                <Truck className="mr-2 h-4 w-4"/> Mark as Shipped
+                            </Button>
+                        )}
+                        {order.status === 'shipped' && (
+                            <>
+                                <Button variant="outline" onClick={() => setShipDialogOpen(true)} disabled={isUpdating}>
+                                    <Truck className="mr-2 h-4 w-4"/> Edit tracking info
+                                </Button>
+                                <Button variant="outline" onClick={handleResendTrackingEmail} disabled={isResendingTracking}>
+                                    {isResendingTracking ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Mail className="mr-2 h-4 w-4"/>}
+                                    Resend tracking email
+                                </Button>
+                            </>
+                        )}
                         {order.status !== 'cancelled' && <Button variant="destructive" onClick={() => handleStatusUpdate('cancelled')} disabled={isUpdating}>Cancel Order</Button>}
                         {isUpdating && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
                     </div>

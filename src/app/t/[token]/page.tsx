@@ -16,6 +16,9 @@ import {
   Mail,
   Phone,
   ExternalLink,
+  Copy,
+  Check as CheckIcon,
+  Banknote,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,6 +53,13 @@ interface SafeOrder {
   trackingNumber?: string;
   trackingUrl?: string;
   paymentLink?: string;
+  paymentInstructions?: {
+    bankAccounts?: Array<{ iban?: string; bic?: string; bankName?: string; accountHolder?: string; label?: string }>;
+    paypalEmail?: string;
+    otherMethods?: Array<{ label: string; details: string }>;
+    paymentTerms?: string;
+    reference: string;
+  };
   distributor?: { name?: string; email?: string; phone?: string };
 }
 
@@ -63,6 +73,30 @@ const statusCopy: Record<string, { label: string; tone: string; icon: React.Elem
   on_hold: { label: "On hold", tone: "bg-orange-500/20 text-orange-700 border-orange-500/30", icon: AlertCircle },
   cancelled: { label: "Cancelled", tone: "bg-red-500/20 text-red-700 border-red-500/30", icon: AlertCircle },
 };
+
+function CopyField({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* ignore */
+    }
+  };
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <div className="min-w-0">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="font-mono font-medium truncate">{value}</p>
+      </div>
+      <Button type="button" variant="ghost" size="sm" onClick={handleCopy} className="shrink-0 h-8">
+        {copied ? <CheckIcon className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+      </Button>
+    </div>
+  );
+}
 
 function StatusStep({
   label,
@@ -195,7 +229,7 @@ export default function TrackingPage() {
           </CardContent>
         </Card>
 
-        {/* Payment prompt (if awaiting payment) */}
+        {/* Payment prompt (if awaiting payment with active link) */}
         {order.paymentLink && (order.status === "awaiting_payment" || order.status === "pending") && (
           <Card className="border-blue-500/30 bg-blue-500/5">
             <CardContent className="py-4 flex items-center justify-between gap-3">
@@ -208,6 +242,85 @@ export default function TrackingPage() {
                   Pay now <ExternalLink className="ml-2 h-4 w-4" />
                 </a>
               </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Payment instructions fallback (no active link) */}
+        {!order.paymentLink && order.paymentInstructions && (
+          <Card className="border-blue-500/30 bg-blue-500/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Banknote className="h-5 w-5 text-blue-600" />
+                How to pay
+              </CardTitle>
+              {order.paymentInstructions.paymentTerms && (
+                <p className="text-xs text-muted-foreground pt-1 whitespace-pre-wrap">
+                  {order.paymentInstructions.paymentTerms}
+                </p>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              <div className="rounded-md border bg-background p-3 space-y-1">
+                <p className="text-xs text-muted-foreground">Amount due</p>
+                <p className="text-xl font-semibold">€{formatPriceForDisplay(order.totalAmount)}</p>
+              </div>
+
+              <div className="rounded-md border bg-background p-3 space-y-2">
+                <CopyField label="Payment reference (include in transfer)" value={order.paymentInstructions.reference} />
+              </div>
+
+              {order.paymentInstructions.bankAccounts?.map((acc, i) => (
+                <div key={i} className="rounded-md border bg-background p-3 space-y-2">
+                  {acc.label && <p className="font-medium">{acc.label}</p>}
+                  {!acc.label && <p className="font-medium">Bank transfer</p>}
+                  {acc.accountHolder && (
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">Account holder:</span>{" "}
+                      <span className="font-medium">{acc.accountHolder}</span>
+                    </div>
+                  )}
+                  {acc.bankName && (
+                    <div className="text-xs">
+                      <span className="text-muted-foreground">Bank:</span>{" "}
+                      <span className="font-medium">{acc.bankName}</span>
+                    </div>
+                  )}
+                  {acc.iban && <CopyField label="IBAN" value={acc.iban} />}
+                  {acc.bic && <CopyField label="BIC / SWIFT" value={acc.bic} />}
+                </div>
+              ))}
+
+              {order.paymentInstructions.paypalEmail && (
+                <div className="rounded-md border bg-background p-3 space-y-2">
+                  <p className="font-medium">PayPal</p>
+                  <CopyField label="PayPal email" value={order.paymentInstructions.paypalEmail} />
+                </div>
+              )}
+
+              {order.paymentInstructions.otherMethods?.map((m, i) => (
+                <div key={i} className="rounded-md border bg-background p-3 space-y-1">
+                  <p className="font-medium">{m.label}</p>
+                  <p className="text-xs whitespace-pre-wrap text-muted-foreground">{m.details}</p>
+                </div>
+              ))}
+
+              <p className="text-xs text-muted-foreground">
+                Questions about payment? Contact the seller below.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Awaiting payment without any link or instructions — minimal fallback */}
+        {!order.paymentLink && !order.paymentInstructions && (order.status === "awaiting_payment" || order.status === "pending") && (
+          <Card className="border-amber-500/30 bg-amber-500/5">
+            <CardContent className="py-4 flex items-start gap-3 text-sm">
+              <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">Payment pending</p>
+                <p className="text-muted-foreground">Please contact the seller (details below) to arrange payment.</p>
+              </div>
             </CardContent>
           </Card>
         )}

@@ -368,12 +368,10 @@ export default function OrdersPage() {
       icon: Package,
       onClick: () => handleBulkStatusUpdate("processing"),
     },
-    {
-      id: "mark-shipped",
-      label: "Mark as Shipped",
-      icon: Truck,
-      onClick: () => handleBulkStatusUpdate("shipped"),
-    },
+    // "Mark as Shipped" intentionally removed from the bulk-action bar. Shipping
+    // now requires carrier + tracking number, and the form lives on the order
+    // detail page. Doing it in bulk would silently ship orders without tracking
+    // info and email customers a broken "Track Package" link.
   ];
 
   if (authLoading || isLoading) {
@@ -629,8 +627,8 @@ export default function OrdersPage() {
                                   </DropdownMenuItem>
                                 )}
                                 {(order.status === 'paid' || order.status === 'processing') && (
-                                  <DropdownMenuItem onClick={() => handleQuickStatusUpdate(order.id, 'shipped')}>
-                                    <Truck className="mr-2 h-4 w-4" /> Mark as Shipped
+                                  <DropdownMenuItem onClick={() => router.push(`/orders/${order.id}`)}>
+                                    <Truck className="mr-2 h-4 w-4" /> Mark as Shipped…
                                   </DropdownMenuItem>
                                 )}
                               </DropdownMenuContent>

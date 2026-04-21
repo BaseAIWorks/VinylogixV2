@@ -43,17 +43,25 @@ export async function GET(
   // Hydrate timestamps so the client doesn't get serialization errors.
   const iso = (v: any) => (v && typeof v.toDate === 'function' ? v.toDate().toISOString() : v);
 
-  // Fetch minimal distributor info for the support line
+  // Fetch minimal distributor info for the support line + payment-fallback info
   let distributorContact: { name?: string; email?: string; phone?: string } = {};
+  let paymentInstructions: {
+    bankAccounts?: Array<{ iban?: string; bic?: string; bankName?: string; accountHolder?: string; label?: string }>;
+    paypalEmail?: string;
+    otherMethods?: Array<{ label: string; details: string }>;
+    paymentTerms?: string;
+    reference: string;
+  } | undefined;
+  let distributorData: any = null;
   if (o.distributorId) {
     try {
       const dSnap = await adminDb.collection('distributors').doc(o.distributorId).get();
       if (dSnap.exists) {
-        const d = dSnap.data() as any;
+        distributorData = dSnap.data();
         distributorContact = {
-          name: d.companyName || d.name,
-          email: d.contactEmail,
-          phone: d.phoneNumber,
+          name: distributorData.companyName || distributorData.name,
+          email: distributorData.contactEmail,
+          phone: distributorData.phoneNumber,
         };
       } else {
         // Helps catch data-integrity issues: an order references a
@@ -63,6 +71,65 @@ export async function GET(
       }
     } catch (err) {
       console.warn(`[public-tracking] Failed to load distributor ${o.distributorId}:`, err);
+    }
+  }
+
+  // Build payment-instructions fallback if the order is awaiting payment and
+  // there's no usable Stripe link (missing or expired). Pulls from the
+  // distributor's `paymentAccounts[]` (new) or legacy iban/bic/bankName
+  // fields, plus optional PayPal email and free-text terms.
+  const isAwaiting = o.status === 'awaiting_payment' || o.status === 'pending';
+  const linkExpiresAt = o.paymentLinkExpiresAt && typeof o.paymentLinkExpiresAt.toDate === 'function'
+    ? o.paymentLinkExpiresAt.toDate()
+    : (o.paymentLinkExpiresAt ? new Date(o.paymentLinkExpiresAt) : null);
+  const linkIsActive = !!o.paymentLink && (!linkExpiresAt || linkExpiresAt.getTime() > Date.now());
+
+  if (isAwaiting && !linkIsActive && distributorData) {
+    const bankAccounts: Array<{ iban?: string; bic?: string; bankName?: string; accountHolder?: string; label?: string }> = [];
+    const otherMethods: Array<{ label: string; details: string }> = [];
+    let paypalEmail: string | undefined;
+
+    const accounts: any[] = Array.isArray(distributorData.paymentAccounts) ? distributorData.paymentAccounts : [];
+    for (const acc of accounts) {
+      if (acc.type === 'bank' && (acc.iban || acc.bankName)) {
+        bankAccounts.push({
+          iban: acc.iban,
+          bic: acc.bic,
+          bankName: acc.bankName,
+          accountHolder: acc.accountHolder,
+          label: acc.label,
+        });
+      } else if (acc.type === 'paypal' && acc.paypalEmail) {
+        if (!paypalEmail) paypalEmail = acc.paypalEmail;
+      } else if (acc.type === 'other' && acc.details) {
+        otherMethods.push({ label: acc.label || 'Other', details: acc.details });
+      }
+    }
+
+    // Legacy fallback: only use the top-level iban/bic/bankName fields if
+    // no structured paymentAccounts entry exists.
+    if (bankAccounts.length === 0 && (distributorData.iban || distributorData.bankName)) {
+      bankAccounts.push({
+        iban: distributorData.iban,
+        bic: distributorData.bic,
+        bankName: distributorData.bankName,
+      });
+    }
+    if (!paypalEmail && distributorData.paypalEmail) {
+      paypalEmail = distributorData.paypalEmail;
+    }
+
+    const hasAnyInstruction =
+      bankAccounts.length > 0 || paypalEmail || otherMethods.length > 0 || distributorData.invoicePaymentTerms;
+
+    if (hasAnyInstruction) {
+      paymentInstructions = {
+        bankAccounts: bankAccounts.length > 0 ? bankAccounts : undefined,
+        paypalEmail,
+        otherMethods: otherMethods.length > 0 ? otherMethods : undefined,
+        paymentTerms: distributorData.invoicePaymentTerms || undefined,
+        reference: o.orderNumber || doc.id.slice(0, 8),
+      };
     }
   }
 
@@ -94,7 +161,8 @@ export async function GET(
     carrier: o.carrier,
     trackingNumber: o.trackingNumber,
     trackingUrl: o.trackingUrl,
-    paymentLink: o.status === 'awaiting_payment' || o.status === 'pending' ? o.paymentLink : undefined,
+    paymentLink: isAwaiting && linkIsActive ? o.paymentLink : undefined,
+    paymentInstructions,
     distributor: distributorContact,
   };
 
