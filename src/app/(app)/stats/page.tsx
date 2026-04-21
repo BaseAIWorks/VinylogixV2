@@ -98,6 +98,23 @@ const METHOD_COLORS = {
   other: "hsl(220, 9%, 46%)",
 };
 
+// Per-method labels + colors for the manual payment breakdown.
+const MANUAL_METHOD_LABELS: Record<string, string> = {
+  bank_transfer: "Bank transfer",
+  cash: "Cash",
+  paypal_external: "PayPal (direct)",
+  stripe_external: "Stripe (external)",
+  other: "Other",
+};
+
+const MANUAL_METHOD_COLORS: Record<string, string> = {
+  bank_transfer: "hsl(152, 70%, 40%)",    // emerald
+  cash: "hsl(142, 76%, 36%)",              // green
+  paypal_external: "hsl(217, 91%, 60%)",   // blue
+  stripe_external: "hsl(262, 70%, 55%)",   // purple (lighter than platform)
+  other: "hsl(220, 9%, 46%)",              // grey
+};
+
 interface FinancialKPI {
   title: string;
   value: string;
@@ -218,16 +235,23 @@ export default function StatsFinancialPage() {
   );
 
   const methodPieData = useMemo(() => {
-    const rows: Array<{ name: string; value: number; fill: string }> = [];
+    const rows: Array<{ name: string; value: number; fill: string; method?: string }> = [];
     if (summary.platformRevenue > 0) {
       rows.push({ name: "Platform (Stripe/PayPal)", value: summary.platformRevenue, fill: METHOD_COLORS.platform });
     }
-    if (summary.manualRevenue > 0) {
-      rows.push({ name: "Manual (off-platform)", value: summary.manualRevenue, fill: METHOD_COLORS.manual });
+    for (const [method, { subtotal }] of Object.entries(summary.manualRevenueByMethod)) {
+      if (subtotal > 0) {
+        rows.push({
+          name: MANUAL_METHOD_LABELS[method] || method,
+          value: subtotal,
+          fill: MANUAL_METHOD_COLORS[method] || METHOD_COLORS.manual,
+          method,
+        });
+      }
     }
     const other = summary.grossRevenue - summary.platformRevenue - summary.manualRevenue;
     if (other > 0.01) {
-      rows.push({ name: "Other", value: other, fill: METHOD_COLORS.other });
+      rows.push({ name: "Unspecified", value: other, fill: METHOD_COLORS.other });
     }
     return rows;
   }, [summary]);
@@ -593,30 +617,45 @@ export default function StatsFinancialPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <CreditCard className="h-4 w-4 text-muted-foreground" />
-                Manual vs platform
+                Revenue by payment method
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <Link
-                href={buildOrdersHref({ paymentStatus: "paid", paymentMethodGroup: "platform", from: fromISO, to: toISO })}
-                className="flex items-center justify-between text-sm hover:bg-muted/50 rounded px-1 -mx-1"
-              >
-                <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full" style={{ background: METHOD_COLORS.platform }} />
-                  Platform
-                </span>
-                <span className="font-medium">{EUR(summary.platformRevenue)}</span>
-              </Link>
-              <Link
-                href={buildOrdersHref({ paymentStatus: "paid", paymentMethodGroup: "manual", from: fromISO, to: toISO })}
-                className="flex items-center justify-between text-sm hover:bg-muted/50 rounded px-1 -mx-1"
-              >
-                <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full" style={{ background: METHOD_COLORS.manual }} />
-                  Manual (off-platform)
-                </span>
-                <span className="font-medium">{EUR(summary.manualRevenue)}</span>
-              </Link>
+            <CardContent className="space-y-1.5">
+              {summary.platformRevenue > 0 && (
+                <Link
+                  href={buildOrdersHref({ paymentStatus: "paid", paymentMethodGroup: "platform", from: fromISO, to: toISO })}
+                  className="flex items-center justify-between text-sm hover:bg-muted/50 rounded px-1 -mx-1"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full" style={{ background: METHOD_COLORS.platform }} />
+                    Platform (Stripe/PayPal)
+                  </span>
+                  <span className="font-medium">{EUR(summary.platformRevenue)}</span>
+                </Link>
+              )}
+              {Object.entries(summary.manualRevenueByMethod)
+                .filter(([, v]) => v.subtotal > 0)
+                .sort((a, b) => b[1].subtotal - a[1].subtotal)
+                .map(([method, { subtotal, count }]) => (
+                  <Link
+                    key={method}
+                    href={buildOrdersHref({ paymentStatus: "paid", paymentMethod: method, from: fromISO, to: toISO })}
+                    className="flex items-center justify-between text-sm hover:bg-muted/50 rounded px-1 -mx-1"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ background: MANUAL_METHOD_COLORS[method] || METHOD_COLORS.manual }}
+                      />
+                      {MANUAL_METHOD_LABELS[method] || method}
+                      <span className="text-xs text-muted-foreground">({count})</span>
+                    </span>
+                    <span className="font-medium">{EUR(subtotal)}</span>
+                  </Link>
+                ))}
+              {summary.platformRevenue === 0 && summary.manualRevenue === 0 && (
+                <p className="text-sm text-muted-foreground">No paid orders in this range.</p>
+              )}
             </CardContent>
           </Card>
         </div>

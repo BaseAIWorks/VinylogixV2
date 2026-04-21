@@ -104,6 +104,10 @@ export interface FinancialSummary {
   manualOrderCount: number;
   platformRevenue: number;   // gross (subtotal) via platform methods
   manualRevenue: number;     // gross (subtotal) via manual methods
+  // Per-method subtotals for the manual breakdown card. Keyed by
+  // Order['paymentMethod'] — only manual methods populated here (platform
+  // methods are rolled up in platformRevenue).
+  manualRevenueByMethod: Record<string, { subtotal: number; count: number }>;
   effectiveFeeRate: number;  // platformFeesPaid / platformRevenue
 }
 
@@ -128,6 +132,7 @@ const EMPTY_SUMMARY: FinancialSummary = {
   manualOrderCount: 0,
   platformRevenue: 0,
   manualRevenue: 0,
+  manualRevenueByMethod: {},
   effectiveFeeRate: 0,
 };
 
@@ -148,10 +153,10 @@ export function summarizePaidOrders(orders: Order[], from?: Date, to?: Date): Fi
   );
 
   if (receivedInRange.length === 0 && fullyRefundedInRange.length === 0) {
-    return { ...EMPTY_SUMMARY };
+    return { ...EMPTY_SUMMARY, manualRevenueByMethod: {} };
   }
 
-  const s: FinancialSummary = { ...EMPTY_SUMMARY };
+  const s: FinancialSummary = { ...EMPTY_SUMMARY, manualRevenueByMethod: {} };
 
   for (const o of receivedInRange) {
     const sub = deriveSubtotal(o);
@@ -173,6 +178,14 @@ export function summarizePaidOrders(orders: Order[], from?: Date, to?: Date): Fi
     } else if (isManualPayment(o)) {
       s.manualOrderCount += 1;
       s.manualRevenue += sub;
+      const key = o.paymentMethod!;
+      const existing = s.manualRevenueByMethod[key];
+      if (existing) {
+        existing.subtotal += sub;
+        existing.count += 1;
+      } else {
+        s.manualRevenueByMethod[key] = { subtotal: sub, count: 1 };
+      }
     }
     // Partial refund contribution. Pro-rate against the order total for
     // reconciliation purposes; exact per-line breakdown would require
