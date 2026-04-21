@@ -158,7 +158,7 @@ export default function IntegrationsPage() {
               </div>
               <h3 className="text-xl font-semibold">Shipping carriers</h3>
               <p className="mt-2 text-sm text-muted-foreground leading-relaxed flex-1">
-                Generate tracking links for six major carriers directly from the order view: <strong className="text-foreground/80">PostNL, DHL, UPS, FedEx, DPD,</strong> and <strong className="text-foreground/80">GLS</strong>. Buyers receive tracking links automatically when you mark an order as shipped.
+                Generate tracking links for seven major carriers directly from the order view: <strong className="text-foreground/80">PostNL, DHL, UPS, FedEx, DPD, GLS,</strong> and <strong className="text-foreground/80">Correos</strong>. Buyers receive tracking links automatically when you mark an order as shipped.
               </p>
               <div className="mt-6">
                 <Link

@@ -226,8 +226,8 @@ const capabilityBuckets: CapabilityBucket[] = [
       },
       {
         icon: Truck,
-        title: "Six carrier integrations",
-        desc: "PostNL, DHL, UPS, FedEx, DPD, GLS — with automatic tracking link generation per carrier.",
+        title: "Seven carrier integrations",
+        desc: "PostNL, DHL, UPS, FedEx, DPD, GLS, Correos — with automatic tracking link generation per carrier.",
       },
       {
         icon: RefreshCw,

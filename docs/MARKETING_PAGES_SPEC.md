@@ -149,7 +149,7 @@ and buy from shops on the platform.
   control (open / private / invite-only)
 - **Orders:** cart-based checkout, statuses (awaiting approval → pending →
   processing → shipped → completed / cancelled / on hold), refunds with stock
-  restoration, carrier tracking (PostNL, DHL, UPS, FedEx, DPD, GLS)
+  restoration, carrier tracking (PostNL, DHL, UPS, FedEx, DPD, GLS, Correos)
 - **Payments:** Stripe Connect (1.5%–3.25% + €0.25 per tx) or PayPal;
   auto-generated invoices; multi-account tracking
 - **CRM:** client accounts, wishlist, favorites, access control per client
@@ -169,7 +169,7 @@ and buy from shops on the platform.
 - **Stripe Connect** — merchant payouts, checkout, refunds
 - **Stripe Tax** — optional automated tax
 - **PayPal** — alternative checkout
-- **Carriers** — PostNL, DHL, UPS, FedEx, DPD, GLS (tracking links)
+- **Carriers** — PostNL, DHL, UPS, FedEx, DPD, GLS, Correos (tracking links)
 - **Firebase / Google Cloud** — hosting + Firestore data layer
 
 ### Pricing (source: `src/services/client-subscription-service.ts`)

@@ -3,9 +3,9 @@
 // - Soft regex validators (warnings, not hard blocks — carriers do change formats)
 // - A URL parser that detects carrier + tracking number from a pasted tracking URL
 
-export type Carrier = 'postnl' | 'dhl' | 'ups' | 'fedex' | 'dpd' | 'gls' | 'other';
+export type Carrier = 'postnl' | 'dhl' | 'ups' | 'fedex' | 'dpd' | 'gls' | 'correos' | 'other';
 
-export const CARRIERS: Carrier[] = ['postnl', 'dhl', 'ups', 'fedex', 'dpd', 'gls', 'other'];
+export const CARRIERS: Carrier[] = ['postnl', 'dhl', 'ups', 'fedex', 'dpd', 'gls', 'correos', 'other'];
 
 export const CARRIER_LABELS: Record<Carrier, string> = {
   postnl: 'PostNL',
@@ -14,6 +14,7 @@ export const CARRIER_LABELS: Record<Carrier, string> = {
   fedex: 'FedEx',
   dpd: 'DPD',
   gls: 'GLS',
+  correos: 'Correos',
   other: 'Other',
 };
 
@@ -24,6 +25,7 @@ const URL_BUILDERS: Record<Exclude<Carrier, 'other'>, (trackingNumber: string) =
   fedex:  (n) => `https://www.fedex.com/fedextrack/?tracknumbers=${encodeURIComponent(n)}`,
   dpd:    (n) => `https://www.dpd.com/tracking?query=${encodeURIComponent(n)}`,
   gls:    (n) => `https://gls-group.com/track?match=${encodeURIComponent(n)}`,
+  correos: (n) => `https://www.correos.es/es/es/herramientas/localizador/envios/detalle?tracking-number=${encodeURIComponent(n)}`,
 };
 
 // Soft per-carrier validators. These catch obvious typos but won't reject
@@ -35,6 +37,7 @@ const VALIDATORS: Record<Exclude<Carrier, 'other'>, RegExp> = {
   fedex:  /^\d{12,20}$/,
   dpd:    /^\d{14}$|^[A-Z0-9]{8,20}$/i,
   gls:    /^\d{8,20}$/,
+  correos: /^[A-Z]{2}\d{9}[A-Z]{2}$|^[A-Z]{2}\d{9}ES$|^\d{13,14}$/i,
 };
 
 // URL-pattern based detection. Used when the distributor pastes a full
@@ -78,6 +81,15 @@ const URL_PARSERS: Array<{
     carrier: 'gls',
     patterns: [/gls-group\./i, /gls\-/i],
     extract: (url) => url.searchParams.get('match') || url.searchParams.get('trackNr'),
+  },
+  {
+    carrier: 'correos',
+    patterns: [/correos\.es/i, /correos\.com/i],
+    extract: (url) =>
+      url.searchParams.get('tracking-number') ||
+      url.searchParams.get('numero') ||
+      url.searchParams.get('envio') ||
+      null,
   },
 ];
 

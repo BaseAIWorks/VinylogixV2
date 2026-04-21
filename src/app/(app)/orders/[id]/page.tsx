@@ -101,7 +101,7 @@ export default function OrderDetailPage() {
     const [shipDialogOpen, setShipDialogOpen] = useState(false);
     const [isSavingShipping, setIsSavingShipping] = useState(false);
     const [isResendingTracking, setIsResendingTracking] = useState(false);
-    const [shipCarrier, setShipCarrier] = useState<'postnl' | 'dhl' | 'ups' | 'fedex' | 'dpd' | 'gls' | 'other'>('postnl');
+    const [shipCarrier, setShipCarrier] = useState<'postnl' | 'dhl' | 'ups' | 'fedex' | 'dpd' | 'gls' | 'correos' | 'other'>('postnl');
     const [shipInput, setShipInput] = useState<string>('');
     const [shipEta, setShipEta] = useState<string>('');
     const [shipSendEmail, setShipSendEmail] = useState<boolean>(true);
@@ -1042,6 +1042,7 @@ export default function OrderDetailPage() {
                                     <SelectItem value="fedex">FedEx</SelectItem>
                                     <SelectItem value="dpd">DPD</SelectItem>
                                     <SelectItem value="gls">GLS</SelectItem>
+                                    <SelectItem value="correos">Correos</SelectItem>
                                     <SelectItem value="other">Other</SelectItem>
                                 </SelectContent>
                             </Select>

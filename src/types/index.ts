@@ -720,7 +720,7 @@ export interface Order {
   invoiceEmailedCount?: number;
 
   // Shipping Tracking Fields
-  carrier?: 'postnl' | 'dhl' | 'ups' | 'fedex' | 'dpd' | 'gls' | 'other';
+  carrier?: 'postnl' | 'dhl' | 'ups' | 'fedex' | 'dpd' | 'gls' | 'correos' | 'other';
   trackingNumber?: string;
   trackingUrl?: string;
   shippedAt?: string; // ISO String

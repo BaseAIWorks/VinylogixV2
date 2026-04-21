@@ -132,7 +132,7 @@ export default function ForDistributorsPage() {
               </div>
               <h3 className="text-xl font-semibold">Built-in order and payment flow</h3>
               <p className="mt-3 text-muted-foreground leading-relaxed text-sm">
-                Buyers place orders through your storefront. Payments go through Stripe Connect or PayPal — card data never touches your server. Invoices are generated automatically, and carrier tracking links (PostNL, DHL, UPS, FedEx, DPD, GLS) keep buyers informed from pick to delivery.
+                Buyers place orders through your storefront. Payments go through Stripe Connect or PayPal — card data never touches your server. Invoices are generated automatically, and carrier tracking links (PostNL, DHL, UPS, FedEx, DPD, GLS, Correos) keep buyers informed from pick to delivery.
               </p>
             </div>
 
