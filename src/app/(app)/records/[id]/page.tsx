@@ -108,6 +108,7 @@ export default function RecordDetailPage() {
   const [isSubmittingCollection, setIsSubmittingCollection] = useState(false);
   const [isSubmittingWishlist, setIsSubmittingWishlist] = useState(false);
   const [isGeneratingAiInfo, setIsGeneratingAiInfo] = useState(false);
+  const [aiInfoError, setAiInfoError] = useState<{ kind: 'rate_limited' | 'unavailable'; message: string } | null>(null);
   const [moreByArtist, setMoreByArtist] = useState<VinylRecord[]>([]);
   const [isReGenerating, setIsReGenerating] = useState(false);
   const [quantity, setQuantity] = useState(1);
@@ -237,16 +238,22 @@ export default function RecordDetailPage() {
   // Effect to automatically generate AI content if it's missing
   const generateAndStoreInfo = useCallback(async () => {
       if (!record || !user || !user.email || !record.artist || !record.title) return;
-        
+
       setIsGeneratingAiInfo(true);
+      setAiInfoError(null);
       try {
-        const result = await generateRecordInfo({ 
-            artist: record.artist, 
-            title: record.title, 
+        const result = await generateRecordInfo({
+            artist: record.artist,
+            title: record.title,
             year: record.year ? Number(record.year) : undefined,
             distributorId: record.distributorId,
         });
-        
+
+        if (!result.ok) {
+          setAiInfoError({ kind: result.error, message: result.message });
+          return;
+        }
+
         const updatedRecordData = await updateRecordInService(
           record.id,
           { artistBio: result.artistBio, albumInfo: result.albumInfo },
@@ -258,6 +265,7 @@ export default function RecordDetailPage() {
         }
       } catch (error) {
         console.error("Failed to automatically generate and store AI info:", error);
+        setAiInfoError({ kind: 'unavailable', message: 'AI is temporarily unavailable.' });
       } finally {
         setIsGeneratingAiInfo(false);
       }
@@ -271,10 +279,13 @@ export default function RecordDetailPage() {
         .catch(() => {});
     }
 
-    if (record && !record.artistBio && !isGeneratingAiInfo) {
+    // Only auto-trigger while we haven't already failed on this record. Without
+    // this guard a rate-limited / unavailable response would put us into an
+    // infinite retry loop (loader spinning forever, 500s stacking up).
+    if (record && !record.artistBio && !isGeneratingAiInfo && !aiInfoError) {
       generateAndStoreInfo();
     }
-  }, [record, isGeneratingAiInfo, generateAndStoreInfo]);
+  }, [record, isGeneratingAiInfo, aiInfoError, generateAndStoreInfo]);
 
   const fetchDiscogsData = useCallback(async () => {
     if (!record || !record.discogs_id) return;
@@ -436,14 +447,24 @@ export default function RecordDetailPage() {
   const handleRegenerateAiInfo = async () => {
     if (!record || !user || user.role !== 'master' || !user.email) return;
     setIsReGenerating(true);
+    setAiInfoError(null);
     toast({ title: "Re-generating AI Info...", description: "Please wait a moment." });
     try {
-        const result = await generateRecordInfo({ 
-            artist: record.artist, 
-            title: record.title, 
+        const result = await generateRecordInfo({
+            artist: record.artist,
+            title: record.title,
             year: record.year ? Number(record.year) : undefined,
             distributorId: record.distributorId,
         });
+        if (!result.ok) {
+            setAiInfoError({ kind: result.error, message: result.message });
+            toast({
+              title: result.error === 'rate_limited' ? "AI is busy" : "AI unavailable",
+              description: result.message,
+              variant: "destructive",
+            });
+            return;
+        }
         const updatedRecordData = await updateRecordInService(
             record.id,
             { artistBio: result.artistBio, albumInfo: result.albumInfo },
@@ -455,6 +476,7 @@ export default function RecordDetailPage() {
         }
     } catch (error) {
         console.error("Failed to re-generate AI info:", error);
+        setAiInfoError({ kind: 'unavailable', message: 'AI is temporarily unavailable.' });
         toast({ title: "Error", description: "Could not re-generate AI info.", variant: "destructive" });
     } finally {
         setIsReGenerating(false);
@@ -907,7 +929,7 @@ export default function RecordDetailPage() {
           </Card>
         )}
 
-        {isGeneratingAiInfo && !record.artistBio && (
+        {isGeneratingAiInfo && !record.artistBio && !aiInfoError && (
             <Card className="shadow-xl">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-3">
@@ -929,6 +951,30 @@ export default function RecordDetailPage() {
                         <Skeleton className="h-4 w-full" />
                         <Skeleton className="h-4 w-3/4" />
                     </div>
+                </CardContent>
+            </Card>
+        )}
+
+        {aiInfoError && !record.artistBio && (
+            <Card className="shadow-sm border-amber-500/30 bg-amber-500/5">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                        <UserCircle className="h-5 w-5 text-amber-600" />
+                        About {record.artist}
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                    <p className="text-muted-foreground">
+                        {aiInfoError.kind === 'rate_limited'
+                            ? "Our AI is a bit busy right now — the automatic biography will appear here once it's available again."
+                            : "Biography isn't available at the moment. Please try again later."}
+                    </p>
+                    {user?.role === 'master' && (
+                        <Button variant="outline" size="sm" onClick={handleRegenerateAiInfo} disabled={isReGenerating}>
+                            {isReGenerating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                            Try again
+                        </Button>
+                    )}
                 </CardContent>
             </Card>
         )}

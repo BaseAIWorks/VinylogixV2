@@ -27,9 +27,26 @@ const GenerateRecordInfoOutputSchema = z.object({
 });
 export type GenerateRecordInfoOutput = z.infer<typeof GenerateRecordInfoOutputSchema>;
 
+// Public return type: wraps the model output with a soft-fail error field so
+// callers can react inline ("AI is busy, try later") instead of the server
+// action throwing and returning a 500 to the browser.
+export type GenerateRecordInfoResult =
+  | { ok: true; artistBio: string; albumInfo: string }
+  | { ok: false; error: 'rate_limited' | 'unavailable'; message: string };
 
-export async function generateRecordInfo(input: GenerateRecordInfoInput): Promise<GenerateRecordInfoOutput> {
-  return generateRecordInfoFlow(input);
+export async function generateRecordInfo(input: GenerateRecordInfoInput): Promise<GenerateRecordInfoResult> {
+  try {
+    const output = await generateRecordInfoFlow(input);
+    return { ok: true, artistBio: output.artistBio, albumInfo: output.albumInfo };
+  } catch (err: any) {
+    const msg = String(err?.message || err || '');
+    const status = err?.status ?? err?.cause?.status;
+    if (status === 429 || /429|Too Many Requests|Resource exhausted|quota/i.test(msg)) {
+      return { ok: false, error: 'rate_limited', message: 'AI quota reached. Try again in a minute.' };
+    }
+    console.error('[generateRecordInfo] failed:', err);
+    return { ok: false, error: 'unavailable', message: 'AI is temporarily unavailable.' };
+  }
 }
 
 

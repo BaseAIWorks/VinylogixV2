@@ -76,12 +76,17 @@ const prepareRecordFlow = ai.defineFlow(
       try {
         // Log the Gemini API call.
         ai.run('logApiCall', () => logApiCall('gemini', input.distributorId));
-        aiInfo = await generateRecordInfo({
+        const aiResult = await generateRecordInfo({
           artist: discogsDetails.artist,
           title: discogsDetails.title,
           year: discogsDetails.year,
           distributorId: input.distributorId,
         });
+        if (aiResult.ok) {
+          aiInfo = { artistBio: aiResult.artistBio, albumInfo: aiResult.albumInfo };
+        } else {
+          console.warn(`[prepare-record-flow] AI ${aiResult.error} for Discogs ID ${input.discogsId}: ${aiResult.message}`);
+        }
       } catch (aiError) {
         console.warn(
           `AI content generation failed for Discogs ID ${input.discogsId}, proceeding without it. Error: ${(aiError as Error).message}`

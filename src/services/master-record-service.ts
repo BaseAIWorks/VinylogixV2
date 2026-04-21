@@ -43,12 +43,17 @@ export async function findOrCreateMasterRecord(
   
   if (allowAiFeatures && actingUser.role !== 'viewer' && discogsDetails.artist && discogsDetails.title) {
       try {
-          aiInfo = await generateRecordInfo({
+          const aiResult = await generateRecordInfo({
               artist: discogsDetails.artist,
               title: discogsDetails.title,
               year: discogsDetails.year,
               distributorId: actingUser.distributorId,
           });
+          if (aiResult.ok) {
+              aiInfo = { artistBio: aiResult.artistBio, albumInfo: aiResult.albumInfo };
+          } else {
+              console.warn(`[master-record-service] AI ${aiResult.error} for Discogs ID ${discogsId}: ${aiResult.message}`);
+          }
       } catch (aiError) {
           console.warn(`AI content generation failed for Discogs ID ${discogsId}, proceeding without it.`, aiError);
       }
