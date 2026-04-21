@@ -3,7 +3,7 @@
 
 import type { Order, OrderStatus, OrderItemStatus, OrderAssignmentEvent, User, OrderItem } from '@/types';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, where, limit, Timestamp, runTransaction } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, where, limit, orderBy, Timestamp, runTransaction } from 'firebase/firestore';
 import {
   deductStockForOrder,
   deductReservedStockForOrder,
@@ -49,7 +49,10 @@ const processOrderTimestamps = (orderData: any): Order => {
 };
 
 
-export async function getOrders(user: User): Promise<Order[]> {
+export async function getOrders(
+  user: User,
+  opts?: { since?: Date; limit?: number },
+): Promise<Order[]> {
   const targetDistributorId = user.distributorId;
   if (!targetDistributorId) {
       logger.warn("OrderService: User has no distributorId, cannot fetch orders");
@@ -57,6 +60,25 @@ export async function getOrders(user: User): Promise<Order[]> {
   }
   const ordersCollectionRef = collection(db, ORDERS_COLLECTION);
   try {
+      // When a caller passes opts (dashboard) we rely on the composite index
+      // (distributorId ASC, createdAt DESC) for server-side order+cap. Callers
+      // that want the full history pass no opts and keep the pre-existing
+      // where-only query + client-side sort — that way this change doesn't
+      // require the new index to be deployed before rollout.
+      if (opts?.since || opts?.limit) {
+        const constraints: any[] = [where("distributorId", "==", targetDistributorId)];
+        if (opts.since) {
+          constraints.push(where("createdAt", ">=", Timestamp.fromDate(opts.since)));
+        }
+        constraints.push(orderBy("createdAt", "desc"));
+        if (typeof opts.limit === "number" && opts.limit > 0) {
+          constraints.push(limit(opts.limit));
+        }
+        const q = query(ordersCollectionRef, ...constraints);
+        const snap = await getDocs(q);
+        return snap.docs.map(d => processOrderTimestamps({ ...d.data(), id: d.id }));
+      }
+
       const q = query(ordersCollectionRef, where("distributorId", "==", targetDistributorId));
       const querySnapshot = await getDocs(q);
       const orders = querySnapshot.docs.map(docSnap => processOrderTimestamps({ ...docSnap.data(), id: docSnap.id }));

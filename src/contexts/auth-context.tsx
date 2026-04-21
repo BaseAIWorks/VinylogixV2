@@ -86,7 +86,6 @@ import {
   getWeightOptions as fetchWeightOptions,
   getSubscriptionTiers,
 } from '@/services/client-subscription-service';
-import { getAllUsers } from '@/services/admin-user-service';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getRecordById, searchRecordsByTerm as searchRecords } from '@/services/record-service';
 import { getSuppliersByDistributorId } from '@/services/supplier-service';

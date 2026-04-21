@@ -169,13 +169,40 @@ export const getAllUsers = onCall({ region: "europe-west4", cors: true }, async 
 
     logger.info(`getAllUsers called by superadmin: ${uid}`);
 
-    // Proceed with fetching all user data
-    const listUsersResult = await admin.auth().listUsers(1000);
-    const allFirestoreUsers = await admin.firestore().collection("users").get();
+    // Fire both reads in parallel — they're independent and together dominate
+    // this function's wall time.
+    const [listUsersResult, allFirestoreUsers] = await Promise.all([
+      admin.auth().listUsers(1000),
+      admin.firestore().collection("users").get(),
+    ]);
 
-    const firestoreUsersMap = new Map();
+    // Project Firestore user data to just the fields the admin pages consume
+    // (accounts/page.tsx + statistics/page.tsx). The full user doc carries
+    // VAT/EORI/address/cart/favorites etc. that the dashboards never touch —
+    // stripping them cuts response size by a large factor.
+    const PROJECTED_FIELDS = [
+      "role",
+      "firstName",
+      "lastName",
+      "companyName",
+      "createdAt",
+      "lastLoginAt",
+      "accessibleDistributorIds",
+      "profileComplete",
+      "originType",
+      "originDistributorName",
+      "status",
+      "distributorId",
+    ] as const;
+
+    const firestoreUsersMap = new Map<string, Record<string, any>>();
     allFirestoreUsers.forEach((doc) => {
-        firestoreUsersMap.set(doc.id, processUserTimestamps(doc.data()));
+        const data = processUserTimestamps(doc.data()) as Record<string, any>;
+        const projected: Record<string, any> = {};
+        for (const f of PROJECTED_FIELDS) {
+          if (data[f] !== undefined) projected[f] = data[f];
+        }
+        firestoreUsersMap.set(doc.id, projected);
     });
 
     const combinedUsers = listUsersResult.users.map((userRecord) => {
@@ -186,7 +213,7 @@ export const getAllUsers = onCall({ region: "europe-west4", cors: true }, async 
             ...firestoreData,
         };
     });
-    
+
     return combinedUsers;
 
   } catch (error) {

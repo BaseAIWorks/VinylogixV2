@@ -151,9 +151,16 @@ export default function DashboardPage() {
         }
         setIsLoadingStats(true);
         try {
+            // Bound the dashboard's orders fetch to the last 90 days. That
+            // covers every preset (today / 7d / 30d) plus the previous-period
+            // comparison window (60d for the 30d preset). The "All Time" card
+            // consequently displays the last 90 days on the dashboard; the
+            // unbounded history lives on /orders and /stats where paging is
+            // done properly.
+            const ordersSince = subDays(new Date(), 90);
             const [fetchedRecords, fetchedOrders, fetchedDistributor, fetchedClients] = await Promise.all([
                 getAllInventoryRecords(user, user.distributorId),
-                getOrders(user),
+                getOrders(user, { since: ordersSince }),
                 getDistributorById(user.distributorId),
                 getClientsByDistributorId(user.distributorId),
             ]);
