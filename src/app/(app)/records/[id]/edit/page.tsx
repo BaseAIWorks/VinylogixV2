@@ -15,7 +15,7 @@ import Image from "next/image";
 import { Separator } from "@/components/ui/separator";
 
 export default function EditRecordPage() {
-  const { user, activeDistributor } = useAuth();
+  const { user, activeDistributor, activeDistributorId } = useAuth();
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
@@ -68,6 +68,12 @@ export default function EditRecordPage() {
 
     try {
       await updateRecord(recordId, dataToUpdate, user);
+      // Invalidate the inventory list cache so the user sees the updated
+      // record when navigating back to /inventory (the list is otherwise
+      // rehydrated from sessionStorage and would show stale data).
+      if (activeDistributorId) {
+        try { sessionStorage.removeItem(`inventory_cache_${activeDistributorId}`); } catch {}
+      }
       toast({
         title: "Record Updated",
         description: `"${values.title}" has been successfully updated.`,

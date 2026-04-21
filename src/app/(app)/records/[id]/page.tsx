@@ -346,6 +346,11 @@ export default function RecordDetailPage() {
     try {
       const success = await deleteRecordFromService(record.id);
       if (success) {
+        // Invalidate inventory-list cache so the deleted record doesn't
+        // reappear from sessionStorage when the user navigates back.
+        if (activeDistributorId) {
+          try { sessionStorage.removeItem(`inventory_cache_${activeDistributorId}`); } catch {}
+        }
         toast({ title: "Record Removed", description: `"${record.title}" has been removed from your collection.`});
         router.back();
       } else {
@@ -521,6 +526,11 @@ export default function RecordDetailPage() {
         );
         if (updated) {
             setRecord(updated);
+            // Stock/location change needs to be visible on the inventory list
+            // after the user navigates back — drop the sessionStorage cache.
+            if (activeDistributorId) {
+              try { sessionStorage.removeItem(`inventory_cache_${activeDistributorId}`); } catch {}
+            }
             toast({ title: "Stock Adjusted", description: "The stock levels and locations have been updated." });
             setIsAdjustStockOpen(false);
         }
