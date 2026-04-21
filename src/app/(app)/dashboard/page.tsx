@@ -2,14 +2,14 @@
 
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Package, ShoppingCart, Users, Library, ListChecks, ArrowRight, BarChart3, Building, HardHat, Briefcase, ScanLine, Archive, Tags, Euro, Barcode, Newspaper, AlertTriangle, Keyboard, TrendingUp, TrendingDown, Clock, AlertCircle, ChevronRight } from "lucide-react";
+import { Loader2, Package, PackageCheck, Truck, ShoppingCart, Users, Library, ListChecks, ArrowRight, BarChart3, Building, HardHat, Briefcase, ScanLine, Archive, Tags, Euro, Barcode, Newspaper, AlertTriangle, Keyboard, TrendingUp, TrendingDown, Clock, AlertCircle, ChevronRight, CreditCard, User as UserIcon, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import type { VinylRecord, Order, OrderStatus, Distributor, User } from "@/types";
 import { getAllInventoryRecords, getLatestRecordsFromDistributors, getRecordsByOwner, getWishlistedRecords } from "@/services/record-service";
-import { getOrders } from "@/services/order-service";
+import { getOrders, claimOrder, markOrderPacked } from "@/services/order-service";
 import { getDistributorById } from "@/services/distributor-service";
 import { getClientsByDistributorId } from "@/services/user-service";
 import { useToast } from "@/hooks/use-toast";
@@ -19,7 +19,13 @@ import RecordCard from "@/components/records/record-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { format, subDays, isAfter, parseISO, startOfDay } from 'date-fns';
+import { format, subDays, isAfter, parseISO, startOfDay, differenceInDays } from 'date-fns';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { TrendIndicator, calculateTrend } from "@/components/ui/trend-indicator";
 
 type DateRangePreset = "today" | "7days" | "30days" | "all";
@@ -129,6 +135,15 @@ export default function DashboardPage() {
     const [viewerCollectionCount, setViewerCollectionCount] = useState<number>(0);
     const [viewerWishlistCount, setViewerWishlistCount] = useState<number>(0);
 
+    // Orders for the operator fulfillment section — fetched separately so
+    // workers (who don't run the master-only stats pipeline) can still see
+    // their work list. Masters use the same array instead of refetching.
+    const [fulfillmentOrders, setFulfillmentOrders] = useState<Order[]>([]);
+    const [isLoadingFulfillment, setIsLoadingFulfillment] = useState(true);
+
+    const canSeeFulfillment =
+        !!user && (user.role === 'master' || (user.role === 'worker' && !!user.permissions?.canManageOrders));
+
      const fetchMasterStatsData = useCallback(async () => {
         if (!user || user.role !== 'master' || !user.distributorId) {
             setIsLoadingStats(false);
@@ -189,6 +204,32 @@ export default function DashboardPage() {
             setIsLoadingStats(false);
         }
     }, [user, authLoading, fetchMasterStatsData, fetchViewerDashboardData]);
+
+    // Dedicated fulfillment fetch so the section works for workers too. For
+    // masters the main `orders` state already holds this data, but we keep a
+    // separate fetch to avoid coupling the master-stats load path to this
+    // section (a failure in one shouldn't hide the other).
+    const fetchFulfillmentOrders = useCallback(async () => {
+        if (!canSeeFulfillment || !user) {
+            setIsLoadingFulfillment(false);
+            return;
+        }
+        setIsLoadingFulfillment(true);
+        try {
+            const fetched = await getOrders(user);
+            setFulfillmentOrders(
+                fetched.filter(o => ['paid', 'processing', 'ready_to_ship', 'shipped'].includes(o.status))
+            );
+        } catch (error) {
+            console.error("DashboardPage: Failed to fetch fulfillment orders", error);
+        } finally {
+            setIsLoadingFulfillment(false);
+        }
+    }, [canSeeFulfillment, user]);
+
+    useEffect(() => {
+        if (!authLoading) fetchFulfillmentOrders();
+    }, [authLoading, fetchFulfillmentOrders]);
 
     // Get date cutoff based on selected range
     const getDateCutoff = useCallback((preset: DateRangePreset): Date | null => {
@@ -357,6 +398,89 @@ export default function DashboardPage() {
         };
     }, [records, orders, user, dateRange, getDateCutoff, getPreviousPeriodCutoff, distributor, clientUsers]);
 
+    // Fulfillment summary for the operator dashboard section.
+    //
+    // Hot-list priority: unassigned `paid` orders go first (FIFO so the
+    // oldest one nags loudest), then orders that the CURRENT user has
+    // claimed and is still working on. Workers without claimed work see
+    // only the unassigned queue — which nudges them to pick one up.
+    const fulfillmentSummary = useMemo(() => {
+        if (!canSeeFulfillment || !user) return null;
+        const today = startOfDay(new Date());
+
+        const unassignedCount = fulfillmentOrders.filter(
+            o => o.status === 'paid' && !o.assigneeUid
+        ).length;
+        const mineInProgressCount = fulfillmentOrders.filter(
+            o =>
+                o.assigneeUid === user.uid &&
+                (o.status === 'processing' || o.status === 'ready_to_ship')
+        ).length;
+        const readyToShipCount = fulfillmentOrders.filter(o => o.status === 'ready_to_ship').length;
+        const shippedTodayCount = fulfillmentOrders.filter(o => {
+            if (o.status !== 'shipped' || !o.shippedAt) return false;
+            return isAfter(parseISO(o.shippedAt), today);
+        }).length;
+
+        const unassignedPaid = fulfillmentOrders
+            .filter(o => o.status === 'paid' && !o.assigneeUid)
+            .sort((a, b) => parseISO(a.createdAt).getTime() - parseISO(b.createdAt).getTime());
+        const mineInProgress = fulfillmentOrders
+            .filter(
+                o =>
+                    o.assigneeUid === user.uid &&
+                    (o.status === 'processing' || o.status === 'ready_to_ship')
+            )
+            .sort((a, b) => parseISO(a.createdAt).getTime() - parseISO(b.createdAt).getTime());
+
+        // Hot list (max 5): unassigned paid first (FIFO nags loudest), but
+        // always reserve up to 2 slots for "mine in progress" so an operator
+        // with active claims keeps seeing their own work even when the
+        // unassigned queue is long.
+        const mineSlots = Math.min(mineInProgress.length, 2);
+        const unassignedSlots = 5 - mineSlots;
+        const hotList = [
+            ...unassignedPaid.slice(0, unassignedSlots),
+            ...mineInProgress.slice(0, mineSlots),
+        ];
+
+        return {
+            unassignedCount,
+            mineInProgressCount,
+            readyToShipCount,
+            shippedTodayCount,
+            hotList,
+        };
+    }, [canSeeFulfillment, fulfillmentOrders, user]);
+
+    const handleDashboardClaim = useCallback(
+        async (orderId: string) => {
+            if (!user) return;
+            try {
+                await claimOrder(orderId, user);
+                toast({ title: "Claimed", description: "You're now on this order." });
+                fetchFulfillmentOrders();
+            } catch (error) {
+                toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+            }
+        },
+        [user, toast, fetchFulfillmentOrders]
+    );
+
+    const handleDashboardMarkPacked = useCallback(
+        async (orderId: string) => {
+            if (!user) return;
+            try {
+                await markOrderPacked(orderId, user);
+                toast({ title: "Packed", description: "Order moved to Ready to Ship." });
+                fetchFulfillmentOrders();
+            } catch (error) {
+                toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+            }
+        },
+        [user, toast, fetchFulfillmentOrders]
+    );
+
     // Viewer stats
     const viewerStats = useMemo(() => {
       if (user?.role !== 'viewer') return null;
@@ -518,6 +642,21 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
+
+            {/* Fulfillment section — visible for master + workers with
+                canManageOrders. Sits at the top so the active work is the
+                first thing you see after logging in. For workers who don't
+                run master-stats this is the main dashboard content. */}
+            {canSeeFulfillment && (
+                <FulfillmentSection
+                    isLoading={isLoadingFulfillment}
+                    summary={fulfillmentSummary}
+                    currentUserUid={user.uid}
+                    onClaim={handleDashboardClaim}
+                    onMarkPacked={handleDashboardMarkPacked}
+                    onViewOrder={(id) => router.push(`/orders/${id}`)}
+                />
+            )}
 
             {user.role === 'master' && (
                 isLoadingStats ? (
@@ -748,4 +887,301 @@ export default function DashboardPage() {
             </div>
         </div>
     );
+}
+
+// ----------------------------------------------------------------------
+// FulfillmentSection — operator-only dashboard card
+// ----------------------------------------------------------------------
+
+interface FulfillmentSectionProps {
+  isLoading: boolean;
+  summary: {
+    unassignedCount: number;
+    mineInProgressCount: number;
+    readyToShipCount: number;
+    shippedTodayCount: number;
+    hotList: Order[];
+  } | null;
+  currentUserUid: string;
+  onClaim: (orderId: string) => void;
+  onMarkPacked: (orderId: string) => void;
+  onViewOrder: (orderId: string) => void;
+}
+
+// Compact mini-tile for the 4 counts at the top of the section. Lighter
+// than the main StatCard because we're rendering 4 in a tight grid.
+function FulfillmentTile({
+  icon: Icon,
+  label,
+  count,
+  tone,
+  highlight,
+  href,
+}: {
+  icon: React.ElementType;
+  label: string;
+  count: number;
+  tone: string;
+  highlight?: boolean;
+  href?: string;
+}) {
+  const content = (
+    <div
+      className={cn(
+        "flex items-center gap-3 p-3 rounded-lg border transition-colors",
+        highlight ? "border-orange-300 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-950/20" : "bg-background",
+        href && "hover:border-primary cursor-pointer"
+      )}
+    >
+      <div className={cn("p-2 rounded-lg shrink-0", tone)}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <div>
+        <div className="text-2xl font-bold leading-none">{count}</div>
+        <div className="text-[11px] text-muted-foreground mt-1">{label}</div>
+      </div>
+    </div>
+  );
+  if (href) return <Link href={href}>{content}</Link>;
+  return content;
+}
+
+// Same deterministic colour scheme as the kanban card's assignee chip —
+// keeps the same collaborator recognisable by colour across the app.
+function dashboardAssigneeInitials(email: string | undefined | null): string {
+  if (!email) return "?";
+  const local = email.split("@")[0] || email;
+  const bits = local.split(/[._-]/).filter(Boolean);
+  if (bits.length === 0) return local.slice(0, 2).toUpperCase();
+  if (bits.length === 1) return bits[0].slice(0, 2).toUpperCase();
+  return (bits[0][0] + bits[1][0]).toUpperCase();
+}
+function dashboardAssigneeTone(email: string | undefined | null): string {
+  if (!email) return "bg-muted text-muted-foreground";
+  let hash = 0;
+  for (let i = 0; i < email.length; i++) hash = (hash * 31 + email.charCodeAt(i)) & 0xffffffff;
+  const palette = [
+    "bg-rose-100 text-rose-700",
+    "bg-orange-100 text-orange-700",
+    "bg-amber-100 text-amber-700",
+    "bg-lime-100 text-lime-700",
+    "bg-emerald-100 text-emerald-700",
+    "bg-teal-100 text-teal-700",
+    "bg-sky-100 text-sky-700",
+    "bg-indigo-100 text-indigo-700",
+    "bg-fuchsia-100 text-fuchsia-700",
+    "bg-pink-100 text-pink-700",
+  ];
+  return palette[Math.abs(hash) % palette.length];
+}
+
+function FulfillmentSection({
+  isLoading,
+  summary,
+  currentUserUid,
+  onClaim,
+  onMarkPacked,
+  onViewOrder,
+}: FulfillmentSectionProps) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Truck className="h-5 w-5 text-primary" />
+            Fulfillment
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-16 rounded-lg" />
+            ))}
+          </div>
+          <Skeleton className="h-32 rounded-lg" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!summary) return null;
+
+  const hasWork = summary.hotList.length > 0;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Truck className="h-5 w-5 text-primary" />
+              Fulfillment
+            </CardTitle>
+            <CardDescription>
+              Orders waiting to be picked up, packed, and shipped.
+            </CardDescription>
+          </div>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/fulfillment">
+              See all <ArrowRight className="ml-1 h-3 w-3" />
+            </Link>
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <FulfillmentTile
+            icon={UserIcon}
+            label="Unassigned"
+            count={summary.unassignedCount}
+            tone="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+            highlight={summary.unassignedCount > 0}
+            href="/fulfillment"
+          />
+          <FulfillmentTile
+            icon={Package}
+            label="My in progress"
+            count={summary.mineInProgressCount}
+            tone="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+            href="/fulfillment"
+          />
+          <FulfillmentTile
+            icon={PackageCheck}
+            label="Ready to ship"
+            count={summary.readyToShipCount}
+            tone="bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400"
+            highlight={summary.readyToShipCount > 0}
+            href="/fulfillment"
+          />
+          <FulfillmentTile
+            icon={CheckCircle2}
+            label="Shipped today"
+            count={summary.shippedTodayCount}
+            tone="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+          />
+        </div>
+
+        {hasWork ? (
+          <div className="border rounded-lg divide-y">
+            {summary.hotList.map(order => {
+              const orderAge = differenceInDays(new Date(), parseISO(order.createdAt));
+              const isMine = order.assigneeUid === currentUserUid;
+              const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+
+              // Action per row: unassigned paid → Claim, mine processing →
+              // Mark packed, mine ready_to_ship → link to /fulfillment
+              // (shipping needs the carrier/tracking dialog which lives
+              // there — no dialog on the dashboard to keep it lean).
+              let action: React.ReactNode = null;
+              if (!order.assigneeUid && order.status === 'paid') {
+                action = (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="h-7 text-xs"
+                    onClick={(e) => { e.stopPropagation(); onClaim(order.id); }}
+                  >
+                    Claim
+                  </Button>
+                );
+              } else if (isMine && order.status === 'processing') {
+                action = (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="h-7 text-xs"
+                    onClick={(e) => { e.stopPropagation(); onMarkPacked(order.id); }}
+                  >
+                    Mark packed
+                  </Button>
+                );
+              } else if (isMine && order.status === 'ready_to_ship') {
+                action = (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    asChild
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Link href="/fulfillment">Ship →</Link>
+                  </Button>
+                );
+              }
+
+              return (
+                <div
+                  key={order.id}
+                  className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer"
+                  onClick={() => onViewOrder(order.id)}
+                >
+                  {/* Assignee chip */}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          className={cn(
+                            "inline-flex items-center justify-center h-7 w-7 rounded-full text-[10px] font-semibold shrink-0",
+                            dashboardAssigneeTone(order.assigneeEmail),
+                            isMine && "ring-2 ring-primary ring-offset-1"
+                          )}
+                        >
+                          {order.assigneeUid ? dashboardAssigneeInitials(order.assigneeEmail) : <UserIcon className="h-3 w-3" />}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {order.assigneeUid
+                          ? isMine ? "You" : order.assigneeEmail
+                          : "Unassigned"}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  {/* Order identity */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm font-medium truncate">
+                        {order.orderNumber || order.id.slice(0, 8)}
+                      </span>
+                      <Badge variant="outline" className={`text-[10px] capitalize ${statusColors[order.status]}`}>
+                        {order.status.replace(/_/g, ' ')}
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {order.customerName} · {totalItems} item{totalItems !== 1 ? 's' : ''} · €{formatPriceForDisplay(order.totalAmount)}
+                    </div>
+                  </div>
+
+                  {/* Age badge — signals which orders are getting stale */}
+                  {orderAge > 0 && (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[10px]",
+                        orderAge > 3
+                          ? "bg-red-100 text-red-700 border-red-200"
+                          : orderAge > 1
+                          ? "bg-yellow-100 text-yellow-700 border-yellow-200"
+                          : ""
+                      )}
+                    >
+                      <Clock className="h-3 w-3 mr-1" />{orderAge}d
+                    </Badge>
+                  )}
+
+                  {action}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="border rounded-lg p-6 text-center text-sm text-muted-foreground">
+            {summary.unassignedCount === 0 && summary.mineInProgressCount === 0
+              ? "All caught up — nothing to do right now."
+              : "No priority orders. Open Fulfillment for the full board."}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
