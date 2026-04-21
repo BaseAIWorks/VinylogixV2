@@ -94,6 +94,17 @@ export default function OrderDetailPage() {
     const [markPaidReference, setMarkPaidReference] = useState('');
     const [markPaidNotes, setMarkPaidNotes] = useState('');
     const [markPaidSendEmail, setMarkPaidSendEmail] = useState(true);
+
+    const [isSendingReminder, setIsSendingReminder] = useState(false);
+
+    // Refund state
+    const [refundDialogOpen, setRefundDialogOpen] = useState(false);
+    const [isRefunding, setIsRefunding] = useState(false);
+    const [refundAmount, setRefundAmount] = useState<string>('');
+    const [refundReason, setRefundReason] = useState<string>('');
+    const [refundMethod, setRefundMethod] = useState<'stripe' | 'paypal' | 'bank_transfer' | 'cash' | 'other'>('bank_transfer');
+    const [refundNotes, setRefundNotes] = useState<string>('');
+
     const [isRecalculating, setIsRecalculating] = useState(false);
     const [shippingCostInput, setShippingCostInput] = useState<string>('');
     const [showShipping, setShowShipping] = useState<boolean>(false);
@@ -528,6 +539,76 @@ export default function OrderDetailPage() {
         }
     };
 
+    const handleSendReminderNow = async () => {
+        if (!order) return;
+        setIsSendingReminder(true);
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            const res = await fetch(`/api/orders/${order.id}/send-payment-reminder`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || "Request failed");
+            toast({
+                title: "Reminder sent",
+                description: `Reminder #${data.reminderCount} emailed to ${order.viewerEmail}.`,
+            });
+            const fetched = await getOrderById(order.id);
+            if (fetched) setOrder(fetched);
+        } catch (err: any) {
+            toast({ title: "Error", description: err.message || "Failed to send reminder.", variant: "destructive" });
+        } finally {
+            setIsSendingReminder(false);
+        }
+    };
+
+    const handleRefundSubmit = async () => {
+        if (!order) return;
+        const amount = parseFloat(refundAmount);
+        if (!isFinite(amount) || amount <= 0) {
+            toast({ title: "Invalid amount", description: "Enter a positive refund amount.", variant: "destructive" });
+            return;
+        }
+        setIsRefunding(true);
+        try {
+            const token = await auth.currentUser?.getIdToken();
+            const res = await fetch(`/api/orders/${order.id}/refund`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({
+                    amount,
+                    reason: refundReason,
+                    method: refundMethod,
+                    notes: refundNotes,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data?.error || "Refund failed");
+            toast({
+                title: data.paymentStatus === "refunded" ? "Fully refunded" : "Refund recorded",
+                description: `€${amount.toFixed(2)} recorded.`,
+            });
+            setRefundDialogOpen(false);
+            setRefundAmount("");
+            setRefundReason("");
+            setRefundNotes("");
+            // Reload order data
+            const fetched = await getOrderById(order.id);
+            if (fetched) setOrder(fetched);
+        } catch (err: any) {
+            toast({ title: "Error", description: err.message || "Failed to record refund.", variant: "destructive" });
+        } finally {
+            setIsRefunding(false);
+        }
+    };
+
     const handleRegeneratePaymentLink = async () => {
         if (!order) return;
         const notify = window.confirm(
@@ -762,6 +843,74 @@ export default function OrderDetailPage() {
                 </DialogContent>
             </Dialog>
 
+            {/* Refund dialog */}
+            <Dialog open={refundDialogOpen} onOpenChange={setRefundDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Record a refund</DialogTitle>
+                        <DialogDescription>
+                            {(() => {
+                                const totalRefunded = (order.refunds || []).reduce((s, r) => s + r.amount, 0);
+                                const remaining = order.totalAmount - totalRefunded;
+                                return `Already refunded: €${formatPriceForDisplay(totalRefunded)}. Remaining refundable: €${formatPriceForDisplay(remaining)}.`;
+                            })()}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="rf-amount">Amount (€)</Label>
+                            <Input
+                                id="rf-amount"
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={refundAmount}
+                                onChange={(e) => setRefundAmount(e.target.value)}
+                                placeholder="0.00"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Method</Label>
+                            <RadioGroup value={refundMethod} onValueChange={(v) => setRefundMethod(v as any)} className="gap-2">
+                                <div className="flex items-center space-x-2"><RadioGroupItem value="bank_transfer" id="rf-bt" /><Label htmlFor="rf-bt" className="font-normal">Bank transfer</Label></div>
+                                <div className="flex items-center space-x-2"><RadioGroupItem value="cash" id="rf-cash" /><Label htmlFor="rf-cash" className="font-normal">Cash</Label></div>
+                                <div className="flex items-center space-x-2"><RadioGroupItem value="stripe" id="rf-stripe" /><Label htmlFor="rf-stripe" className="font-normal">Stripe (record only — process refund manually in dashboard)</Label></div>
+                                <div className="flex items-center space-x-2"><RadioGroupItem value="paypal" id="rf-pp" /><Label htmlFor="rf-pp" className="font-normal">PayPal</Label></div>
+                                <div className="flex items-center space-x-2"><RadioGroupItem value="other" id="rf-other" /><Label htmlFor="rf-other" className="font-normal">Other</Label></div>
+                            </RadioGroup>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="rf-reason">Reason <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                            <Input
+                                id="rf-reason"
+                                value={refundReason}
+                                onChange={(e) => setRefundReason(e.target.value)}
+                                placeholder="Damaged item, cancelled, etc."
+                                maxLength={500}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="rf-notes">Internal notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                            <Textarea
+                                id="rf-notes"
+                                value={refundNotes}
+                                onChange={(e) => setRefundNotes(e.target.value)}
+                                placeholder="Bank reference, etc."
+                                maxLength={1000}
+                                rows={2}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setRefundDialogOpen(false)} disabled={isRefunding}>Cancel</Button>
+                        <Button onClick={handleRefundSubmit} disabled={isRefunding || !refundAmount}>
+                            {isRefunding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                            Record refund
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <Button onClick={() => router.push('/orders')} variant="outline" size="sm" className="mb-4">
@@ -772,6 +921,11 @@ export default function OrderDetailPage() {
                 </div>
                 {canManageOrder && (
                     <div className="flex items-center gap-2 flex-wrap">
+                        {(order.paymentStatus === 'paid' || order.paymentStatus === 'partially_refunded') && (
+                            <Button variant="outline" onClick={() => setRefundDialogOpen(true)}>
+                                <RefreshCw className="mr-2 h-4 w-4" /> Record Refund
+                            </Button>
+                        )}
                         <Button variant="outline" onClick={handleDownloadInvoice}><FileDown className="mr-2 h-4 w-4" /> Download Invoice</Button>
                         <Button variant="outline" onClick={handleEmailInvoice} disabled={isEmailingInvoice || !order.viewerEmail || isPricingDirty} title={isPricingDirty ? 'Recalculate Price + Tax before sending the invoice' : (invoiceEmailedAt ? `Last emailed on ${format(new Date(invoiceEmailedAt), 'dd MMM yyyy HH:mm')}` : 'Email the invoice PDF to the customer')}>
                             {isEmailingInvoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
@@ -955,11 +1109,20 @@ export default function OrderDetailPage() {
                                         {isRegeneratingPaymentLink ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                                         Regenerate Payment Link
                                     </Button>
+                                    <Button onClick={handleSendReminderNow} disabled={isSendingReminder} size="sm" variant="outline">
+                                        {isSendingReminder ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
+                                        Send payment reminder
+                                    </Button>
                                     {paymentLinkCreatedAt && (
                                         <span className="text-xs text-muted-foreground">
                                             Created {format(new Date(paymentLinkCreatedAt), 'dd MMM HH:mm')}
                                         </span>
                                     )}
+                                    {order.paymentReminderCount ? (
+                                        <span className="text-xs text-muted-foreground">
+                                            · {order.paymentReminderCount} reminder{order.paymentReminderCount === 1 ? '' : 's'} sent
+                                        </span>
+                                    ) : null}
                                 </div>
                             </CardContent>
                         </Card>
@@ -1337,6 +1500,8 @@ export default function OrderDetailPage() {
                         // built-in Stripe or PayPal Connect flows. Manual methods
                         // (bank_transfer, cash, *_external, other) bypass the platform entirely.
                         const feeBearingMethods = ['stripe', 'paypal'];
+                        const isOffPlatform =
+                            !!order.paymentMethod && !feeBearingMethods.includes(order.paymentMethod);
                         const hasPlatformFee =
                             !!order.platformFeeAmount &&
                             (!order.paymentMethod || feeBearingMethods.includes(order.paymentMethod));
@@ -1351,6 +1516,17 @@ export default function OrderDetailPage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-3 text-sm">
+                                {isOffPlatform && (
+                                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 flex gap-2 text-xs">
+                                        <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                                        <div className="space-y-1">
+                                            <p className="font-medium text-amber-700">Payment handled outside Vinylogix</p>
+                                            <p className="text-muted-foreground">
+                                                This order was marked as paid manually. The funds were not processed or held by Vinylogix, and the platform has no visibility or control over the transfer. Collection, reconciliation, and any disputes are handled entirely between you and the buyer.
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="flex justify-between">
                                     <span className="text-muted-foreground">Order Total:</span>
                                     <span className="font-medium">€{formatPriceForDisplay(order.totalAmount)}</span>
@@ -1368,11 +1544,54 @@ export default function OrderDetailPage() {
                                 )}
                                 <Separator />
                                 <div className="flex justify-between">
-                                    <span className="font-semibold">Your Payout:</span>
+                                    <span className="font-semibold">
+                                        {isOffPlatform ? 'Amount Due to You' : 'Your Payout'}:
+                                    </span>
                                     <span className="font-semibold text-green-600">
                                         €{formatPriceForDisplay(payout)}
                                     </span>
                                 </div>
+                                {isOffPlatform && (
+                                    <p className="text-xs text-muted-foreground -mt-1">
+                                        Collected directly by you via {PAYMENT_METHOD_LABELS[order.paymentMethod!] || order.paymentMethod}. Vinylogix does not track or forward these funds.
+                                    </p>
+                                )}
+                                {(order.refunds && order.refunds.length > 0) && (() => {
+                                    const totalRefunded = order.refunds!.reduce((s, r) => s + r.amount, 0);
+                                    const remaining = order.totalAmount - totalRefunded;
+                                    const netReceived = payout - totalRefunded;
+                                    return (
+                                        <>
+                                            <Separator />
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between text-sm font-medium">
+                                                    <span>Refunds</span>
+                                                    <span className="text-red-600">-€{formatPriceForDisplay(totalRefunded)}</span>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    {order.refunds!.map((r) => (
+                                                        <div key={r.id} className="flex justify-between text-xs text-muted-foreground pl-3 border-l-2 border-red-500/30">
+                                                            <div>
+                                                                <div>{format(new Date(r.refundedAt), 'PP')} · {PAYMENT_METHOD_LABELS[r.method || ''] || r.method || 'refund'}</div>
+                                                                {r.reason && <div className="italic">"{r.reason}"</div>}
+                                                            </div>
+                                                            <div className="text-red-600 font-medium">-€{formatPriceForDisplay(r.amount)}</div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="flex justify-between text-sm border-t pt-2">
+                                                    <span className="text-muted-foreground">Net received:</span>
+                                                    <span className="font-semibold text-green-700">€{formatPriceForDisplay(netReceived)}</span>
+                                                </div>
+                                                {remaining > 0.01 && (
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Remaining refundable: €{formatPriceForDisplay(remaining)}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </>
+                                    );
+                                })()}
                                 {order.paymentMethod && (
                                     <>
                                         <Separator />

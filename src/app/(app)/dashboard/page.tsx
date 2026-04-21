@@ -245,6 +245,45 @@ export default function DashboardPage() {
           return totalStock > 0 && totalStock <= lowStockThreshold;
         });
 
+        // Build a reorder-suggestions list: include days-since-last-sold and supplier info.
+        const soldDatesByRecord = new Map<string, Date>();
+        for (const o of orders) {
+          if (o.status !== 'paid' && o.status !== 'shipped' && o.status !== 'processing') continue;
+          const paidDate = o.paidAt ? parseISO(o.paidAt) : (o.createdAt ? parseISO(o.createdAt) : null);
+          if (!paidDate) continue;
+          for (const item of o.items || []) {
+            const prior = soldDatesByRecord.get(item.recordId);
+            if (!prior || paidDate > prior) soldDatesByRecord.set(item.recordId, paidDate);
+          }
+        }
+        const reorderSuggestions = lowStockRecords
+          .map(r => {
+            const lastSold = soldDatesByRecord.get(r.id);
+            const daysSinceSold = lastSold
+              ? Math.floor((Date.now() - lastSold.getTime()) / (1000 * 60 * 60 * 24))
+              : null;
+            return {
+              id: r.id,
+              title: r.title,
+              artist: r.artist,
+              coverUrl: r.cover_url,
+              currentStock: (Number(r.stock_shelves) || 0) + (Number(r.stock_storage) || 0),
+              supplier: (r as any).supplier?.name || (r as any).supplierId || null,
+              daysSinceSold,
+              lastSoldAt: lastSold ? lastSold.toISOString() : null,
+            };
+          })
+          .sort((a, b) => {
+            // Prioritize: out-of-stock or recently-sold first
+            const aStock = a.currentStock;
+            const bStock = b.currentStock;
+            if (aStock !== bStock) return aStock - bStock;
+            const aSold = a.daysSinceSold ?? 999;
+            const bSold = b.daysSinceSold ?? 999;
+            return aSold - bSold;
+          })
+          .slice(0, 8);
+
         // Filter orders by date range
         const dateCutoff = getDateCutoff(dateRange);
         const filteredOrders = dateCutoff
@@ -307,6 +346,7 @@ export default function DashboardPage() {
             newClients,
             pendingInvites,
             lowStockCount: lowStockRecords.length,
+            reorderSuggestions,
             filteredOrderCount: currentOrderCount,
             revenue: currentRevenue,
             revenueTrend,
@@ -532,6 +572,73 @@ export default function DashboardPage() {
                             href={masterStats.ordersNeedAttention > 0 ? "/orders?status=awaiting_payment" : undefined}
                           />
                       </div>
+
+                      {/* Reorder suggestions (low-stock detail) */}
+                      {masterStats.reorderSuggestions && masterStats.reorderSuggestions.length > 0 && (
+                        <Card>
+                          <CardHeader>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <CardTitle className="text-base flex items-center gap-2">
+                                  <AlertCircle className="h-5 w-5 text-orange-500" />
+                                  Reorder suggestions
+                                </CardTitle>
+                                <CardDescription>
+                                  Records at or below threshold ({distributor?.lowStockThreshold || 3} units). Sorted by urgency.
+                                </CardDescription>
+                              </div>
+                              <Button variant="ghost" size="sm" asChild>
+                                <Link href="/inventory?stock=low">
+                                  View all <ArrowRight className="ml-1 h-3 w-3" />
+                                </Link>
+                              </Button>
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Record</TableHead>
+                                  <TableHead className="hidden sm:table-cell">Supplier</TableHead>
+                                  <TableHead className="text-right">Stock</TableHead>
+                                  <TableHead className="text-right hidden md:table-cell">Last sold</TableHead>
+                                  <TableHead className="w-10"></TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {masterStats.reorderSuggestions.map(r => (
+                                  <TableRow key={r.id} className="cursor-pointer" onClick={() => router.push(`/records/${r.id}`)}>
+                                    <TableCell>
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        {r.coverUrl && (
+                                          // eslint-disable-next-line @next/next/no-img-element
+                                          <img src={r.coverUrl} alt="" className="h-8 w-8 rounded object-cover flex-shrink-0" />
+                                        )}
+                                        <div className="min-w-0">
+                                          <p className="font-medium truncate">{r.title}</p>
+                                          <p className="text-xs text-muted-foreground truncate">{r.artist}</p>
+                                        </div>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{r.supplier || '—'}</TableCell>
+                                    <TableCell className="text-right">
+                                      <Badge variant={r.currentStock <= 1 ? "destructive" : "outline"} className="font-mono">
+                                        {r.currentStock}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right hidden md:table-cell text-sm text-muted-foreground">
+                                      {r.daysSinceSold === null ? "—" : `${r.daysSinceSold}d ago`}
+                                    </TableCell>
+                                    <TableCell>
+                                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </CardContent>
+                        </Card>
+                      )}
 
                       {/* Client Stats */}
                       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">

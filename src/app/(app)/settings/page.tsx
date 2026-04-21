@@ -109,6 +109,7 @@ const distributorSettingsSchema = z.object({
 const notificationsFormSchema = z.object({
   lowStockNotificationsEnabled: z.boolean().default(false),
   lowStockThreshold: z.string().optional(),
+  weeklyDigestOptIn: z.boolean().default(false),
 });
 
 const cardDisplayFormSchema = z.object({
@@ -313,6 +314,7 @@ export default function SettingsPage() {
     defaultValues: {
         lowStockNotificationsEnabled: false,
         lowStockThreshold: "20",
+        weeklyDigestOptIn: false,
     }
   });
 
@@ -429,6 +431,7 @@ export default function SettingsPage() {
         notificationsForm.reset({
             lowStockNotificationsEnabled: activeDistributor.lowStockNotificationsEnabled || false,
             lowStockThreshold: activeDistributor.lowStockThreshold?.toString() || "20",
+            weeklyDigestOptIn: activeDistributor.weeklyDigestOptIn || false,
         });
         distributorSettingsForm.reset({
           slug: activeDistributor.slug || "",
@@ -529,6 +532,7 @@ export default function SettingsPage() {
       await updateMyDistributorSettings({
         lowStockNotificationsEnabled: values.lowStockNotificationsEnabled,
         lowStockThreshold: values.lowStockThreshold ? parseInt(values.lowStockThreshold, 10) : undefined,
+        weeklyDigestOptIn: values.weeklyDigestOptIn,
       });
       showSaveSuccess('notifications');
   };
@@ -2248,6 +2252,17 @@ export default function SettingsPage() {
                           </FormItem>
                         )} />
                       )}
+                      <FormField control={notificationsForm.control} name="weeklyDigestOptIn" render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-sm">Weekly financial digest</FormLabel>
+                            <FormDescription className="text-xs">
+                              Every Monday 09:00 — last week&apos;s revenue, VAT, payout, and outstanding payments. Sent to your contact email.
+                            </FormDescription>
+                          </div>
+                          <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                        </FormItem>
+                      )} />
                       <SaveButton formName="notifications" isSubmitting={notificationsForm.formState.isSubmitting} />
                     </form>
                   </Form>

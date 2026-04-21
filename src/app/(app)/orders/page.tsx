@@ -5,13 +5,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ShoppingCart, Loader2, AlertTriangle, ArrowLeft, Eye, CreditCard, Truck, Package, MoreVertical } from "lucide-react";
+import { ShoppingCart, Loader2, AlertTriangle, ArrowLeft, Eye, CreditCard, Truck, Package, MoreVertical, Bookmark, BookmarkPlus, X } from "lucide-react";
 import type { Order, OrderStatus } from "@/types";
 import { getOrders, updateOrderStatus } from "@/services/order-service";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import { format, parseISO, isWithinInterval } from "date-fns";
+import { MANUAL_PAYMENT_METHODS, PLATFORM_PAYMENT_METHODS } from "@/lib/financial-aggregations";
 import { formatPriceForDisplay } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { StatusTabs, type StatusTab } from "@/components/ui/status-tabs";
@@ -32,6 +33,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 const statusColors: Record<OrderStatus, string> = {
   awaiting_approval: 'bg-amber-500/20 text-amber-500 border-amber-500/30',
@@ -72,7 +82,73 @@ export default function OrdersPage() {
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [datePreset, setDatePreset] = useState<DateRangePreset>("all");
-  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
+  const [dateRange, setDateRange] = useState<DateRange>(() => {
+    const fromParam = searchParams.get('from');
+    const toParam = searchParams.get('to');
+    return {
+      from: fromParam ? new Date(fromParam) : undefined,
+      to: toParam ? new Date(toParam) : undefined,
+    };
+  });
+
+  // Deep-link filters (from /stats drill-downs). Read once; not reflected in the UI toolbar.
+  const paymentStatusFilter = searchParams.get('paymentStatus') as Order['paymentStatus'] | null;
+  const paymentMethodFilter = searchParams.get('paymentMethod') as Order['paymentMethod'] | null;
+  const paymentMethodGroup = searchParams.get('paymentMethodGroup'); // 'manual' | 'platform'
+
+  // Saved filter presets (per-distributor, localStorage)
+  type FilterPreset = {
+    name: string;
+    status: OrderStatus | "all";
+    search: string;
+    preset: typeof datePreset;
+  };
+  const presetsKey = user?.distributorId ? `orders-filter-presets:${user.distributorId}` : "orders-filter-presets";
+  const [presets, setPresets] = useState<FilterPreset[]>([]);
+  const [isPresetDialogOpen, setIsPresetDialogOpen] = useState(false);
+  const [newPresetName, setNewPresetName] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !user) return;
+    try {
+      const raw = window.localStorage.getItem(presetsKey);
+      if (raw) setPresets(JSON.parse(raw) as FilterPreset[]);
+    } catch {
+      /* ignore corrupt state */
+    }
+  }, [presetsKey, user]);
+
+  const persistPresets = useCallback((next: FilterPreset[]) => {
+    setPresets(next);
+    try {
+      window.localStorage.setItem(presetsKey, JSON.stringify(next));
+    } catch {
+      /* quota/privacy mode — presets are best-effort */
+    }
+  }, [presetsKey]);
+
+  const handleSavePreset = () => {
+    const name = newPresetName.trim();
+    if (!name) return;
+    const preset: FilterPreset = { name, status: statusFilter, search: searchQuery, preset: datePreset };
+    const next = [...presets.filter(p => p.name !== name), preset];
+    persistPresets(next);
+    setNewPresetName("");
+    setIsPresetDialogOpen(false);
+    toast({ title: "Filter saved", description: `"${name}" is ready to reuse.` });
+  };
+
+  const handleLoadPreset = (p: FilterPreset) => {
+    setStatusFilter(p.status);
+    setSearchQuery(p.search);
+    setDatePreset(p.preset);
+    const range = getDateRangeFromPreset(p.preset);
+    setDateRange(range);
+  };
+
+  const handleDeletePreset = (name: string) => {
+    persistPresets(presets.filter(p => p.name !== name));
+  };
 
   const fetchOrders = useCallback(async () => {
     if (!authLoading && user && (user.role === 'master' || (user.role === 'worker' && user.permissions?.canManageOrders))) {
@@ -161,8 +237,25 @@ export default function OrdersPage() {
       });
     }
 
+    // Deep-link: payment status filter
+    if (paymentStatusFilter) {
+      result = result.filter(order => order.paymentStatus === paymentStatusFilter);
+    }
+
+    // Deep-link: exact payment method
+    if (paymentMethodFilter) {
+      result = result.filter(order => order.paymentMethod === paymentMethodFilter);
+    }
+
+    // Deep-link: method group ('manual' | 'platform')
+    if (paymentMethodGroup === 'manual') {
+      result = result.filter(order => order.paymentMethod && MANUAL_PAYMENT_METHODS.has(order.paymentMethod));
+    } else if (paymentMethodGroup === 'platform') {
+      result = result.filter(order => order.paymentMethod && PLATFORM_PAYMENT_METHODS.has(order.paymentMethod));
+    }
+
     return result;
-  }, [orders, statusFilter, searchQuery, dateRange]);
+  }, [orders, statusFilter, searchQuery, dateRange, paymentStatusFilter, paymentMethodFilter, paymentMethodGroup]);
 
   // Status tabs
   const statusTabs: StatusTab<OrderStatus>[] = [
@@ -330,6 +423,78 @@ export default function OrdersPage() {
             value={statusFilter}
             onChange={setStatusFilter}
           />
+
+          {/* Saved filter presets */}
+          <div className="flex flex-wrap items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8">
+                  <Bookmark className="h-3.5 w-3.5 mr-1.5" />
+                  Saved filters {presets.length > 0 && <span className="ml-1 text-xs text-muted-foreground">({presets.length})</span>}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-60">
+                {presets.length === 0 && (
+                  <div className="px-2 py-3 text-xs text-muted-foreground">
+                    No saved filters yet. Apply filters, then &quot;Save current&quot;.
+                  </div>
+                )}
+                {presets.map(p => (
+                  <DropdownMenuItem key={p.name} onSelect={() => handleLoadPreset(p)} className="group">
+                    <span className="flex-1 truncate">{p.name}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeletePreset(p.name); }}
+                      className="ml-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+                      aria-label={`Delete ${p.name}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </DropdownMenuItem>
+                ))}
+                {presets.length > 0 && <DropdownMenuSeparator />}
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setIsPresetDialogOpen(true); }}>
+                  <BookmarkPlus className="h-3.5 w-3.5 mr-1.5" />
+                  Save current filters…
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {(statusFilter !== "all" || searchQuery || datePreset !== "all") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-muted-foreground"
+                onClick={() => { setStatusFilter("all"); setSearchQuery(""); setDatePreset("all"); setDateRange({ from: undefined, to: undefined }); }}
+              >
+                Clear filters
+              </Button>
+            )}
+          </div>
+
+          <Dialog open={isPresetDialogOpen} onOpenChange={setIsPresetDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Save current filters</DialogTitle>
+                <DialogDescription>
+                  Status: <span className="font-medium">{statusFilter === "all" ? "All" : statusLabels[statusFilter]}</span>
+                  {searchQuery && <> · search: <span className="font-medium">{searchQuery}</span></>}
+                  {datePreset !== "all" && <> · date range: <span className="font-medium">{datePreset}</span></>}
+                </DialogDescription>
+              </DialogHeader>
+              <Input
+                autoFocus
+                placeholder="Name this view — e.g., &quot;Awaiting Stripe last 30d&quot;"
+                value={newPresetName}
+                onChange={(e) => setNewPresetName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSavePreset(); }}
+                maxLength={60}
+              />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsPresetDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleSavePreset} disabled={!newPresetName.trim()}>Save filter</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Toolbar */}
           <DataTableToolbar

@@ -283,4 +283,15 @@ exports.setCustomUserClaimsOnUserWrite = (0, firestore_1.onDocumentWritten)('use
     }
     return null;
 });
+// ============================================================================
+// SCHEDULED JOBS — intentionally DISABLED.
+// ============================================================================
+// Cron endpoints still exist in Next.js:
+//   POST /api/cron/payment-reminders
+//   POST /api/cron/weekly-digest
+// Both are protected by CRON_SECRET (Bearer auth). Trigger them manually or
+// via an external cron (cron-job.org, Upstash QStash, GitHub Actions) when
+// you're ready. To bring back Firebase-native scheduling, re-introduce
+// onSchedule() handlers here — git history has the previous implementation.
+// ============================================================================
 //# sourceMappingURL=index.js.map

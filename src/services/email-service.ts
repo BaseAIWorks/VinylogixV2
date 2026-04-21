@@ -3,8 +3,21 @@ import { format } from 'date-fns';
 import type { Order, OrderItemStatus, Distributor } from '@/types';
 import { formatPriceForDisplay } from '@/lib/utils';
 import { markdownToSafeHtml, escapeHtml } from '@/lib/markdown-utils';
+import { ensureTrackingToken, buildTrackingUrl } from '@/lib/tracking-token';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
+
+// Best-effort: returns a public tracking URL, generating the token if missing.
+// Falls back to the logged-in "my orders" URL if admin access is unavailable.
+async function getTrackingUrl(order: Order): Promise<string> {
+  try {
+    const token = order.trackingToken || await ensureTrackingToken(order.id);
+    if (token) return buildTrackingUrl(token);
+  } catch {
+    /* ignore — fallthrough to authed URL */
+  }
+  return `${siteUrl}/my-orders/${order.id}`;
+}
 
 // Items that a customer should actually see / be billed for — excludes items the
 // distributor marked as not_available or out_of_stock. Matches totals in order-service.
@@ -544,6 +557,7 @@ ${createDistributorPromoText()}
  * Send order confirmation email to client
  */
 export async function sendOrderConfirmation(order: Order): Promise<void> {
+  const trackingUrl = await getTrackingUrl(order);
   try {
     await resend.emails.send({
       from: 'Vinylogix Orders <noreply@vinylogix.com>',
@@ -593,7 +607,7 @@ export async function sendOrderConfirmation(order: Order): Promise<void> {
             </div>
 
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${siteUrl}/my-orders/${order.id}" class="button">View Order Details</a>
+              <a href="${trackingUrl}" class="button">View Order Details</a>
             </div>
 
             <p style="text-align: center; color: #6c757d; font-size: 14px;">
@@ -611,10 +625,175 @@ export async function sendOrderConfirmation(order: Order): Promise<void> {
 }
 
 /**
+ * Send a payment reminder to a customer with an outstanding awaiting_payment order.
+ * Called by the scheduled cron or manually from the order page.
+ */
+export async function sendPaymentReminderEmail(order: Order, reminderNumber: number): Promise<void> {
+  const trackingUrl = await getTrackingUrl(order);
+  const paymentUrl = order.paymentLink || trackingUrl;
+  const reminderLabel = reminderNumber === 1
+    ? "Friendly reminder"
+    : reminderNumber === 2
+    ? "Second reminder"
+    : "Final reminder";
+
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix Orders <noreply@vinylogix.com>',
+      to: order.viewerEmail,
+      subject: `${reminderLabel}: payment pending for order #${order.orderNumber || order.id.slice(0, 8)}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #fef3c7; border-radius: 8px; padding: 30px; margin-bottom: 20px; text-align: center; border: 1px solid #fde68a; }
+              .card { background-color: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+              .button { display: inline-block; background-color: #2563eb; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; }
+              .muted { color: #6c757d; font-size: 14px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1 style="margin: 0;">${reminderLabel}</h1>
+              <p style="margin: 8px 0 0; color: #713f12;">Your order is still waiting on payment.</p>
+            </div>
+
+            <div class="card">
+              <p>Hi ${escapeHtml(order.customerName || '')},</p>
+              <p>We haven't received payment for order <strong>#${order.orderNumber || order.id.slice(0, 8)}</strong> yet. The items are still reserved for you.</p>
+              <p><strong>Total:</strong> €${formatPriceForDisplay(order.totalAmount)}</p>
+              <div style="text-align: center; margin: 24px 0;">
+                <a href="${paymentUrl}" class="button">Complete payment</a>
+              </div>
+              ${reminderNumber === MAX_REMINDERS_CONST ? `
+                <p class="muted">This is our last automatic reminder. If we don't receive payment soon, the order will be put on hold and the reserved stock released.</p>
+              ` : ''}
+            </div>
+
+            <p class="muted" style="text-align: center;">
+              Questions? Reply to this email or use the tracking page: <a href="${trackingUrl}">${trackingUrl}</a>
+            </p>
+          </body>
+        </html>
+      `,
+    });
+
+    console.log(`Payment reminder #${reminderNumber} sent to ${order.viewerEmail} for order ${order.orderNumber}`);
+  } catch (error) {
+    console.error('Failed to send payment reminder:', error);
+  }
+}
+
+const MAX_REMINDERS_CONST = 3;
+
+/**
+ * Send weekly financial digest to a distributor's master.
+ * Reports covering `periodLabel` (e.g. "Apr 13 – Apr 19, 2026").
+ */
+export async function sendWeeklyDigestEmail(params: {
+  to: string;
+  distributorName: string;
+  periodLabel: string;
+  netRevenue: number;
+  vatCollected: number;
+  shippingCollected: number;
+  netPayout: number;
+  orderCount: number;
+  refundedRevenue: number;
+  refundCount: number;
+  awaitingTotal: number;
+  awaitingCount: number;
+  prevNetRevenue?: number;
+  statsUrl: string;
+}): Promise<void> {
+  const delta = params.prevNetRevenue !== undefined && params.prevNetRevenue !== 0
+    ? ((params.netRevenue - params.prevNetRevenue) / params.prevNetRevenue) * 100
+    : undefined;
+  const deltaLabel = delta === undefined ? '' :
+    delta > 0 ? `<span style="color:#16a34a;">▲ ${delta.toFixed(1)}%</span>` :
+    delta < 0 ? `<span style="color:#dc2626;">▼ ${Math.abs(delta).toFixed(1)}%</span>` :
+    `<span style="color:#6c757d;">— 0%</span>`;
+
+  try {
+    await resend.emails.send({
+      from: 'Vinylogix Weekly <noreply@vinylogix.com>',
+      to: params.to,
+      subject: `Your weekly report — ${params.periodLabel}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head><meta charset="utf-8"></head>
+          <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 640px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #16a34a, #059669); color: white; border-radius: 8px; padding: 28px; text-align: center; margin-bottom: 20px;">
+              <p style="margin: 0; font-size: 12px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.05em;">Weekly report</p>
+              <h1 style="margin: 6px 0 0; font-size: 22px;">${escapeHtml(params.distributorName)}</h1>
+              <p style="margin: 4px 0 0; font-size: 14px; opacity: 0.9;">${escapeHtml(params.periodLabel)}</p>
+            </div>
+
+            <div style="background: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+              <p style="margin: 0 0 4px; color: #6c757d; font-size: 12px; text-transform: uppercase;">Net revenue (ex-VAT)</p>
+              <p style="margin: 0; font-size: 28px; font-weight: 700; color: #16a34a;">€${formatPriceForDisplay(params.netRevenue)} ${deltaLabel}</p>
+              <p style="margin: 8px 0 0; color: #6c757d; font-size: 13px;">${params.orderCount} paid order${params.orderCount === 1 ? '' : 's'} this week</p>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+              <div style="background: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 14px;">
+                <p style="margin: 0; color: #6c757d; font-size: 11px; text-transform: uppercase;">VAT collected</p>
+                <p style="margin: 2px 0 0; font-size: 18px; font-weight: 600;">€${formatPriceForDisplay(params.vatCollected)}</p>
+              </div>
+              <div style="background: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 14px;">
+                <p style="margin: 0; color: #6c757d; font-size: 11px; text-transform: uppercase;">Shipping collected</p>
+                <p style="margin: 2px 0 0; font-size: 18px; font-weight: 600;">€${formatPriceForDisplay(params.shippingCollected)}</p>
+              </div>
+              <div style="background: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 14px;">
+                <p style="margin: 0; color: #6c757d; font-size: 11px; text-transform: uppercase;">Net payout</p>
+                <p style="margin: 2px 0 0; font-size: 18px; font-weight: 600;">€${formatPriceForDisplay(params.netPayout)}</p>
+              </div>
+              <div style="background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 14px;">
+                <p style="margin: 0; color: #713f12; font-size: 11px; text-transform: uppercase;">Awaiting payment</p>
+                <p style="margin: 2px 0 0; font-size: 18px; font-weight: 600; color: #713f12;">€${formatPriceForDisplay(params.awaitingTotal)}</p>
+                <p style="margin: 2px 0 0; font-size: 11px; color: #92400e;">${params.awaitingCount} outstanding</p>
+              </div>
+            </div>
+
+            ${params.refundCount > 0 ? `
+              <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+                <p style="margin: 0; color: #7f1d1d; font-size: 12px;">
+                  <strong>Refunds this week:</strong> €${formatPriceForDisplay(params.refundedRevenue)} across ${params.refundCount} order${params.refundCount === 1 ? '' : 's'}
+                </p>
+              </div>
+            ` : ''}
+
+            <div style="text-align: center; margin: 24px 0;">
+              <a href="${params.statsUrl}" style="display: inline-block; background-color: #26222B; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+                Open financial dashboard
+              </a>
+            </div>
+
+            <p style="text-align: center; color: #6c757d; font-size: 12px;">
+              You're receiving this because you opted in to weekly reports.
+              Toggle it off in <a href="${siteUrl}/settings" style="color: #2563eb;">Settings</a>.
+            </p>
+          </body>
+        </html>
+      `,
+    });
+    console.log(`Weekly digest sent to ${params.to}`);
+  } catch (error) {
+    console.error('Failed to send weekly digest:', error);
+  }
+}
+
+/**
  * Send shipping notification to client
  */
 export async function sendShippingNotification(order: Order): Promise<void> {
   if (!order.trackingNumber) return;
+
+  const trackingUrl = await getTrackingUrl(order);
 
   try {
     await resend.emails.send({
@@ -648,7 +827,7 @@ export async function sendShippingNotification(order: Order): Promise<void> {
 
             <div style="text-align: center; margin: 30px 0;">
               ${order.trackingUrl ? `<a href="${order.trackingUrl}" class="button">Track Package</a>` : ''}
-              <a href="${siteUrl}/my-orders/${order.id}" class="button" style="margin-left: 10px;">View Order</a>
+              <a href="${trackingUrl}" class="button" style="margin-left: 10px;">View Order</a>
             </div>
           </body>
         </html>

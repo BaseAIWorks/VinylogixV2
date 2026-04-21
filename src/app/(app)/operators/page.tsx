@@ -66,6 +66,7 @@ const defaultPermissions: WorkerPermissions = {
   canEditSuppliers: false,
   canManageOrders: false,
   canManageLocations: false,
+  canViewFinancialStats: false,
 };
 
 function getPermissionSummary(permissions?: WorkerPermissions, role?: string): { summary: string; level: "full" | "partial" | "limited" } {

@@ -58,6 +58,7 @@ const permissionsFormSchema = z.object({
     canEditSuppliers: z.boolean().default(false),
     canManageOrders: z.boolean().default(false),
     canManageLocations: z.boolean().default(false),
+    canViewFinancialStats: z.boolean().default(false),
 });
 type PermissionsFormValues = z.infer<typeof permissionsFormSchema>;
 
@@ -134,6 +135,7 @@ export default function OperatorDetailPage() {
                 canEditSuppliers: opResult.value.permissions?.canEditSuppliers || false,
                 canManageOrders: opResult.value.permissions?.canManageOrders || false,
                 canManageLocations: opResult.value.permissions?.canManageLocations || false,
+                canViewFinancialStats: opResult.value.permissions?.canViewFinancialStats || false,
             });
 
             if (recResult.status === 'fulfilled') setRecords(recResult.value);
@@ -364,6 +366,7 @@ export default function OperatorDetailPage() {
                                     <FormField control={permissionsForm.control} name="canEditSuppliers" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Manage Suppliers on Records</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>)}/>
                                     <FormField control={permissionsForm.control} name="canManageOrders" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Manage Orders</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>)}/>
                                     <FormField control={permissionsForm.control} name="canManageLocations" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>Manage Storage Locations</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>)}/>
+                                    <FormField control={permissionsForm.control} name="canViewFinancialStats" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm"><div className="space-y-0.5"><FormLabel>View Financial Stats</FormLabel><p className="text-xs text-muted-foreground">Access to /stats (revenue &amp; awaiting payments). Off by default.</p></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>)}/>
                                 </div>
                                 <div className="flex justify-end">
                                     <Button type="submit" disabled={permissionsForm.formState.isSubmitting}>

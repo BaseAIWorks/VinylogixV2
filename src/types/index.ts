@@ -74,6 +74,7 @@ export interface WorkerPermissions {
   canEditSuppliers: boolean;
   canManageOrders: boolean;
   canManageLocations: boolean;
+  canViewFinancialStats?: boolean;
 }
 
 
@@ -284,6 +285,10 @@ export interface Distributor {
 
   // Multiple payment accounts
   paymentAccounts?: PaymentAccount[];
+
+  // Weekly financial digest email (Monday 09:00). Opt-in; off by default.
+  weeklyDigestOptIn?: boolean;
+  weeklyDigestLastSentAt?: string; // ISO
 }
 
 export type PaymentAccountType = 'bank' | 'paypal' | 'other';
@@ -639,7 +644,7 @@ export interface Order {
   paymentReference?: string; // Bank transaction ID / memo / external reference (for manual payments)
   paymentNotes?: string; // Internal notes about the payment (distributor-only)
   paidBy?: string; // uid of the user who marked the order paid (manual) or 'stripe-webhook'/'paypal-webhook' for automated
-  paymentStatus?: 'unpaid' | 'paid' | 'refunded' | 'failed';
+  paymentStatus?: 'unpaid' | 'paid' | 'refunded' | 'partially_refunded' | 'failed';
   paidAt?: string; // ISO String
   platformFeeAmount?: number; // Platform fee in cents (varies by tier)
   appliedFeePercentage?: number; // Fee rate applied at order creation (e.g., 0.04 for 4%)
@@ -720,6 +725,25 @@ export interface Order {
   trackingUrl?: string;
   shippedAt?: string; // ISO String
   estimatedDeliveryDate?: string; // ISO String
+
+  // Customer self-service tracking token — unguessable URL slug for /t/[token]
+  trackingToken?: string;
+
+  // Payment reminder tracking (for awaiting_payment dunning)
+  lastPaymentReminderAt?: string; // ISO
+  paymentReminderCount?: number;
+
+  // Refunds — partial or full. Empty/missing when nothing refunded.
+  refunds?: Array<{
+    id: string;
+    amount: number;        // € refunded, subset of totalAmount
+    reason?: string;
+    method?: string;       // 'stripe' | 'paypal' | 'bank_transfer' | 'cash' | 'other'
+    stripeRefundId?: string;
+    refundedAt: string;    // ISO
+    refundedBy: string;    // uid
+    notes?: string;
+  }>;
 }
 
 // ===================================

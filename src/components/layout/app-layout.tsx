@@ -252,7 +252,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
     { href: '/orders', label: 'Orders', title: 'Incoming Orders', icon: ShoppingCart, roles: ['master', 'worker'], category: 'Sales' },
     { href: '/fulfillment', label: 'Fulfillment', title: 'Order Fulfillment', icon: Truck, roles: ['master', 'worker'], category: 'Sales' },
-    { href: '/stats', label: 'Statistics', title: 'Distributor Statistics', icon: BarChart3, roles: ['master'], category: 'Sales' },
+    { href: '/stats', label: 'Financial', title: 'Financial Stats', icon: BarChart3, roles: ['master', 'worker'], category: 'Sales' },
+    { href: '/stats/inventory', label: 'Inventory Stats', title: 'Inventory Statistics', icon: Boxes, roles: ['master'], category: 'Sales' },
 
     { href: '/clients', label: 'Clients', title: 'Client Management', icon: Users, roles: ['master'], category: 'People' },
     { href: '/operators', label: 'Operators', title: 'Operator Management', icon: HardHat, roles: ['master'], category: 'People' },
@@ -268,6 +269,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     if (!user || !item.roles.includes(user.role)) return false;
     if (user.role === 'worker' && item.href === '/orders' && !user.permissions?.canManageOrders) return false;
     if (user.role === 'worker' && item.href === '/fulfillment' && !user.permissions?.canManageOrders) return false;
+    if (user.role === 'worker' && item.href === '/stats' && !user.permissions?.canViewFinancialStats) return false;
     if (user.role === 'viewer' && item.setting === false) return false;
     if (user.role === 'viewer' && item.href === '/inventory' && item.label === 'Inventory') return false; 
     return true;
