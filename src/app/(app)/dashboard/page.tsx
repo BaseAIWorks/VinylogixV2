@@ -119,7 +119,7 @@ const statusColors: Record<OrderStatus, string> = {
 
 
 export default function DashboardPage() {
-    const { user, loading: authLoading, toggleFavorite, activeDistributorId } = useAuth();
+    const { user, loading: authLoading, toggleFavorite, activeDistributorId, activeDistributor } = useAuth();
     const router = useRouter();
     const { toast } = useToast();
     const [records, setRecords] = useState<VinylRecord[]>([]);
@@ -311,6 +311,13 @@ export default function DashboardPage() {
             if (!prior || paidDate > prior) soldDatesByRecord.set(item.recordId, paidDate);
           }
         }
+        // Resolve supplierId → supplier name via the suppliers array that
+        // the auth context has already loaded onto activeDistributor. Without
+        // this lookup the column renders the raw Firestore ID, which is
+        // useless to the user.
+        const supplierNameById = new Map(
+          (activeDistributor?.suppliers || []).map(s => [s.id, s.name])
+        );
         const reorderSuggestions = lowStockRecords
           .map(r => {
             const lastSold = soldDatesByRecord.get(r.id);
@@ -323,7 +330,7 @@ export default function DashboardPage() {
               artist: r.artist,
               coverUrl: r.cover_url,
               currentStock: (Number(r.stock_shelves) || 0) + (Number(r.stock_storage) || 0),
-              supplier: (r as any).supplier?.name || (r as any).supplierId || null,
+              supplier: r.supplierId ? (supplierNameById.get(r.supplierId) || null) : null,
               daysSinceSold,
               lastSoldAt: lastSold ? lastSold.toISOString() : null,
             };
@@ -408,7 +415,7 @@ export default function DashboardPage() {
             orderCountTrend,
             dateRangeLabel: dateRangeOptions.find(o => o.value === dateRange)?.label || "",
         };
-    }, [records, orders, user, dateRange, getDateCutoff, getPreviousPeriodCutoff, distributor, clientUsers]);
+    }, [records, orders, user, dateRange, getDateCutoff, getPreviousPeriodCutoff, distributor, clientUsers, activeDistributor?.suppliers]);
 
     // Fulfillment summary for the operator dashboard section.
     //
