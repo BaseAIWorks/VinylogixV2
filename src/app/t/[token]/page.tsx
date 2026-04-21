@@ -334,7 +334,7 @@ export default function TrackingPage() {
         )}
 
         {/* Tracking (if shipped) */}
-        {order.trackingNumber && (
+        {order.trackingNumber ? (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
@@ -356,7 +356,32 @@ export default function TrackingPage() {
               )}
             </CardContent>
           </Card>
-        )}
+        ) : order.status === "shipped" ? (
+          // Distributor moved the order to 'shipped' without entering tracking
+          // info (small distributor, local delivery, pickup fallback, etc.).
+          // Surface the fact explicitly — without this card the page shows
+          // "shipped" on the status step but gives the customer no detail or
+          // reassurance, which reads as "something's missing".
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Truck className="h-5 w-5 text-primary" />
+                Shipment on its way
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <p className="text-muted-foreground">
+                Your order has been dispatched. No online tracking number was provided —
+                {order.distributor?.name ? <> contact <span className="font-medium text-foreground">{order.distributor.name}</span></> : ' contact the seller'} directly for delivery details.
+              </p>
+              {order.shippedAt && (
+                <p className="text-muted-foreground">
+                  Shipped on: <span className="font-medium text-foreground">{format(new Date(order.shippedAt), "PPP")}</span>
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
 
         {/* Items */}
         <Card>
@@ -435,6 +460,17 @@ export default function TrackingPage() {
             </CardContent>
           </Card>
         )}
+
+        <div className="text-center py-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/login?next=${encodeURIComponent(`/my-orders/${order.id}`)}`}>
+              Manage order in my account <ExternalLink className="ml-2 h-3 w-3" />
+            </Link>
+          </Button>
+          <p className="text-xs text-muted-foreground mt-2">
+            Sign in to download the invoice or review your order history.
+          </p>
+        </div>
 
         <p className="text-center text-xs text-muted-foreground py-4">
           Powered by{" "}

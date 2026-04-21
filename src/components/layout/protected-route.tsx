@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import AppLayout from './app-layout';
 import { useActivityTracker } from '@/hooks/use-activity-tracker';
 import { Loader2 } from 'lucide-react';
@@ -21,12 +21,23 @@ function ActivityTrackerProvider({ children }: { children: React.ReactNode }) {
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   React.useEffect(() => {
     if (!loading && !user) {
-      router.replace('/login');
+      // Preserve the page the visitor was trying to reach so the login form
+      // can send them back after a successful sign-in. Skip when we're
+      // already on /login (redundant) or when the path is the root (nothing
+      // worth preserving).
+      const qs = searchParams?.toString();
+      const fullPath = qs ? `${pathname}?${qs}` : pathname;
+      const next = pathname && pathname !== '/' && pathname !== '/login'
+        ? `?next=${encodeURIComponent(fullPath)}`
+        : '';
+      router.replace(`/login${next}`);
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, pathname, searchParams]);
 
   if (loading) {
     return (

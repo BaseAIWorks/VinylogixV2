@@ -6,17 +6,49 @@ import { markdownToSafeHtml, escapeHtml } from '@/lib/markdown-utils';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
 
-// Returns the best "view my order" URL we can build from the order alone.
-// - If the order already carries a trackingToken → use the public /t/[token]
-//   page so customers don't need to log in.
-// - Otherwise → fall back to the authed /my-orders/[id] path.
-// Token generation is a server-only concern (needs firebase-admin) and lives
-// in `src/lib/tracking-token.ts`. Callers that want to guarantee a token
-// exists before the email renders should call `ensureTrackingToken(orderId)`
-// from their server route and pass the updated order in.
+// Both customer-facing URLs for an order:
+// - myOrders  → authed /my-orders/[id]. Full details, download invoice, etc.
+//   Requires login; we pass the destination as ?next= so the login form
+//   sends the user straight back after signing in.
+// - publicTracking → public /t/[token] (no login). Status / tracking / pay.
+//   Only returned when the order carries a trackingToken — older orders
+//   pre-dating the feature won't have one; the backfill script assigns
+//   tokens to those. Emails render both buttons when both exist, and a
+//   single "View order details" button when only the authed URL is available.
+function getOrderUrls(order: Order): { myOrders: string; publicTracking: string | null } {
+  const myOrders = `${siteUrl}/login?next=${encodeURIComponent(`/my-orders/${order.id}`)}`;
+  const publicTracking = order.trackingToken ? `${siteUrl}/t/${order.trackingToken}` : null;
+  return { myOrders, publicTracking };
+}
+
+// HTML fragment: one or two CTA buttons side by side, matching the existing
+// email visual style. Keeps markup duplication out of every email template.
+function renderOrderCtaButtons(order: Order, options?: { primaryLabel?: string; accent?: string }): string {
+  const { myOrders, publicTracking } = getOrderUrls(order);
+  const accent = options?.accent || '#111827';
+  const primaryLabel = options?.primaryLabel || 'View order details';
+  const primary = `<a href="${myOrders}" style="display: inline-block; background: ${accent}; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-size: 14px; margin: 4px;">${primaryLabel}</a>`;
+  if (!publicTracking) return primary;
+  const secondary = `<a href="${publicTracking}" style="display: inline-block; background: white; color: ${accent}; border: 1px solid ${accent}; padding: 11px 27px; text-decoration: none; border-radius: 6px; font-size: 14px; margin: 4px;">Track order</a>`;
+  return `${primary}${secondary}`;
+}
+
+// Plain-text equivalent for email text parts (when we add them).
+function renderOrderCtaText(order: Order): string {
+  const { myOrders, publicTracking } = getOrderUrls(order);
+  return publicTracking
+    ? `View order details: ${myOrders}\nTrack order: ${publicTracking}`
+    : `View order details: ${myOrders}`;
+}
+
+// Kept for backwards-compat in the three places that only want a single URL
+// (shipping notification, confirmation, payment reminder). Prefers the public
+// tracking URL when available so the "Track Package" button in those emails
+// doesn't require a login.
 function getTrackingUrl(order: Order): string {
-  if (order.trackingToken) return `${siteUrl}/t/${order.trackingToken}`;
-  return `${siteUrl}/my-orders/${order.id}`;
+  return order.trackingToken
+    ? `${siteUrl}/t/${order.trackingToken}`
+    : `${siteUrl}/login?next=${encodeURIComponent(`/my-orders/${order.id}`)}`;
 }
 
 // Items that a customer should actually see / be billed for — excludes items the
@@ -557,7 +589,6 @@ ${createDistributorPromoText()}
  * Send order confirmation email to client
  */
 export async function sendOrderConfirmation(order: Order): Promise<void> {
-  const trackingUrl = getTrackingUrl(order);
   try {
     await resend.emails.send({
       from: 'Vinylogix Orders <noreply@vinylogix.com>',
@@ -607,7 +638,7 @@ export async function sendOrderConfirmation(order: Order): Promise<void> {
             </div>
 
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${trackingUrl}" class="button">View Order Details</a>
+              ${renderOrderCtaButtons(order)}
             </div>
 
             <p style="text-align: center; color: #6c757d; font-size: 14px;">
@@ -668,13 +699,16 @@ export async function sendPaymentReminderEmail(order: Order, reminderNumber: num
               <div style="text-align: center; margin: 24px 0;">
                 <a href="${paymentUrl}" class="button">Complete payment</a>
               </div>
+              <div style="text-align: center; margin: 0 0 12px 0;">
+                ${renderOrderCtaButtons(order)}
+              </div>
               ${reminderNumber === MAX_REMINDERS_CONST ? `
                 <p class="muted">This is our last automatic reminder. If we don't receive payment soon, the order will be put on hold and the reserved stock released.</p>
               ` : ''}
             </div>
 
             <p class="muted" style="text-align: center;">
-              Questions? Reply to this email or use the tracking page: <a href="${trackingUrl}">${trackingUrl}</a>
+              Questions? Reply to this email.
             </p>
           </body>
         </html>
@@ -793,8 +827,6 @@ export async function sendWeeklyDigestEmail(params: {
 export async function sendShippingNotification(order: Order): Promise<void> {
   if (!order.trackingNumber) return;
 
-  const trackingUrl = getTrackingUrl(order);
-
   try {
     await resend.emails.send({
       from: 'Vinylogix Orders <noreply@vinylogix.com>',
@@ -826,8 +858,8 @@ export async function sendShippingNotification(order: Order): Promise<void> {
             </div>
 
             <div style="text-align: center; margin: 30px 0;">
-              ${order.trackingUrl ? `<a href="${order.trackingUrl}" class="button">Track Package</a>` : ''}
-              <a href="${trackingUrl}" class="button" style="margin-left: 10px;">View Order</a>
+              ${order.trackingUrl ? `<a href="${order.trackingUrl}" class="button" style="margin: 4px;">Track Package</a>` : ''}
+              ${renderOrderCtaButtons(order)}
             </div>
           </body>
         </html>
@@ -1001,7 +1033,7 @@ export async function sendOrderRequestConfirmation(
 
   const cta = `
     <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
-      <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #111827; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-size: 14px;">View Order Status</a>
+      ${renderOrderCtaButtons(order, { primaryLabel: 'View order status' })}
       <p style="margin: 10px 0 0 0; color: #6b7280; font-size: 12px;">No payment is required at this time. You'll be notified when <strong>${escapeHtml(distributorName)}</strong> has reviewed your request.</p>
     </div>
   `;
@@ -1033,7 +1065,7 @@ Order total: € ${formatPriceForDisplay(order.totalAmount)}
 
 No payment is required at this time.
 
-View your order: ${siteUrl}/my-orders/${order.id}
+${renderOrderCtaText(order)}
 `,
     });
     console.log(`Order request confirmation sent to ${order.viewerEmail}`);
@@ -1133,11 +1165,11 @@ export async function sendOrderApprovedEmail(
     <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
       <a href="${escapeHtml(paymentLink)}" style="display: inline-block; background: #16a34a; color: white; padding: 14px 44px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; box-shadow: 0 2px 4px rgba(22,163,74,0.25);">Pay Securely</a>
       <p style="margin: 10px 0 0 0; color: #6b7280; font-size: 12px;">This payment link expires in 24 hours.</p>
-      <p style="margin: 14px 0 0 0; color: #6b7280; font-size: 12px;"><a href="${siteUrl}/my-orders/${order.id}" style="color: #6b7280;">View order details on Vinylogix</a></p>
+      <div style="margin-top: 14px;">${renderOrderCtaButtons(order)}</div>
     </div>
   ` : `
     <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
-      <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #111827; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-size: 14px;">View Order Details</a>
+      ${renderOrderCtaButtons(order)}
     </div>
   `;
 
@@ -1175,7 +1207,7 @@ Total: € ${formatPriceForDisplay(order.totalAmount)}
 ${paymentLink ? `\nPay now: ${paymentLink}\n(link expires in 24 hours)` : ''}
 ${invoicePdf ? '\nA PDF invoice is attached for your records.' : ''}
 
-View your order: ${siteUrl}/my-orders/${order.id}
+${renderOrderCtaText(order)}
 `,
     });
     console.log(`Order approved email sent to ${order.viewerEmail}`);
@@ -1535,7 +1567,7 @@ export async function sendOrderItemChangesEmail(order: Order, distributorName: s
 
         <p>If you have any questions about this update, please contact <strong>${distributorName}</strong> directly.</p>
 
-        <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 0;">View Order Details</a>
+        <div style="margin: 10px 0;">${renderOrderCtaButtons(order, { accent: '#3b82f6' })}</div>
     </div>
     <div style="text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px;">
         <p>This email was sent from Vinylogix on behalf of ${distributorName}</p>
@@ -1554,7 +1586,7 @@ ${changedItems.map(item => `- ${item.artist} — ${item.title} (Qty: ${item.quan
 
 ${hasAdjustedTotal ? `Order total adjusted: Original €${formatPriceForDisplay(order.originalTotalAmount!)} → New total €${formatPriceForDisplay(order.totalAmount)}` : ''}
 
-View your order: ${siteUrl}/my-orders/${order.id}
+${renderOrderCtaText(order)}
       `,
     });
     console.log(`Order item changes email sent to ${order.viewerEmail}`);
@@ -1594,7 +1626,7 @@ export async function sendOrderApprovedInvoiceOnlyEmail(
   const paymentSection = renderPaymentDetailsSection(distributor, orderRef);
   const viewButton = `
     <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
-      <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #111827; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-size: 14px;">View Order Details</a>
+      ${renderOrderCtaButtons(order)}
       <p style="margin: 10px 0 0 0; color: #6b7280; font-size: 12px;">📎 A PDF invoice is attached to this email.</p>
     </div>
   `;
@@ -1629,7 +1661,7 @@ in the transfer reference so the payment can be matched.
 Once ${distributorName} has confirmed receipt of your payment, you'll be notified and
 your order will be shipped.
 
-View your order: ${siteUrl}/my-orders/${order.id}
+${renderOrderCtaText(order)}
 `,
     });
     console.log(`Order-approved invoice-only email sent to ${order.viewerEmail} for order ${orderRef}`);
@@ -1668,7 +1700,7 @@ export async function sendOrderPaidConfirmation(
   const summary = renderOrderSummary(order, distributor);
   const cta = `
     <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
-      <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #111827; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-size: 14px;">View Order Details</a>
+      ${renderOrderCtaButtons(order)}
       <p style="margin: 14px 0 0 0; color: #6b7280; font-size: 12px;">Your order is now being processed — you'll receive another email when it ships.</p>
     </div>
   `;
@@ -1699,7 +1731,7 @@ Total paid: € ${formatPriceForDisplay(order.totalAmount)}
 
 Your order is now being processed. You'll receive another email when it ships.
 
-View your order: ${siteUrl}/my-orders/${order.id}
+${renderOrderCtaText(order)}
 `,
     });
     console.log(`Payment confirmation email sent to ${order.viewerEmail} for order ${orderRef}`);
@@ -1739,7 +1771,7 @@ export async function sendUpdatedPaymentLinkEmail(
     <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
       <a href="${escapeHtml(paymentLink)}" style="display: inline-block; background: #16a34a; color: white; padding: 14px 44px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; box-shadow: 0 2px 4px rgba(22,163,74,0.25);">Pay Securely</a>
       <p style="margin: 10px 0 0 0; color: #6b7280; font-size: 12px;">This payment link expires in 24 hours.</p>
-      <p style="margin: 14px 0 0 0; color: #6b7280; font-size: 12px;"><a href="${siteUrl}/my-orders/${order.id}" style="color: #6b7280;">View order details on Vinylogix</a></p>
+      <div style="margin-top: 14px;">${renderOrderCtaButtons(order)}</div>
       ${invoicePdf ? '<p style="margin: 10px 0 0 0; color: #6b7280; font-size: 12px;">📎 The updated invoice is attached as a PDF.</p>' : ''}
     </div>
   `;
@@ -1774,6 +1806,8 @@ New total: € ${formatPriceForDisplay(order.totalAmount)}
 Pay now: ${paymentLink}
 This link expires in 24 hours.
 ${invoicePdf ? '\nThe updated invoice is attached as a PDF.' : ''}
+
+${renderOrderCtaText(order)}
 `,
     });
     console.log(`Updated payment link email sent to ${order.viewerEmail} for order ${orderRef}`);
@@ -1816,7 +1850,7 @@ export async function sendInvoiceToCustomerEmail(
   const paymentSection = showPaymentDetails ? renderPaymentDetailsSection(distributor, orderRef) : '';
   const cta = `
     <div style="padding: 8px 24px 24px 24px; background: white; text-align: center;">
-      <a href="${siteUrl}/my-orders/${order.id}" style="display: inline-block; background: #111827; color: white; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-size: 14px;">View Order Details</a>
+      ${renderOrderCtaButtons(order)}
       <p style="margin: 10px 0 0 0; color: #6b7280; font-size: 12px;">📎 The updated invoice is attached as a PDF.</p>
     </div>
   `;
@@ -1845,7 +1879,7 @@ Hello ${order.customerName || ''},
 ${distributorName} has sent you an updated invoice for order #${orderRef}.
 Total: € ${formatPriceForDisplay(order.totalAmount)}
 ${showPaymentDetails ? `\nPlease transfer the total using the payment details on the attached invoice and include #${orderRef} as reference.\n` : ''}
-View your order: ${siteUrl}/my-orders/${order.id}
+${renderOrderCtaText(order)}
 `,
     });
     console.log(`Invoice email sent to ${order.viewerEmail} for order ${orderRef}`);

@@ -16,7 +16,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, LogIn } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
@@ -45,8 +46,22 @@ const GoogleIcon = () => (
     </svg>
 );
 
+// Accept only same-origin, absolute paths. A `next=` value from a query
+// param is attacker-controlled so we must refuse anything that could escape
+// the site (open-redirect / phishing). Good: "/my-orders/abc". Rejected:
+// "//evil.com", "https://evil.com", "/login" (would loop), anything relative.
+function sanitizeNext(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  if (!raw.startsWith('/') || raw.startsWith('//')) return null;
+  if (raw.startsWith('/login')) return null;
+  return raw;
+}
+
 export default function LoginForm() {
-  const { login, loginWithGoogle } = useAuth();
+  const { login, loginWithGoogle, user } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextUrl = sanitizeNext(searchParams?.get('next'));
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
@@ -58,10 +73,20 @@ export default function LoginForm() {
     },
   });
 
+  // Post-login redirect: once the auth-context reports a signed-in user and
+  // the URL carries a valid ?next= we route there. Without ?next= we leave
+  // routing to the caller (ProtectedRoute remounts and the user lands on
+  // whatever page they opened originally).
+  useEffect(() => {
+    if (user && nextUrl) {
+      router.replace(nextUrl);
+    }
+  }, [user, nextUrl, router]);
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     await login(values.email, values.password);
-    setIsLoading(false); 
+    setIsLoading(false);
   }
 
   async function handleGoogleLogin() {

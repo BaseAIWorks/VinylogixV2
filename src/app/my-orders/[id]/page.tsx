@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Download, ArrowLeft, Package, Truck, MapPin, Loader2, Clock, CheckCircle, XCircle, Hourglass, Wallet, Copy } from "lucide-react";
+import { Download, ArrowLeft, Package, Truck, MapPin, Loader2, Clock, CheckCircle, XCircle, Hourglass, Wallet, Copy, ExternalLink } from "lucide-react";
 import { markdownToSafeHtml } from "@/lib/markdown-utils";
 import { format } from "date-fns";
 import Image from "next/image";
@@ -135,9 +135,18 @@ export default function ClientOrderDetailPage() {
             <h1 className="text-3xl font-bold tracking-tight">Order #{order.orderNumber || order.id.slice(0, 8)}</h1>
             <p className="text-muted-foreground">Placed on {format(new Date(order.createdAt), 'PPP')}</p>
           </div>
-          <Button onClick={handleDownloadInvoice} variant="outline">
-            <Download className="mr-2 h-4 w-4" /> Download Invoice
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {order.trackingToken && (
+              <Button asChild variant="outline">
+                <a href={`/t/${order.trackingToken}`} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" /> Tracking page
+                </a>
+              </Button>
+            )}
+            <Button onClick={handleDownloadInvoice} variant="outline">
+              <Download className="mr-2 h-4 w-4" /> Download Invoice
+            </Button>
+          </div>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
