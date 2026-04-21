@@ -58,7 +58,9 @@ const statusColors: Record<OrderStatus, string> = {
     on_hold: 'bg-orange-500/20 text-orange-500 border-orange-500/30',
     cancelled: 'bg-red-500/20 text-red-500 border-red-500/30',
     processing: 'bg-purple-500/20 text-purple-500 border-purple-500/30',
+    ready_to_ship: 'bg-teal-500/20 text-teal-500 border-teal-500/30',
     shipped: 'bg-indigo-500/20 text-indigo-500 border-indigo-500/30',
+    delivered: 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30',
 };
 
 

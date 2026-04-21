@@ -26,7 +26,9 @@ const statusConfig: Record<OrderStatus, { icon: React.ElementType, color: string
   awaiting_payment: { icon: Clock, color: 'bg-blue-500/20 text-blue-500 border-blue-500/30', label: 'Awaiting Payment' },
   paid: { icon: CheckCircle, color: 'bg-green-500/20 text-green-500 border-green-500/30', label: 'Paid' },
   processing: { icon: Hourglass, color: 'bg-purple-500/20 text-purple-500 border-purple-500/30', label: 'Processing' },
+  ready_to_ship: { icon: Package, color: 'bg-teal-500/20 text-teal-500 border-teal-500/30', label: 'Preparing Shipment' },
   shipped: { icon: Truck, color: 'bg-indigo-500/20 text-indigo-500 border-indigo-500/30', label: 'Shipped' },
+  delivered: { icon: CheckCircle, color: 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30', label: 'Delivered' },
   on_hold: { icon: Clock, color: 'bg-orange-500/20 text-orange-500 border-orange-500/30', label: 'On Hold' },
   cancelled: { icon: XCircle, color: 'bg-red-500/20 text-red-500 border-red-500/30', label: 'Cancelled' },
 };

@@ -10,7 +10,9 @@ const statusConfig: Record<OrderStatus, { label: string }> = {
   awaiting_payment: { label: 'Awaiting Payment' },
   paid: { label: 'Paid' },
   processing: { label: 'Processing' },
+  ready_to_ship: { label: 'Ready to Ship' },
   shipped: { label: 'Shipped' },
+  delivered: { label: 'Delivered' },
   on_hold: { label: 'On Hold' },
   cancelled: { label: 'Cancelled' },
 };

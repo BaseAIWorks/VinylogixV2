@@ -5,9 +5,33 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Truck, Loader2, AlertTriangle, ArrowLeft, LayoutGrid, List, Package, CreditCard, Printer, Clock } from "lucide-react";
+import { Truck, Loader2, AlertTriangle, ArrowLeft, LayoutGrid, List, Package, PackageCheck, CreditCard, Printer, Clock } from "lucide-react";
 import type { Order, OrderStatus } from "@/types";
-import { getOrders, updateOrderStatus } from "@/services/order-service";
+import {
+  getOrders,
+  updateOrderStatus,
+  claimOrder,
+  markOrderPacked,
+  markOrderShipped,
+  markOrderDelivered,
+} from "@/services/order-service";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from "next/navigation";
@@ -31,7 +55,9 @@ const statusColors: Record<OrderStatus, string> = {
   awaiting_payment: 'bg-blue-500/20 text-blue-500 border-blue-500/30',
   paid: 'bg-green-500/20 text-green-500 border-green-500/30',
   processing: 'bg-purple-500/20 text-purple-500 border-purple-500/30',
+  ready_to_ship: 'bg-teal-500/20 text-teal-500 border-teal-500/30',
   shipped: 'bg-indigo-500/20 text-indigo-500 border-indigo-500/30',
+  delivered: 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30',
   on_hold: 'bg-orange-500/20 text-orange-500 border-orange-500/30',
   cancelled: 'bg-red-500/20 text-red-500 border-red-500/30',
 };
@@ -52,9 +78,11 @@ export default function FulfillmentPage() {
       setIsLoading(true);
       try {
         const fetchedOrders = await getOrders(user);
-        // Only show orders in fulfillment workflow: paid, processing, shipped (last 7 days)
+        // Only show orders in fulfillment workflow: paid, processing,
+        // ready_to_ship, and shipped (last 7 days). Delivered falls out of
+        // the board — it's a terminal state shown on /orders instead.
         const fulfillmentOrders = fetchedOrders.filter(o => {
-          if (o.status === 'paid' || o.status === 'processing') return true;
+          if (o.status === 'paid' || o.status === 'processing' || o.status === 'ready_to_ship') return true;
           if (o.status === 'shipped') {
             const shippedDaysAgo = differenceInDays(new Date(), parseISO(o.updatedAt));
             return shippedDaysAgo <= 7;
@@ -81,15 +109,98 @@ export default function FulfillmentPage() {
   const stats = useMemo(() => {
     const paidCount = orders.filter(o => o.status === 'paid').length;
     const processingCount = orders.filter(o => o.status === 'processing').length;
+    const readyToShipCount = orders.filter(o => o.status === 'ready_to_ship').length;
     const shippedCount = orders.filter(o => o.status === 'shipped').length;
     const urgentCount = orders.filter(o => {
       const age = differenceInDays(new Date(), parseISO(o.createdAt));
-      return (o.status === 'paid' || o.status === 'processing') && age > 3;
+      return (o.status === 'paid' || o.status === 'processing' || o.status === 'ready_to_ship') && age > 3;
     }).length;
-    return { paidCount, processingCount, shippedCount, urgentCount };
+    return { paidCount, processingCount, readyToShipCount, shippedCount, urgentCount };
   }, [orders]);
 
   const businessProfileStatus = checkBusinessProfileComplete(activeDistributor);
+
+  // Ship-dialog state — opened from a kanban card's "Mark shipped" button.
+  // Holding the order here (not just the id) so the dialog can show the
+  // order number + count without a re-fetch.
+  const [shipDialogOrder, setShipDialogOrder] = useState<Order | null>(null);
+  const [shipDialogCarrier, setShipDialogCarrier] = useState<Order["carrier"] | undefined>(undefined);
+  const [shipDialogTracking, setShipDialogTracking] = useState("");
+  const [isShipping, setIsShipping] = useState(false);
+
+  // Feature-gate everything behind the distributor's subscription. The
+  // dashboard already checks this, but a worker could still deep-link into
+  // /fulfillment on a plan without orders — belt & braces.
+  const ordersAllowed = activeDistributor?.subscription?.allowOrders !== false;
+
+  const handleClaim = async (orderId: string) => {
+    if (!user) return;
+    try {
+      await claimOrder(orderId, user);
+      toast({ title: "Claimed", description: "You're now on this order." });
+      fetchFulfillmentOrders();
+    } catch (error) {
+      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+    }
+  };
+
+  const handleMarkPacked = async (orderId: string) => {
+    if (!user) return;
+    try {
+      await markOrderPacked(orderId, user);
+      toast({ title: "Packed", description: "Order moved to Ready to Ship." });
+      fetchFulfillmentOrders();
+    } catch (error) {
+      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+    }
+  };
+
+  const handleOpenShipDialog = (orderId: string) => {
+    // Block shipped if business profile is incomplete — shipping produces an
+    // invoice/email that needs business details to be accurate.
+    if (!businessProfileStatus.isComplete) {
+      toast({
+        title: "Business Profile Incomplete",
+        description: `Please complete your business profile before shipping. Missing: ${businessProfileStatus.missingFields.join(', ')}`,
+        variant: "destructive",
+      });
+      return;
+    }
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    setShipDialogOrder(order);
+    setShipDialogCarrier(order.carrier);
+    setShipDialogTracking(order.trackingNumber || "");
+  };
+
+  const handleConfirmShipped = async () => {
+    if (!user || !shipDialogOrder) return;
+    setIsShipping(true);
+    try {
+      await markOrderShipped(shipDialogOrder.id, user, {
+        carrier: shipDialogCarrier,
+        trackingNumber: shipDialogTracking.trim() || undefined,
+      });
+      toast({ title: "Shipped", description: "Customer will receive a shipping notification." });
+      setShipDialogOrder(null);
+      fetchFulfillmentOrders();
+    } catch (error) {
+      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+    } finally {
+      setIsShipping(false);
+    }
+  };
+
+  const handleMarkDelivered = async (orderId: string) => {
+    if (!user) return;
+    try {
+      await markOrderDelivered(orderId, user);
+      toast({ title: "Delivered", description: "Order marked as delivered." });
+      fetchFulfillmentOrders();
+    } catch (error) {
+      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+    }
+  };
 
   const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
     if (!user) return;
@@ -222,10 +333,26 @@ export default function FulfillmentPage() {
     );
   }
 
+  if (!ordersAllowed) {
+    return (
+      <div className="flex flex-col items-center justify-center text-center p-6">
+        <Truck className="h-16 w-16 text-muted-foreground mb-4" />
+        <h2 className="text-2xl font-semibold">Fulfillment not included in your plan</h2>
+        <p className="text-muted-foreground mt-2 max-w-md">
+          Your current subscription doesn't include order management. Upgrade to
+          enable incoming orders and the fulfillment workflow.
+        </p>
+        <Button onClick={() => router.push('/subscription')} className="mt-6">
+          Upgrade plan
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
@@ -248,6 +375,19 @@ export default function FulfillmentPage() {
               <div>
                 <p className="text-2xl font-bold">{stats.processingCount}</p>
                 <p className="text-xs text-muted-foreground">Processing</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-teal-100 dark:bg-teal-900/20">
+                <PackageCheck className="h-5 w-5 text-teal-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{stats.readyToShipCount}</p>
+                <p className="text-xs text-muted-foreground">Ready to Ship</p>
               </div>
             </div>
           </CardContent>
@@ -313,7 +453,11 @@ export default function FulfillmentPage() {
             viewMode === "kanban" ? (
               <KanbanBoard
                 orders={orders}
-                onStatusChange={handleStatusChange}
+                currentUserUid={user?.uid || ""}
+                onClaim={handleClaim}
+                onMarkPacked={handleMarkPacked}
+                onMarkShipped={handleOpenShipDialog}
+                onMarkDelivered={handleMarkDelivered}
                 onViewOrder={handleViewOrder}
                 selectedOrders={selectedOrders}
                 onSelectOrder={toggleOrderSelection}
@@ -434,6 +578,73 @@ export default function FulfillmentPage() {
         isProcessing={isProcessingBulk}
         processingLabel="Updating orders..."
       />
+
+      {/* Ship dialog — opens when the user clicks "Mark shipped" on a
+          ready_to_ship card. Pre-fills carrier/tracking if they're already
+          set on the order (editing after a mistake), otherwise collects
+          them fresh. Submitting fires the customer shipping email on the
+          first shipped transition only (see markOrderShipped). */}
+      <Dialog open={!!shipDialogOrder} onOpenChange={(open) => { if (!open) setShipDialogOrder(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Ship order{" "}
+              <span className="font-mono">
+                {shipDialogOrder?.orderNumber || shipDialogOrder?.id.slice(0, 8)}
+              </span>
+            </DialogTitle>
+            <DialogDescription>
+              Record the carrier and tracking number. The customer will receive
+              a shipping notification with these details.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="ship-carrier">Carrier</Label>
+              <Select
+                value={shipDialogCarrier ?? ""}
+                onValueChange={(v) => setShipDialogCarrier(v as Order["carrier"])}
+              >
+                <SelectTrigger id="ship-carrier">
+                  <SelectValue placeholder="Select carrier" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="postnl">PostNL</SelectItem>
+                  <SelectItem value="dhl">DHL</SelectItem>
+                  <SelectItem value="ups">UPS</SelectItem>
+                  <SelectItem value="fedex">FedEx</SelectItem>
+                  <SelectItem value="dpd">DPD</SelectItem>
+                  <SelectItem value="gls">GLS</SelectItem>
+                  <SelectItem value="correos">Correos</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ship-tracking">Tracking number</Label>
+              <Input
+                id="ship-tracking"
+                placeholder="e.g. 3SKABA1234567890"
+                value={shipDialogTracking}
+                onChange={(e) => setShipDialogTracking(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Optional but recommended — without a tracking number the customer
+                can't self-serve status updates.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShipDialogOrder(null)} disabled={isShipping}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmShipped} disabled={isShipping}>
+              {isShipping && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Mark shipped
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -601,9 +601,22 @@ export interface FirestoreUser {
 // Sales/Orders
 // ===================================
 
-export type OrderStatus = 'awaiting_approval' | 'pending' | 'awaiting_payment' | 'paid' | 'processing' | 'shipped' | 'cancelled' | 'on_hold';
+export type OrderStatus = 'awaiting_approval' | 'pending' | 'awaiting_payment' | 'paid' | 'processing' | 'ready_to_ship' | 'shipped' | 'delivered' | 'cancelled' | 'on_hold';
 
-export const OrderStatuses: OrderStatus[] = ['awaiting_approval', 'pending', 'awaiting_payment', 'paid', 'processing', 'shipped', 'cancelled', 'on_hold'];
+export const OrderStatuses: OrderStatus[] = ['awaiting_approval', 'pending', 'awaiting_payment', 'paid', 'processing', 'ready_to_ship', 'shipped', 'delivered', 'cancelled', 'on_hold'];
+
+// Events recorded on the order when someone claims, takes over, releases, or
+// is reassigned. Soft-ownership model: any operator can advance any order,
+// but every handover is captured here so the trail is readable. Bounded to
+// the last 20 entries in service code to keep doc-size predictable.
+export interface OrderAssignmentEvent {
+  action: 'claimed' | 'taken_over' | 'released' | 'reassigned';
+  byUid: string;
+  byEmail: string;
+  at: string; // ISO
+  fromUid?: string;   // previous assignee when 'taken_over' or 'reassigned'
+  fromEmail?: string;
+}
 
 
 export type OrderItemStatus = 'available' | 'not_available' | 'out_of_stock' | 'back_order';
@@ -725,6 +738,28 @@ export interface Order {
   trackingUrl?: string;
   shippedAt?: string; // ISO String
   estimatedDeliveryDate?: string; // ISO String
+
+  // Fulfillment ownership (soft — any operator can advance any order).
+  // `assigneeUid` is the operator *currently* on it; the history array keeps
+  // the full handover trail so the order-detail timeline can render it.
+  assigneeUid?: string;
+  assigneeEmail?: string;
+  assignedAt?: string; // ISO — when the current assignee took it
+  assignmentHistory?: OrderAssignmentEvent[];
+
+  // Packed (processing → ready_to_ship)
+  packedAt?: string; // ISO
+  packedByUid?: string;
+  packedByEmail?: string;
+
+  // Shipped (ready_to_ship → shipped). `shippedAt` already exists above.
+  shippedByUid?: string;
+  shippedByEmail?: string;
+
+  // Delivered (shipped → delivered). Phase 1: manual; phase 2: carrier webhook.
+  deliveredAt?: string; // ISO
+  deliveredByUid?: string;
+  deliveredByEmail?: string;
 
   // Customer self-service tracking token — unguessable URL slug for /t/[token]
   trackingToken?: string;

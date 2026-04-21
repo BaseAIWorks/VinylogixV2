@@ -145,6 +145,7 @@ export async function GET(
     paidAt: iso(o.paidAt),
     approvedAt: iso(o.approvedAt),
     shippedAt: iso(o.shippedAt),
+    deliveredAt: iso(o.deliveredAt),
     estimatedDeliveryDate: iso(o.estimatedDeliveryDate),
     totalAmount: o.totalAmount,
     subtotalAmount: o.subtotalAmount,

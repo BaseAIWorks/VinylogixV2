@@ -1,9 +1,9 @@
 
 "use client";
 
-import type { Order, OrderStatus, OrderItemStatus, User, CartItem, OrderItem } from '@/types';
+import type { Order, OrderStatus, OrderItemStatus, OrderAssignmentEvent, User, CartItem, OrderItem } from '@/types';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, where, limit, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, where, limit, Timestamp, runTransaction } from 'firebase/firestore';
 import {
   deductStockForOrder,
   deductReservedStockForOrder,
@@ -631,3 +631,237 @@ export async function createOrder(user: User, cartItems: CartItem[]): Promise<Or
 }
 
 // createOrderRequest is now server-side only — see server-order-service.ts createOrderRequestServer
+
+// ====================================================================
+// Fulfillment workflow (soft ownership)
+// ====================================================================
+// Any operator can claim, take over, pack, ship, and mark-delivered any
+// order within their distributor. The assigneeUid signals who is *actively*
+// on it; assignmentHistory preserves every handover so the order-detail
+// timeline is readable. All helpers below are idempotent — clicking a
+// button twice must never produce a dupe side-effect (e.g. two shipping
+// emails).
+
+const MAX_ASSIGNMENT_HISTORY = 20;
+
+function appendAssignmentEvent(
+  history: OrderAssignmentEvent[] | undefined,
+  event: OrderAssignmentEvent
+): OrderAssignmentEvent[] {
+  const next = [...(history || []), event];
+  // Clamp to prevent unbounded growth of the order doc. The oldest entries
+  // drop off; the most recent 20 handovers are what matters for daily ops.
+  return next.length > MAX_ASSIGNMENT_HISTORY
+    ? next.slice(next.length - MAX_ASSIGNMENT_HISTORY)
+    : next;
+}
+
+/**
+ * Claim or take-over an order. Runs as a Firestore transaction so two
+ * operators clicking "Claim" simultaneously cannot both become assignee
+ * silently — one of them will see a "taken over" event appear in the
+ * history. If the caller is already the assignee this is a no-op.
+ *
+ * When the order is still in `paid` status the claim advances it to
+ * `processing` in the same write (the "Claim & start" semantic).
+ */
+export async function claimOrder(
+  orderId: string,
+  actingUser: User
+): Promise<Order> {
+  if (!actingUser.distributorId) throw new Error("User has no distributorId.");
+  if (!actingUser.uid || !actingUser.email) {
+    throw new Error("User uid and email required to claim an order.");
+  }
+  const orderDocRef = doc(db, ORDERS_COLLECTION, orderId);
+
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(orderDocRef);
+    if (!snap.exists()) throw new Error("Order not found.");
+    const order = snap.data() as Order;
+    if (order.distributorId !== actingUser.distributorId) {
+      throw new Error("Permission Denied.");
+    }
+
+    const currentAssignee = order.assigneeUid;
+    // Idempotent: already mine → nothing to write.
+    if (currentAssignee && currentAssignee === actingUser.uid) return;
+
+    const nowIso = new Date().toISOString();
+    const isTakeover = !!currentAssignee && currentAssignee !== actingUser.uid;
+
+    const event: OrderAssignmentEvent = isTakeover
+      ? {
+          action: 'taken_over',
+          byUid: actingUser.uid,
+          byEmail: actingUser.email!,
+          at: nowIso,
+          fromUid: currentAssignee,
+          fromEmail: order.assigneeEmail,
+        }
+      : {
+          action: 'claimed',
+          byUid: actingUser.uid,
+          byEmail: actingUser.email!,
+          at: nowIso,
+        };
+
+    const payload: any = {
+      assigneeUid: actingUser.uid,
+      assigneeEmail: actingUser.email,
+      assignedAt: nowIso,
+      assignmentHistory: appendAssignmentEvent(order.assignmentHistory, event),
+      updatedAt: Timestamp.now(),
+    };
+
+    // First claim on a paid order auto-advances to processing. Stock was
+    // already moved to 'deducted' at the paid transition, so we do not touch
+    // stockState here.
+    if (order.status === 'paid' && !isTakeover) {
+      payload.status = 'processing';
+    }
+
+    tx.update(orderDocRef, payload);
+  });
+
+  const finalSnap = await getDoc(orderDocRef);
+  return processOrderTimestamps({ ...finalSnap.data(), id: finalSnap.id });
+}
+
+/**
+ * Move processing → ready_to_ship and record who packed it. Does not touch
+ * the stock-state machine (stock was already deducted at `paid`). Idempotent.
+ */
+export async function markOrderPacked(
+  orderId: string,
+  actingUser: User
+): Promise<Order> {
+  if (!actingUser.distributorId || !actingUser.uid || !actingUser.email) {
+    throw new Error("User info missing.");
+  }
+  const orderDocRef = doc(db, ORDERS_COLLECTION, orderId);
+  const snap = await getDoc(orderDocRef);
+  if (!snap.exists() || snap.data().distributorId !== actingUser.distributorId) {
+    throw new Error("Permission Denied or Order not found.");
+  }
+  const order = snap.data() as Order;
+
+  // Idempotent — no double-write if already in target state.
+  if (order.status === 'ready_to_ship') {
+    return processOrderTimestamps({ ...order, id: orderId });
+  }
+  if (order.status !== 'processing' && order.status !== 'paid') {
+    throw new Error(`Cannot mark packed from status '${order.status}'.`);
+  }
+
+  const nowIso = new Date().toISOString();
+  await updateDoc(orderDocRef, {
+    status: 'ready_to_ship' as OrderStatus,
+    packedAt: nowIso,
+    packedByUid: actingUser.uid,
+    packedByEmail: actingUser.email,
+    updatedAt: Timestamp.now(),
+  });
+
+  const final = await getDoc(orderDocRef);
+  return processOrderTimestamps({ ...final.data(), id: final.id });
+}
+
+/**
+ * Move ready_to_ship → shipped (or processing → shipped if someone skipped
+ * the packed step), record who shipped it, and fire the customer shipping
+ * notification email exactly once on the first transition. Can also be used
+ * on an already-shipped order to edit carrier/trackingNumber (in that case
+ * status and shippedAt stay untouched, no new email goes out).
+ */
+export async function markOrderShipped(
+  orderId: string,
+  actingUser: User,
+  shipment: { carrier?: Order['carrier']; trackingNumber?: string; trackingUrl?: string } = {}
+): Promise<Order> {
+  if (!actingUser.distributorId || !actingUser.uid || !actingUser.email) {
+    throw new Error("User info missing.");
+  }
+  const orderDocRef = doc(db, ORDERS_COLLECTION, orderId);
+  const snap = await getDoc(orderDocRef);
+  if (!snap.exists() || snap.data().distributorId !== actingUser.distributorId) {
+    throw new Error("Permission Denied or Order not found.");
+  }
+  const order = snap.data() as Order;
+
+  const alreadyShipped = order.status === 'shipped' || order.status === 'delivered';
+
+  const payload: any = { updatedAt: Timestamp.now() };
+  if (shipment.carrier !== undefined) payload.carrier = shipment.carrier;
+  if (shipment.trackingNumber !== undefined) payload.trackingNumber = shipment.trackingNumber;
+  if (shipment.trackingUrl !== undefined) payload.trackingUrl = shipment.trackingUrl;
+
+  if (!alreadyShipped) {
+    // Must come from processing or ready_to_ship.
+    if (order.status !== 'processing' && order.status !== 'ready_to_ship') {
+      throw new Error(`Cannot mark shipped from status '${order.status}'.`);
+    }
+    payload.status = 'shipped';
+    payload.shippedAt = Timestamp.now();
+    payload.shippedByUid = actingUser.uid;
+    payload.shippedByEmail = actingUser.email;
+  }
+
+  await updateDoc(orderDocRef, payload);
+
+  // Customer email only fires on the first shipped transition — editing
+  // tracking info later must not re-send it.
+  if (!alreadyShipped) {
+    try {
+      const afterSnap = await getDoc(orderDocRef);
+      const afterOrder = processOrderTimestamps({ ...afterSnap.data(), id: afterSnap.id });
+      const { sendShippingNotification } = await import('./email-service');
+      sendShippingNotification(afterOrder).catch(err =>
+        logger.error('Failed to send shipping notification', err as Error)
+      );
+    } catch (error) {
+      logger.error('Failed to import email service', error as Error);
+    }
+  }
+
+  const final = await getDoc(orderDocRef);
+  return processOrderTimestamps({ ...final.data(), id: final.id });
+}
+
+/**
+ * Move shipped → delivered. Phase 1 is manual; phase 2 will wire this to
+ * carrier tracking webhooks. Idempotent.
+ */
+export async function markOrderDelivered(
+  orderId: string,
+  actingUser: User
+): Promise<Order> {
+  if (!actingUser.distributorId || !actingUser.uid || !actingUser.email) {
+    throw new Error("User info missing.");
+  }
+  const orderDocRef = doc(db, ORDERS_COLLECTION, orderId);
+  const snap = await getDoc(orderDocRef);
+  if (!snap.exists() || snap.data().distributorId !== actingUser.distributorId) {
+    throw new Error("Permission Denied or Order not found.");
+  }
+  const order = snap.data() as Order;
+
+  if (order.status === 'delivered') {
+    return processOrderTimestamps({ ...order, id: orderId });
+  }
+  if (order.status !== 'shipped') {
+    throw new Error(`Cannot mark delivered from status '${order.status}'.`);
+  }
+
+  const nowIso = new Date().toISOString();
+  await updateDoc(orderDocRef, {
+    status: 'delivered' as OrderStatus,
+    deliveredAt: nowIso,
+    deliveredByUid: actingUser.uid,
+    deliveredByEmail: actingUser.email,
+    updatedAt: Timestamp.now(),
+  });
+
+  const final = await getDoc(orderDocRef);
+  return processOrderTimestamps({ ...final.data(), id: final.id });
+}

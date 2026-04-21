@@ -36,6 +36,7 @@ interface SafeOrder {
   paidAt?: string;
   approvedAt?: string;
   shippedAt?: string;
+  deliveredAt?: string;
   estimatedDeliveryDate?: string;
   totalAmount: number;
   subtotalAmount?: number;
@@ -69,7 +70,9 @@ const statusCopy: Record<string, { label: string; tone: string; icon: React.Elem
   awaiting_payment: { label: "Awaiting payment", tone: "bg-blue-500/20 text-blue-700 border-blue-500/30", icon: Receipt },
   paid: { label: "Paid · preparing", tone: "bg-green-500/20 text-green-700 border-green-500/30", icon: CheckCircle },
   processing: { label: "Processing", tone: "bg-purple-500/20 text-purple-700 border-purple-500/30", icon: Package },
+  ready_to_ship: { label: "Preparing shipment", tone: "bg-teal-500/20 text-teal-700 border-teal-500/30", icon: Package },
   shipped: { label: "Shipped", tone: "bg-indigo-500/20 text-indigo-700 border-indigo-500/30", icon: Truck },
+  delivered: { label: "Delivered", tone: "bg-emerald-500/20 text-emerald-700 border-emerald-500/30", icon: CheckCircle },
   on_hold: { label: "On hold", tone: "bg-orange-500/20 text-orange-700 border-orange-500/30", icon: AlertCircle },
   cancelled: { label: "Cancelled", tone: "bg-red-500/20 text-red-700 border-red-500/30", icon: AlertCircle },
 };
@@ -188,10 +191,14 @@ export default function TrackingPage() {
   const StatusIcon = statusInfo.icon;
   const visibleItems = order.items.filter(i => (i.itemStatus || "available") !== "not_available");
 
-  // Step progression (approved → paid → processing → shipped)
-  const paidOrBeyond = ["paid", "processing", "shipped"].includes(order.status);
-  const processingOrBeyond = ["processing", "shipped"].includes(order.status);
+  // Step progression: approved → paid → processing → shipped → delivered.
+  // `ready_to_ship` is grouped under Processing for the customer view — no
+  // reason to burden the customer with our internal pack/ship split.
+  const paidOrBeyond = ["paid", "processing", "ready_to_ship", "shipped", "delivered"].includes(order.status);
+  const processingOrBeyond = ["processing", "ready_to_ship", "shipped", "delivered"].includes(order.status);
+  const shippedOrBeyond = ["shipped", "delivered"].includes(order.status);
   const shipped = order.status === "shipped";
+  const delivered = order.status === "delivered";
 
   return (
     <div className="min-h-screen bg-muted/30 py-8">
@@ -216,8 +223,9 @@ export default function TrackingPage() {
             <div className="space-y-4">
               <StatusStep label="Order approved" done={!!order.approvedAt} active={order.status === "awaiting_payment"} date={order.approvedAt} />
               <StatusStep label="Payment received" done={paidOrBeyond} active={order.status === "paid"} date={order.paidAt} />
-              <StatusStep label="Processing" done={shipped} active={processingOrBeyond && !shipped} />
-              <StatusStep label="Shipped" done={shipped} active={shipped} date={order.shippedAt} />
+              <StatusStep label="Processing" done={shippedOrBeyond} active={processingOrBeyond && !shippedOrBeyond} />
+              <StatusStep label="Shipped" done={delivered} active={shipped} date={order.shippedAt} />
+              <StatusStep label="Delivered" done={delivered} active={delivered} date={order.deliveredAt} />
             </div>
 
             {order.estimatedDeliveryDate && (
