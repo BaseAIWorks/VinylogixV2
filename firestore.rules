@@ -123,10 +123,19 @@ service cloud.firestore {
     // Fulfillment action fields must name the acting user, not a colleague.
     // Any operator is allowed to advance any order (soft ownership), but
     // writing e.g. `shippedByUid: "someone-else"` would let an operator
-    // frame a colleague in the audit trail. Enforced by comparing each of
-    // the four *ByUid fields before/after — the field may stay the same,
-    // stay absent, or match request.auth.uid. Master reassign lands in
-    // phase 2 as a dedicated path (admin SDK or a rule carve-out).
+    // frame a colleague in the audit trail. Enforced by comparing each
+    // *ByUid and *Email field before/after — a given field may stay the
+    // same, stay absent, or be set to a value that identifies the acting
+    // user (uid matches request.auth.uid; email matches the auth token's
+    // email). Master reassign lands in phase 2 as a dedicated path (admin
+    // SDK or a rule carve-out).
+    //
+    // Note: `assignmentHistory` is an array and is not validated here —
+    // appending bogus entries within one's own distributor remains
+    // technically possible. The client service appends via transaction so
+    // legitimate writes are well-formed; malicious writes are bounded to
+    // operators already inside a distributor, which is the same trust
+    // boundary as everything else in the update path.
     function fulfillmentActionFieldsMatchCaller() {
       let before = resource.data;
       let after = request.resource.data;
@@ -144,7 +153,21 @@ service cloud.firestore {
                         (('deliveredByUid' in before) && before.deliveredByUid == after.deliveredByUid) ||
                         after.deliveredByUid == request.auth.uid;
 
-      return assigneeOk && packedOk && shippedOk && deliveredOk;
+      let assigneeEmailOk = !('assigneeEmail' in after) ||
+                            (('assigneeEmail' in before) && before.assigneeEmail == after.assigneeEmail) ||
+                            after.assigneeEmail == request.auth.token.email;
+      let packedEmailOk = !('packedByEmail' in after) ||
+                          (('packedByEmail' in before) && before.packedByEmail == after.packedByEmail) ||
+                          after.packedByEmail == request.auth.token.email;
+      let shippedEmailOk = !('shippedByEmail' in after) ||
+                           (('shippedByEmail' in before) && before.shippedByEmail == after.shippedByEmail) ||
+                           after.shippedByEmail == request.auth.token.email;
+      let deliveredEmailOk = !('deliveredByEmail' in after) ||
+                             (('deliveredByEmail' in before) && before.deliveredByEmail == after.deliveredByEmail) ||
+                             after.deliveredByEmail == request.auth.token.email;
+
+      return assigneeOk && packedOk && shippedOk && deliveredOk
+             && assigneeEmailOk && packedEmailOk && shippedEmailOk && deliveredEmailOk;
     }
 
     // Prevent masters from moving users between distributors
@@ -272,20 +295,26 @@ service cloud.firestore {
         // Superadmins can manage all orders
         allow read, write, delete: if isSuperAdmin();
 
+        // Customers create their own order. Post-create mutations for
+        // customers go through server-side APIs (cancellation, VAT
+        // validation, payment webhooks) using the admin SDK — there is no
+        // legitimate flow where a logged-in customer updates an order
+        // directly from the client. Denying it outright prevents a whole
+        // class of forgery: status flips, audit-trail injection, tampering
+        // with totals, and spoofing of fulfillment *By* fields. See the
+        // security-review note on 2026-04-21.
         allow create: if isSignedIn() && request.resource.data.viewerId == request.auth.uid;
 
-        // Read is unchanged — any operator of the distributor or the customer
-        // who placed the order can see it.
+        // Read: any operator of the distributor, or the customer who placed
+        // the order.
         allow read: if isOperatorOfWithFallback(resource.data.distributorId) || isOwner(resource.data.viewerId);
 
-        // Update splits in two: operators may update orders for their
-        // distributor BUT must not spoof the fulfillment *ByUid audit fields
-        // onto a colleague. The customer who placed the order can still
-        // update their own order (e.g. cancellation, address correction) —
-        // they can't touch those action fields because they're not an
-        // operator and the audit-field guard blocks it anyway.
-        allow update: if (isOperatorOfWithFallback(resource.data.distributorId) && fulfillmentActionFieldsMatchCaller())
-                      || (isOwner(resource.data.viewerId) && fulfillmentActionFieldsMatchCaller());
+        // Update: operators only, AND operators cannot spoof the four
+        // fulfillment *ByUid audit fields onto a colleague. Customers
+        // intentionally have NO direct update path — if a feature needs
+        // customer writes (self-cancel, address change), add a dedicated
+        // server endpoint rather than loosening this rule.
+        allow update: if isOperatorOfWithFallback(resource.data.distributorId) && fulfillmentActionFieldsMatchCaller();
     }
 
     match /notifications/{notificationId} {
