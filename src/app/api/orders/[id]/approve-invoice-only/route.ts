@@ -87,16 +87,39 @@ export async function POST(
       distributor
     );
 
-    await orderRef.update({
-      status: 'awaiting_payment',
-      approvedAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-      // Remove any dormant Stripe link fields so the UI doesn't show a dead link
-      paymentLink: FieldValue.delete(),
-      stripeCheckoutSessionId: FieldValue.delete(),
-      paymentLinkExpiresAt: FieldValue.delete(),
-      paymentLinkCreatedAt: FieldValue.delete(),
-    });
+    // Transactional status transition: re-read the order at write time and
+    // refuse to transition unless it's still awaiting_approval. Guards
+    // against a double-approval race (two operators click at once) or a
+    // status change committed during the PDF build above.
+    try {
+      await orderRef.firestore.runTransaction(async (tx) => {
+        const snap = await tx.get(orderRef);
+        if (!snap.exists) {
+          throw new Error(`Order ${orderId} disappeared before approval write.`);
+        }
+        const current = snap.data()!;
+        if (current.status !== 'awaiting_approval') {
+          const err: any = new Error(`Order status changed to "${current.status}" while approving.`);
+          err.status = 409;
+          throw err;
+        }
+        tx.update(orderRef, {
+          status: 'awaiting_payment',
+          approvedAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+          // Remove any dormant Stripe link fields so the UI doesn't show a dead link
+          paymentLink: FieldValue.delete(),
+          stripeCheckoutSessionId: FieldValue.delete(),
+          paymentLinkExpiresAt: FieldValue.delete(),
+          paymentLinkCreatedAt: FieldValue.delete(),
+        });
+      });
+    } catch (err: any) {
+      if (err?.status === 409) {
+        return NextResponse.json({ error: err.message }, { status: 409 });
+      }
+      throw err;
+    }
 
     try {
       const { sendOrderApprovedInvoiceOnlyEmail } = await import('@/services/email-service');

@@ -3,6 +3,7 @@
 import type { Order, OrderStatus, OrderItem } from '@/types';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { Timestamp, FieldValue } from 'firebase-admin/firestore';
+import type { DocumentData } from 'firebase-admin/firestore';
 import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
 import { generateTrackingToken } from '@/lib/tracking-token';
@@ -856,129 +857,117 @@ export async function createOrderRequestServer(params: {
  * isReverseCharge in place so the invoice PDF and payment link reflect
  * reality. Idempotent: a no-op when the stored state already matches.
  *
- * Math mirrors recalculateOrderPriceAndTax in order-service.ts but runs on
- * the admin SDK so it can be called from approval API routes.
+ * Reads of the order happen INSIDE a transaction so concurrent mutations
+ * (item status changes, discounts, etc.) cause an automatic retry rather
+ * than a stale-overwrite. Distributor + user data are fetched outside the
+ * transaction — they're stable enough for this purpose and including them
+ * would slow the transaction body unnecessarily.
  */
 export async function recalcOrderReverseCharge(
   orderId: string,
-): Promise<{ order: any; distributor: any; changed: boolean }> {
+): Promise<{ order: DocumentData; distributor: DocumentData | null; changed: boolean }> {
   const adminDb = getAdminDb();
   if (!adminDb) throw new Error("Admin DB not initialized.");
 
   const orderRef = adminDb.collection(ORDERS_COLLECTION).doc(orderId);
-  const orderSnap = await orderRef.get();
-  if (!orderSnap.exists) throw new Error(`Order ${orderId} not found`);
-  const order = orderSnap.data()!;
 
-  const distSnap = await adminDb.collection('distributors').doc(order.distributorId).get();
+  // Outer read: needed to find the distributor and customer. We re-read
+  // the order inside the transaction below before computing/writing.
+  const outerSnap = await orderRef.get();
+  if (!outerSnap.exists) throw new Error(`Order ${orderId} not found`);
+  const outerOrder = outerSnap.data()!;
+
+  const distSnap = await adminDb.collection('distributors').doc(outerOrder.distributorId).get();
   if (!distSnap.exists) {
-    return { order, distributor: null, changed: false };
+    return { order: outerOrder, distributor: null, changed: false };
   }
   const distributor = distSnap.data()!;
 
-  // Resolve the customer's CURRENT vatValidated state from their user doc.
+  // Resolve the customer's CURRENT vatValidated state + a country fallback.
   let customerVatValidated = false;
-  let customerCountry: string | undefined = order.customerCountry;
-  if (order.viewerId && order.viewerId !== 'unknown') {
+  let customerCountryFallback: string | undefined;
+  if (outerOrder.viewerId && outerOrder.viewerId !== 'unknown') {
     try {
-      const userSnap = await adminDb.collection('users').doc(order.viewerId).get();
+      const userSnap = await adminDb.collection('users').doc(outerOrder.viewerId).get();
       if (userSnap.exists) {
         const u = userSnap.data() || {};
         customerVatValidated = u.vatValidated === true;
-        // Older orders don't snapshot customerCountry — fall back to the
-        // user profile so reverse-charge detection still works.
-        if (!customerCountry) customerCountry = u.country;
+        customerCountryFallback = u.country;
       }
     } catch (err) {
-      console.warn(`[recalcOrderReverseCharge] Could not fetch customer ${order.viewerId}:`, err);
+      console.warn(`[recalcOrderReverseCharge] Could not fetch customer ${outerOrder.viewerId}:`, err);
     }
   }
 
-  const { isReverseChargeApplicable } = await import('@/lib/tax-utils');
-  const shouldBeReverseCharge = isReverseChargeApplicable(
-    order.customerVatNumber, customerCountry, distributor.country,
-    { validated: customerVatValidated, requireValidated: true }
-  );
-  const currentlyReverseCharge = order.isReverseCharge === true;
+  const { isReverseChargeApplicable, computeDiscountAmount, computeOrderTotals } = await import('@/lib/tax-utils');
 
-  if (shouldBeReverseCharge === currentlyReverseCharge) {
-    return { order, distributor, changed: false };
-  }
+  const result = await adminDb.runTransaction(async (tx) => {
+    const freshSnap = await tx.get(orderRef);
+    if (!freshSnap.exists) throw new Error(`Order ${orderId} disappeared during transaction`);
+    const order = freshSnap.data()!;
 
-  // When reverse charge was applied at create, the stored taxRate is 0 (that's
-  // how calculateTax reports the effective rate). Fall back to the distributor's
-  // current manual rate so we can put VAT back on if validation is withdrawn.
-  const storedRate = typeof order.taxRate === 'number' ? order.taxRate : 0;
-  const fallbackRate = distributor.manualTaxRate || 0;
-  const rate = storedRate > 0 ? storedRate : fallbackRate;
-  if (rate <= 0) {
-    console.warn(`[recalcOrderReverseCharge] Order ${orderId}: no usable tax rate, skipping recalc.`);
-    return { order, distributor, changed: false };
-  }
-  const inclusive = typeof order.taxInclusive === 'boolean'
-    ? order.taxInclusive
-    : ((distributor.taxBehavior || 'inclusive') === 'inclusive');
+    const customerCountry = order.customerCountry || customerCountryFallback;
+    const shouldBeReverseCharge = isReverseChargeApplicable(
+      order.customerVatNumber, customerCountry, distributor.country,
+      { validated: customerVatValidated, requireValidated: true }
+    );
+    const currentlyReverseCharge = order.isReverseCharge === true;
 
-  const activeItems = (order.items || []).filter((item: any) => {
-    const status = item.itemStatus || 'available';
-    return status === 'available' || status === 'back_order';
-  });
-  const itemTotal = activeItems.reduce(
-    (sum: number, item: any) => sum + (item.priceAtTimeOfOrder || 0) * (item.quantity || 0),
-    0,
-  );
-
-  const round2 = (n: number) => Math.round(n * 100) / 100;
-
-  let discountAmount = 0;
-  if (order.discountType && typeof order.discountValue === 'number' && order.discountValue > 0) {
-    if (order.discountType === 'fixed') {
-      discountAmount = round2(Math.min(order.discountValue, itemTotal));
-    } else {
-      const pct = Math.min(100, Math.max(0, order.discountValue));
-      discountAmount = round2(itemTotal * pct / 100);
+    if (shouldBeReverseCharge === currentlyReverseCharge) {
+      return { order, changed: false };
     }
-  }
-  const itemAfterDiscount = round2(itemTotal - discountAmount);
-  const enteredShipping = order.shippingCost || 0;
 
-  let productsExcl: number;
-  let shippingExcl: number;
-  let taxAmount: number;
-  let totalAmount: number;
-
-  if (inclusive) {
-    productsExcl = round2(itemAfterDiscount / (1 + rate / 100));
-    shippingExcl = round2(enteredShipping / (1 + rate / 100));
-    if (shouldBeReverseCharge) {
-      taxAmount = 0;
-      totalAmount = round2(productsExcl + shippingExcl);
-    } else {
-      taxAmount = round2((itemAfterDiscount + enteredShipping) - (productsExcl + shippingExcl));
-      totalAmount = round2(itemAfterDiscount + enteredShipping);
+    // When reverse charge was applied at create, the stored taxRate is 0
+    // (calculateTax reports the effective rate). Fall back to distributor's
+    // current manual rate so we can put VAT back on if validation is withdrawn.
+    const storedRate = typeof order.taxRate === 'number' ? order.taxRate : 0;
+    const fallbackRate = distributor.manualTaxRate || 0;
+    const rate = storedRate > 0 ? storedRate : fallbackRate;
+    if (rate <= 0) {
+      console.warn(`[recalcOrderReverseCharge] Order ${orderId}: no usable tax rate, skipping recalc.`);
+      return { order, changed: false };
     }
-  } else {
-    productsExcl = itemAfterDiscount;
-    shippingExcl = enteredShipping;
-    if (shouldBeReverseCharge) {
-      taxAmount = 0;
-      totalAmount = round2(productsExcl + shippingExcl);
-    } else {
-      taxAmount = round2((productsExcl + shippingExcl) * (rate / 100));
-      totalAmount = round2(productsExcl + shippingExcl + taxAmount);
-    }
-  }
+    const inclusive = typeof order.taxInclusive === 'boolean'
+      ? order.taxInclusive
+      : ((distributor.taxBehavior || 'inclusive') === 'inclusive');
 
-  await orderRef.update({
-    subtotalAmount: productsExcl,
-    taxAmount,
-    totalAmount,
-    taxRate: shouldBeReverseCharge ? 0 : rate,
-    taxInclusive: inclusive,
-    isReverseCharge: shouldBeReverseCharge,
-    updatedAt: Timestamp.now(),
+    const activeItems = (order.items || []).filter((item: any) => {
+      const status = item.itemStatus || 'available';
+      return status === 'available' || status === 'back_order';
+    });
+    const itemTotal = activeItems.reduce(
+      (sum: number, item: any) => sum + (item.priceAtTimeOfOrder || 0) * (item.quantity || 0),
+      0,
+    );
+    const discountAmount = computeDiscountAmount(
+      itemTotal,
+      order.discountType && typeof order.discountValue === 'number'
+        ? { type: order.discountType, value: order.discountValue }
+        : null,
+    );
+    const itemAfterDiscount = Math.round((itemTotal - discountAmount) * 100) / 100;
+    const enteredShipping = order.shippingCost || 0;
+
+    const { productsExcl, taxAmount, totalAmount } = computeOrderTotals({
+      itemAfterDiscount,
+      shipping: enteredShipping,
+      rate,
+      inclusive,
+      reverseCharge: shouldBeReverseCharge,
+    });
+
+    const update = {
+      subtotalAmount: productsExcl,
+      taxAmount,
+      totalAmount,
+      taxRate: shouldBeReverseCharge ? 0 : rate,
+      taxInclusive: inclusive,
+      isReverseCharge: shouldBeReverseCharge,
+      updatedAt: Timestamp.now(),
+    };
+    tx.update(orderRef, update);
+    return { order: { ...order, ...update }, changed: true };
   });
 
-  const refreshed = await orderRef.get();
-  return { order: refreshed.data()!, distributor, changed: true };
+  return { order: result.order, distributor, changed: result.changed };
 }

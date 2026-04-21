@@ -205,3 +205,76 @@ export function calculateTax(
     return { subtotal: amount, taxAmount, total, taxRate: rate, isReverseCharge: false };
   }
 }
+
+/**
+ * Cap a discount against the items subtotal. Fixed discounts are clipped at
+ * itemTotal (you can't give away more than the products); percent discounts
+ * are clamped to 0-100%. Returns 0 for missing or non-positive inputs.
+ */
+export function computeDiscountAmount(
+  itemTotal: number,
+  discount?: { type: 'fixed' | 'percent'; value: number } | null,
+): number {
+  if (!discount || typeof discount.value !== 'number' || discount.value <= 0) return 0;
+  if (discount.type === 'fixed') {
+    return round2(Math.min(discount.value, itemTotal));
+  }
+  const pct = Math.min(100, Math.max(0, discount.value));
+  return round2(itemTotal * pct / 100);
+}
+
+/**
+ * Single source of truth for order-level totals given items-after-discount,
+ * shipping, tax rate, inclusive/exclusive behavior, and reverse-charge flag.
+ * Shared by `recalculateOrderPriceAndTax` (client SDK) and
+ * `recalcOrderReverseCharge` (admin SDK) so the math can't drift.
+ *
+ * `productsExcl` and `shippingExcl` are returned separately (callers
+ * typically store only `subtotalAmount = productsExcl`) so non-standard
+ * display cases can see shipping ex-tax if they need to.
+ */
+export function computeOrderTotals(opts: {
+  itemAfterDiscount: number;
+  shipping: number;
+  rate: number; // percent, e.g. 21
+  inclusive: boolean;
+  reverseCharge: boolean;
+}): { productsExcl: number; shippingExcl: number; taxAmount: number; totalAmount: number } {
+  const { itemAfterDiscount, shipping, rate, inclusive, reverseCharge } = opts;
+
+  if (rate <= 0 && !reverseCharge) {
+    return {
+      productsExcl: itemAfterDiscount,
+      shippingExcl: shipping,
+      taxAmount: 0,
+      totalAmount: round2(itemAfterDiscount + shipping),
+    };
+  }
+
+  if (inclusive) {
+    const productsExcl = round2(itemAfterDiscount / (1 + rate / 100));
+    const shippingExcl = round2(shipping / (1 + rate / 100));
+    if (reverseCharge) {
+      return { productsExcl, shippingExcl, taxAmount: 0, totalAmount: round2(productsExcl + shippingExcl) };
+    }
+    const taxAmount = round2((itemAfterDiscount + shipping) - (productsExcl + shippingExcl));
+    return { productsExcl, shippingExcl, taxAmount, totalAmount: round2(itemAfterDiscount + shipping) };
+  }
+
+  // exclusive
+  if (reverseCharge) {
+    return {
+      productsExcl: itemAfterDiscount,
+      shippingExcl: shipping,
+      taxAmount: 0,
+      totalAmount: round2(itemAfterDiscount + shipping),
+    };
+  }
+  const taxAmount = round2((itemAfterDiscount + shipping) * (rate / 100));
+  return {
+    productsExcl: itemAfterDiscount,
+    shippingExcl: shipping,
+    taxAmount,
+    totalAmount: round2(itemAfterDiscount + shipping + taxAmount),
+  };
+}

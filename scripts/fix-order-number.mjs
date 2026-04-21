@@ -4,14 +4,15 @@
  * the next counter value from its distributor.
  *
  * Usage:
- *   node scripts/fix-order-number.mjs --list           # list orders with the old PREFIX-YYYYMMDD-XXXXXX format
- *   node scripts/fix-order-number.mjs <orderId>        # fix one order
- *   node scripts/fix-order-number.mjs <orderId> --dry-run
+ *   node scripts/fix-order-number.mjs --list                       # list orders with the old PREFIX-YYYYMMDD-XXXXXX format
+ *   node scripts/fix-order-number.mjs <orderId>                    # fix one order
+ *   node scripts/fix-order-number.mjs <orderId> --dry-run          # preview only
+ *   node scripts/fix-order-number.mjs <orderId> --force            # re-assign even if already sequential
  *
- * Reads the order, finds its distributor, atomically increments the
- * distributor's orderCounter, and rewrites the order's orderNumber to
- * `{PREFIX}-{NNNNN}`. Safe to run on an order that already has a legacy-
- * format number (it will be replaced).
+ * The order is read inside the transaction so concurrent writes (item-status
+ * changes, discounts, etc.) can't be clobbered. By default the script refuses
+ * to re-assign an order that already has a sequential number, so re-running
+ * won't double-bump the counter.
  */
 
 import { initializeApp, cert } from 'firebase-admin/app';
@@ -20,12 +21,13 @@ import { readFileSync } from 'fs';
 
 const [, , arg, ...flags] = process.argv;
 const dryRun = flags.includes('--dry-run');
+const force = flags.includes('--force');
 const listMode = arg === '--list';
 
 if (!arg) {
   console.error('Usage:');
   console.error('  node scripts/fix-order-number.mjs --list');
-  console.error('  node scripts/fix-order-number.mjs <orderId> [--dry-run]');
+  console.error('  node scripts/fix-order-number.mjs <orderId> [--dry-run] [--force]');
   process.exit(1);
 }
 
@@ -47,6 +49,9 @@ function formatOrderNumber(prefix, counter) {
 
 // Matches the broken PREFIX-YYYYMMDD-XXXXXX format (6 hex chars).
 const LEGACY_TIMESTAMP_FORMAT = /^[A-Z0-9]{1,8}-\d{8}-[A-F0-9]{6}$/;
+// Matches the sequential PREFIX-NNNNN format (5+ digits). Used to guard
+// against double-bumping the counter if the script is re-run.
+const SEQUENTIAL_FORMAT = /^[A-Z0-9]{1,8}-\d{5,}$/;
 
 async function listBrokenOrders() {
   const snap = await db.collection('orders').get();
@@ -96,6 +101,8 @@ async function main() {
       process.exit(1);
     }
     const dist = distSnap.data();
+    const alreadySequential = typeof order.orderNumber === 'string' && SEQUENTIAL_FORMAT.test(order.orderNumber);
+    const wouldSkip = alreadySequential && !force;
     const next = (typeof dist.orderCounter === 'number' ? dist.orderCounter : 0) + 1;
     console.log(JSON.stringify({
       orderId: orderIdArg,
@@ -103,13 +110,32 @@ async function main() {
       prefix: dist.orderIdPrefix,
       currentCounter: dist.orderCounter || 0,
       oldOrderNumber: order.orderNumber || null,
-      wouldBecome: formatOrderNumber(dist.orderIdPrefix, next),
+      wouldBecome: wouldSkip ? null : formatOrderNumber(dist.orderIdPrefix, next),
+      wouldSkipReason: wouldSkip ? 'already-sequential (pass --force to override)' : null,
       dryRun: true,
     }, null, 2));
-    return;
+    process.exit(wouldSkip ? 2 : 0);
   }
 
   const result = await db.runTransaction(async (tx) => {
+    // Re-read the order inside the transaction so a concurrent write (e.g.
+    // an operator editing items) either wins and we see its effect or we
+    // retry; we never clobber their change.
+    const freshOrderSnap = await tx.get(orderRef);
+    if (!freshOrderSnap.exists) {
+      throw new Error(`Order ${orderIdArg} disappeared during transaction`);
+    }
+    const freshOrder = freshOrderSnap.data();
+
+    if (!force && typeof freshOrder.orderNumber === 'string' && SEQUENTIAL_FORMAT.test(freshOrder.orderNumber)) {
+      const err = new Error(
+        `Order already has a sequential number: ${freshOrder.orderNumber}. ` +
+        `Re-running would skip a counter value. Pass --force to override.`
+      );
+      err.code = 'ALREADY_SEQUENTIAL';
+      throw err;
+    }
+
     const distSnap = await tx.get(distributorRef);
     if (!distSnap.exists) {
       throw new Error(`Distributor ${distributorId} not found`);
@@ -122,7 +148,7 @@ async function main() {
     tx.update(distributorRef, { orderCounter: next });
     tx.update(orderRef, { orderNumber: newOrderNumber });
 
-    return { previous: order.orderNumber || null, next: newOrderNumber, counter: next };
+    return { previous: freshOrder.orderNumber || null, next: newOrderNumber, counter: next };
   });
 
   console.log(JSON.stringify({
@@ -135,6 +161,8 @@ async function main() {
 }
 
 main().then(() => process.exit(0)).catch((err) => {
-  console.error(err);
-  process.exit(1);
+  console.error(err?.message || err);
+  // Exit 2 when the guard fires so automation can distinguish
+  // "already done" from a real error.
+  process.exit(err?.code === 'ALREADY_SEQUENTIAL' ? 2 : 1);
 });

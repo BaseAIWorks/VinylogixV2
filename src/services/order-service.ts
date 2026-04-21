@@ -440,18 +440,12 @@ export async function recalculateOrderPriceAndTax(
     discountValue = orderData.discountValue;
   }
 
+  const { computeDiscountAmount, computeOrderTotals } = await import('@/lib/tax-utils');
+  const discountAmount = computeDiscountAmount(
+    itemTotal,
+    discountType && typeof discountValue === 'number' ? { type: discountType, value: discountValue } : null,
+  );
   const round2 = (n: number) => Math.round(n * 100) / 100;
-
-  // Cap the discount so it never exceeds itemTotal (no negative products).
-  let discountAmount = 0;
-  if (discountType && typeof discountValue === 'number' && discountValue > 0) {
-    if (discountType === 'fixed') {
-      discountAmount = round2(Math.min(discountValue, itemTotal));
-    } else {
-      const pct = Math.min(100, Math.max(0, discountValue));
-      discountAmount = round2(itemTotal * pct / 100);
-    }
-  }
   const itemAfterDiscount = round2(itemTotal - discountAmount);
 
   // Shipping: undefined means keep current.
@@ -468,38 +462,13 @@ export async function recalculateOrderPriceAndTax(
 
   // shippingCost + priceAtTimeOfOrder are stored in the same convention
   // (inclusive/exclusive per taxBehavior), so the recalc is idempotent.
-  let productsExcl: number;
-  let shippingExcl: number;
-  let taxAmount: number;
-  let totalAmount: number;
-
-  if (rate <= 0 && !reverseCharge) {
-    // No tax configured — products and shipping are pass-through.
-    productsExcl = itemAfterDiscount;
-    shippingExcl = enteredShipping;
-    taxAmount = 0;
-    totalAmount = round2(itemAfterDiscount + enteredShipping);
-  } else if (inclusive) {
-    productsExcl = round2(itemAfterDiscount / (1 + rate / 100));
-    shippingExcl = round2(enteredShipping / (1 + rate / 100));
-    if (reverseCharge) {
-      taxAmount = 0;
-      totalAmount = round2(productsExcl + shippingExcl);
-    } else {
-      taxAmount = round2((itemAfterDiscount + enteredShipping) - (productsExcl + shippingExcl));
-      totalAmount = round2(itemAfterDiscount + enteredShipping);
-    }
-  } else {
-    productsExcl = itemAfterDiscount;
-    shippingExcl = enteredShipping;
-    if (reverseCharge) {
-      taxAmount = 0;
-      totalAmount = round2(productsExcl + shippingExcl);
-    } else {
-      taxAmount = round2((productsExcl + shippingExcl) * (rate / 100));
-      totalAmount = round2(productsExcl + shippingExcl + taxAmount);
-    }
-  }
+  const { productsExcl, taxAmount, totalAmount } = computeOrderTotals({
+    itemAfterDiscount,
+    shipping: enteredShipping,
+    rate,
+    inclusive,
+    reverseCharge,
+  });
 
   const updatePayload: any = {
     subtotalAmount: productsExcl,
