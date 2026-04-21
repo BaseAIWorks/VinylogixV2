@@ -81,7 +81,6 @@ export default function DistributorDetailPage() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
     const [editFormState, setEditFormState] = useState<Partial<Distributor>>({});
-    const [isResetCounterDialogOpen, setIsResetCounterDialogOpen] = useState(false);
 
     const fetchData = useCallback(async () => {
         if (!user || user.role !== 'superadmin' || !distributorId) {
@@ -186,19 +185,6 @@ export default function DistributorDetailPage() {
         }
     };
 
-    const handleResetCounter = async () => {
-        if (!distributor || !user) return;
-        try {
-            await updateDistributor(distributor.id, { orderCounter: 0 }, user);
-            toast({ title: "Order Counter Reset", description: "The order counter has been reset to 0." });
-            fetchData();
-        } catch (error) {
-            toast({ title: "Reset Failed", description: "Could not reset the counter.", variant: "destructive" });
-        } finally {
-            setIsResetCounterDialogOpen(false);
-        }
-    };
-    
     const onEditFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { id, value } = e.target;
         setEditFormState(prev => ({ ...prev, [id]: value }));
@@ -464,24 +450,18 @@ export default function DistributorDetailPage() {
                     )}
                     <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5 text-primary"/>Order Number Settings</CardTitle>
-                            <CardDescription>Manage order number generation for this distributor.</CardDescription>
+                            <CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5 text-primary"/>Order Number Format</CardTitle>
+                            <CardDescription>Order numbers use the prefix plus the date and a short random ID.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="flex items-center justify-between rounded-lg border p-4">
-                                <div>
-                                    <p className="font-medium">Next Order Number</p>
-                                    <p className="text-sm text-muted-foreground">The next order will be <span className="font-mono text-foreground">{distributor.orderIdPrefix || 'ORD'}-{(distributor.orderCounter || 0) + 1}</span>.</p>
-                                </div>
-                                <AlertDialog open={isResetCounterDialogOpen} onOpenChange={setIsResetCounterDialogOpen}>
-                                    <AlertDialogTrigger asChild>
-                                        <Button variant="outline">Reset Counter</Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will reset the order counter to 0. The next order will be number 1. This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                                        <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleResetCounter}>Reset</AlertDialogAction></AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
+                            <div className="rounded-lg border p-4 space-y-2">
+                                <p className="font-medium">Example next order number</p>
+                                <p className="font-mono text-base text-foreground">
+                                    {distributor.orderIdPrefix || 'ORD'}-{(() => { const d = new Date(); return `${d.getFullYear()}${(d.getMonth()+1).toString().padStart(2,'0')}${d.getDate().toString().padStart(2,'0')}`; })()}-XXXXXX
+                                </p>
+                                <p className="text-xs text-muted-foreground pt-1">
+                                    Prefix + YYYYMMDD + 6 random hex characters. No shared counter, so concurrent orders don&apos;t conflict.
+                                </p>
                             </div>
                         </CardContent>
                     </Card>

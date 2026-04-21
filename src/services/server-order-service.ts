@@ -6,6 +6,7 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
 import { generateTrackingToken } from '@/lib/tracking-token';
+import { generateOrderNumber } from '@/lib/order-number';
 
 const ORDERS_COLLECTION = 'orders';
 const RECORDS_COLLECTION = 'vinylRecords';
@@ -185,20 +186,17 @@ export async function createOrderFromCheckout(session: Stripe.Checkout.Session):
     throw new Error("No distributorId found in checkout session metadata");
   }
 
-  // Get distributor and atomically increment order counter via transaction
+  // Get distributor (plain read — no transaction, no counter). The order
+  // number is generated from timestamp + random suffix so we can create many
+  // concurrent orders for the same distributor without contending on a
+  // shared counter doc (legacy path hit Firestore's 1 write/sec/doc ceiling).
   const distributorDocRef = adminDb.collection('distributors').doc(distributorId);
-
-  const { distributor, orderNumber } = await adminDb.runTransaction(async (tx) => {
-    const snap = await tx.get(distributorDocRef);
-    if (!snap.exists) {
-      throw new Error(`Distributor with ID ${distributorId} not found`);
-    }
-    const dist = snap.data()!;
-    const prefix = dist.orderIdPrefix || 'ORD';
-    const cnt = (dist.orderCounter || 0) + 1;
-    tx.update(distributorDocRef, { orderCounter: cnt });
-    return { distributor: dist, orderNumber: `${prefix}-${cnt.toString().padStart(5, '0')}` };
-  });
+  const distributorSnap = await distributorDocRef.get();
+  if (!distributorSnap.exists) {
+    throw new Error(`Distributor with ID ${distributorId} not found`);
+  }
+  const distributor = distributorSnap.data()!;
+  const orderNumber = generateOrderNumber(distributor.orderIdPrefix);
 
   // Line items are NOT included in webhook events by default
   // We need to retrieve them from Stripe
@@ -461,20 +459,15 @@ export async function createOrderFromPayPal(params: {
   const pendingData = pendingOrderSnap.data() as any;
   const distributorId = pendingData.distributorId;
 
-  // Get distributor and atomically increment order counter via transaction
+  // Get distributor (plain read — no transaction, no counter; see the
+  // Stripe checkout path above for rationale).
   const distributorDocRef = adminDb.collection('distributors').doc(distributorId);
-
-  const { distributor: paypalDistributor, orderNumber: paypalOrderNumber } = await adminDb.runTransaction(async (tx) => {
-    const snap = await tx.get(distributorDocRef);
-    if (!snap.exists) {
-      throw new Error(`Distributor with ID ${distributorId} not found`);
-    }
-    const dist = snap.data()!;
-    const prefix = dist.orderIdPrefix || 'ORD';
-    const cnt = (dist.orderCounter || 0) + 1;
-    tx.update(distributorDocRef, { orderCounter: cnt });
-    return { distributor: dist, orderNumber: `${prefix}-${cnt.toString().padStart(5, '0')}` };
-  });
+  const distributorSnap = await distributorDocRef.get();
+  if (!distributorSnap.exists) {
+    throw new Error(`Distributor with ID ${distributorId} not found`);
+  }
+  const paypalDistributor = distributorSnap.data()!;
+  const paypalOrderNumber = generateOrderNumber(paypalDistributor.orderIdPrefix);
 
   const now = new Date();
 
@@ -699,17 +692,9 @@ export async function createOrderRequestServer(params: {
 
   const { distributorId, viewerId } = params;
   const distributorDocRef = adminDb.collection('distributors').doc(distributorId);
-
-  // Atomic order counter via transaction
-  const { orderNumber } = await adminDb.runTransaction(async (tx) => {
-    const snap = await tx.get(distributorDocRef);
-    if (!snap.exists) throw new Error('Distributor not found.');
-    const dist = snap.data()!;
-    const prefix = dist.orderIdPrefix || 'ORD';
-    const cnt = (dist.orderCounter || 0) + 1;
-    tx.update(distributorDocRef, { orderCounter: cnt });
-    return { orderNumber: `${prefix}-${cnt.toString().padStart(5, '0')}` };
-  });
+  const distributorSnap = await distributorDocRef.get();
+  if (!distributorSnap.exists) throw new Error('Distributor not found.');
+  const orderNumber = generateOrderNumber(distributorSnap.data()!.orderIdPrefix);
 
   const now = new Date();
   const orderItems = params.items.map(item => ({

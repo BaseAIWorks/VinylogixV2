@@ -2253,14 +2253,19 @@ export default function SettingsPage() {
                         )} />
                       )}
                       <FormField control={notificationsForm.control} name="weeklyDigestOptIn" render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 opacity-60">
                           <div className="space-y-0.5">
-                            <FormLabel className="text-sm">Weekly financial digest</FormLabel>
+                            <FormLabel className="text-sm flex items-center gap-2">
+                              Weekly financial digest
+                              <span className="text-[10px] uppercase tracking-wider font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded">Coming soon</span>
+                            </FormLabel>
                             <FormDescription className="text-xs">
-                              Every Monday 09:00 — last week&apos;s revenue, VAT, payout, and outstanding payments. Sent to your contact email.
+                              Every Monday 09:00 — last week&apos;s revenue, VAT, payout, and outstanding payments. Delivery is temporarily paused; enabling this has no effect right now.
                             </FormDescription>
                           </div>
-                          <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                          <FormControl>
+                            <Switch checked={false} disabled onCheckedChange={() => { /* disabled */ }} />
+                          </FormControl>
                         </FormItem>
                       )} />
                       <SaveButton formName="notifications" isSubmitting={notificationsForm.formState.isSubmitting} />

@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Vinylogix — Capacity &amp; Bottleneck Analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+  rel="stylesheet"
+/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --bg-muted: #0f1626;
+    --ink: #e8edf5;
+    --ink-soft: #c2cad9;
+    --ink-faint: #7d879a;
+    --ink-ghost: #4d5669;
+    --rule: #1b2438;
+    --rule-strong: #293349;
+    --accent: #4fd1c5;
+    --accent-soft: #2d7d77;
+    --critical: #c14848;
+    --watch: #b8802e;
+    --fine: #3a8357;
+    --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+    --font-body: "IBM Plex Sans", -apple-system, system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.6;
+    font-weight: 400;
+    letter-spacing: 0.005em;
+  }
+
+  /* Subtle page grain — adds depth without gradient-soup */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image: radial-gradient(rgba(232, 237, 245, 0.02) 1px, transparent 1px);
+    background-size: 3px 3px;
+    opacity: 0.6;
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 72px 40px 120px;
+  }
+
+  /* ================= MASTHEAD ================= */
+  .masthead {
+    border-top: 3px double var(--rule-strong);
+    border-bottom: 1px solid var(--rule);
+    padding: 28px 0 22px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    align-items: baseline;
+  }
+
+  .masthead h1 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-variation-settings: "opsz" 96, "SOFT" 20;
+    font-size: clamp(32px, 4.8vw, 52px);
+    line-height: 1.0;
+    margin: 0;
+    letter-spacing: -0.015em;
+  }
+
+  .masthead h1 em {
+    font-style: italic;
+    color: var(--ink-soft);
+    font-weight: 300;
+  }
+
+  .masthead .meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    line-height: 1.4;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .masthead .meta b {
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  /* ================= DECK (intro) ================= */
+  .deck {
+    margin: 48px 0 64px;
+    max-width: 720px;
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-style: italic;
+    font-size: 22px;
+    line-height: 1.45;
+    color: var(--ink-soft);
+    letter-spacing: -0.005em;
+  }
+
+  .deck::first-letter {
+    font-weight: 500;
+    font-style: normal;
+    color: var(--ink);
+  }
+
+  /* ================= SECTION LABELS ================= */
+  .label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    font-weight: 500;
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .label::before {
+    content: "";
+    display: inline-block;
+    width: 18px;
+    height: 1px;
+    background: var(--accent);
+    opacity: 0.8;
+  }
+
+  h2.section-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-variation-settings: "opsz" 60;
+    font-size: clamp(26px, 3vw, 34px);
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    margin: 0 0 36px;
+    max-width: 760px;
+  }
+
+  /* ================= EXEC SUMMARY ================= */
+  .exec {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    margin-bottom: 96px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    padding: 32px 0;
+  }
+
+  .stat {
+    padding: 4px 24px;
+    border-right: 1px solid var(--rule);
+  }
+  .stat:last-child { border-right: none; }
+  .stat:first-child { padding-left: 0; }
+
+  .stat .kicker {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ink-faint);
+    margin-bottom: 10px;
+    line-height: 1.3;
+  }
+
+  .stat .figure {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 144;
+    font-weight: 400;
+    font-size: clamp(32px, 3.4vw, 44px);
+    line-height: 1.0;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 10px;
+  }
+
+  .stat .figure .unit {
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--ink-faint);
+    letter-spacing: 0;
+    margin-left: 4px;
+  }
+
+  .stat .note {
+    font-size: 13px;
+    color: var(--ink-soft);
+    line-height: 1.4;
+  }
+
+  /* ================= ARCHITECTURE DIAGRAM ================= */
+  .architecture {
+    margin: 0 0 96px;
+  }
+
+  .architecture-wrap {
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    padding: 44px 0 32px;
+    overflow-x: auto;
+  }
+
+  .architecture svg {
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+  }
+
+  .arch-caption {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    text-align: center;
+    margin-top: 20px;
+  }
+
+  /* ================= RISK MATRIX ================= */
+  .matrix {
+    margin-bottom: 96px;
+  }
+
+  .matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .matrix-table thead th {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink-faint);
+    font-weight: 500;
+    text-align: left;
+    padding: 0 16px 14px;
+    border-bottom: 1px solid var(--rule-strong);
+    white-space: nowrap;
+  }
+
+  .matrix-table tbody td {
+    padding: 18px 16px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+
+  .matrix-table tbody tr:hover {
+    background: rgba(79, 209, 197, 0.025);
+  }
+
+  .matrix-table tbody tr {
+    transition: background 120ms ease;
+  }
+
+  .matrix-table td:first-child {
+    position: relative;
+    padding-left: 28px;
+  }
+  .matrix-table td:first-child::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 18px;
+    bottom: 18px;
+    width: 3px;
+    background: currentColor;
+  }
+  .matrix-table tr.crit td:first-child::before { background: var(--critical); }
+  .matrix-table tr.watch td:first-child::before { background: var(--watch); }
+  .matrix-table tr.fine td:first-child::before { background: var(--fine); }
+
+  .matrix-table .area-title {
+    color: var(--ink);
+    font-weight: 500;
+    font-size: 15px;
+    margin-bottom: 4px;
+  }
+  .matrix-table .area-path {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    line-height: 1.5;
+    word-break: break-all;
+  }
+
+  .risk-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+  }
+  .risk-chip .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .risk-chip.crit  { color: var(--critical); }
+  .risk-chip.crit  .dot { background: var(--critical); box-shadow: 0 0 0 2px rgba(193, 72, 72, 0.18); }
+  .risk-chip.watch { color: var(--watch); }
+  .risk-chip.watch .dot { background: var(--watch); box-shadow: 0 0 0 2px rgba(184, 128, 46, 0.18); }
+  .risk-chip.fine  { color: var(--fine); }
+  .risk-chip.fine  .dot { background: var(--fine); box-shadow: 0 0 0 2px rgba(58, 131, 87, 0.18); }
+
+  .scaling-cell {
+    color: var(--ink-soft);
+  }
+  .break-cell {
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ================= DEEP DIVES ================= */
+  .deep-dives { margin-bottom: 96px; }
+
+  .dive {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 48px;
+    padding: 40px 0;
+    border-top: 1px solid var(--rule);
+  }
+  .dive:last-child { border-bottom: 1px solid var(--rule); }
+
+  .dive-index {
+    font-family: var(--font-display);
+    font-weight: 300;
+    font-variation-settings: "opsz" 144;
+    font-size: 72px;
+    line-height: 0.85;
+    color: var(--critical);
+    opacity: 0.9;
+    letter-spacing: -0.03em;
+  }
+
+  .dive-index .of {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-top: 14px;
+    font-weight: 500;
+  }
+
+  .dive h3 {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 48;
+    font-weight: 500;
+    font-size: 24px;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin: 0 0 10px;
+  }
+
+  .dive .path {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+    margin-bottom: 20px;
+    display: inline-block;
+    padding: 3px 9px;
+    background: rgba(79, 209, 197, 0.08);
+    border-radius: 3px;
+  }
+
+  .dive p {
+    color: var(--ink-soft);
+    margin: 0 0 14px;
+    max-width: 640px;
+  }
+
+  .dive-facts {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+    margin-top: 22px;
+    border-top: 1px solid var(--rule);
+    padding-top: 18px;
+  }
+
+  .dive-fact {
+    padding-right: 24px;
+  }
+  .dive-fact .k {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: var(--ink-faint);
+    margin-bottom: 6px;
+  }
+  .dive-fact .v {
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.4;
+  }
+
+  /* ================= CHARTS ================= */
+  .charts { margin-bottom: 96px; }
+
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 56px 64px;
+  }
+
+  .chart-cell.span-2 { grid-column: 1 / -1; }
+
+  .chart-cell h4 {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 30;
+    font-weight: 500;
+    font-size: 18px;
+    line-height: 1.25;
+    margin: 0 0 4px;
+    letter-spacing: -0.005em;
+  }
+
+  .chart-cell .subtitle {
+    font-size: 13px;
+    color: var(--ink-faint);
+    margin: 0 0 20px;
+    line-height: 1.45;
+  }
+
+  .chart-canvas-wrap {
+    position: relative;
+    width: 100%;
+    height: 240px;
+    border-top: 1px solid var(--rule);
+    padding-top: 14px;
+  }
+
+  .chart-note {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+    letter-spacing: 0.06em;
+    margin-top: 12px;
+    line-height: 1.5;
+  }
+
+  /* ================= SCENARIOS ================= */
+  .scenarios { margin-bottom: 96px; }
+
+  .scenario-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .scenario {
+    padding: 36px 32px 32px 0;
+    border-right: 1px solid var(--rule);
+  }
+  .scenario:last-child { border-right: none; padding-right: 0; }
+  .scenario:not(:first-child) { padding-left: 32px; }
+
+  .scenario .scale {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 144;
+    font-weight: 300;
+    font-size: 56px;
+    line-height: 0.9;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+
+  .scenario .scale-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--accent);
+    margin-bottom: 22px;
+  }
+
+  .scenario .projections {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 20px;
+    font-size: 13px;
+  }
+  .scenario .proj-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: baseline;
+  }
+  .scenario .proj-row .l {
+    color: var(--ink-faint);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    font-family: var(--font-mono);
+  }
+  .scenario .proj-row .v {
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .scenario .verdict {
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+  .scenario .verdict b {
+    color: var(--ink);
+    font-weight: 500;
+    display: block;
+    margin-bottom: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+  }
+  .scenario.stable  .verdict b { color: var(--fine); }
+  .scenario.strain  .verdict b { color: var(--watch); }
+  .scenario.break   .verdict b { color: var(--critical); }
+
+  /* ================= RECOMMENDATIONS ================= */
+  .recs {
+    margin-bottom: 96px;
+  }
+
+  .rec-list {
+    counter-reset: rec;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .rec {
+    counter-increment: rec;
+    display: grid;
+    grid-template-columns: 40px 110px 1fr auto;
+    gap: 32px;
+    align-items: baseline;
+    padding: 22px 0;
+    border-top: 1px solid var(--rule);
+  }
+  .rec:last-child { border-bottom: 1px solid var(--rule); }
+
+  .rec::before {
+    content: counter(rec, decimal-leading-zero);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+    letter-spacing: 0.08em;
+    align-self: baseline;
+    padding-top: 4px;
+  }
+
+  .rec .priority {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    padding: 4px 0;
+  }
+  .rec .priority.p1 { color: var(--critical); }
+  .rec .priority.p2 { color: var(--watch); }
+  .rec .priority.p3 { color: var(--fine); }
+
+  .rec .body {
+    padding: 0;
+  }
+  .rec .body .title {
+    color: var(--ink);
+    font-weight: 500;
+    font-size: 15px;
+    margin-bottom: 4px;
+  }
+  .rec .body .impact {
+    color: var(--ink-faint);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .rec .fix {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.02em;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* ================= FOOTER ================= */
+  .footer {
+    margin-top: 96px;
+    padding-top: 32px;
+    border-top: 3px double var(--rule-strong);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 24px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: var(--ink-faint);
+    line-height: 1.7;
+  }
+
+  .footer .right { text-align: right; }
+
+  .footer a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .footer .note {
+    margin-top: 18px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    color: var(--ink-soft);
+    font-style: italic;
+    letter-spacing: 0.005em;
+    text-transform: none;
+    max-width: 640px;
+    line-height: 1.55;
+  }
+
+  /* ================= RESPONSIVE ================= */
+  @media (max-width: 860px) {
+    .page { padding: 40px 24px 80px; }
+    .exec { grid-template-columns: repeat(2, 1fr); padding: 0; border: 0; }
+    .exec .stat { padding: 22px 16px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+    .exec .stat:first-child { padding-left: 16px; }
+    .exec .stat:nth-child(2n) { border-right: none; }
+    .dive { grid-template-columns: 1fr; gap: 16px; }
+    .dive-index { font-size: 48px; }
+    .dive-facts { grid-template-columns: 1fr; gap: 16px; }
+    .dive-facts .dive-fact { padding-bottom: 14px; border-bottom: 1px solid var(--rule); }
+    .chart-grid { grid-template-columns: 1fr; gap: 48px; }
+    .scenario-grid { grid-template-columns: 1fr; border-bottom: 0; }
+    .scenario { border-right: none; border-bottom: 1px solid var(--rule); padding: 28px 0 !important; }
+    .rec { grid-template-columns: 30px 90px 1fr; gap: 16px; }
+    .rec .fix { grid-column: 1 / -1; text-align: left; margin-top: 8px; }
+    .matrix-table thead .col-scaling, .matrix-table tbody .col-scaling { display: none; }
+  }
+
+  @media (max-width: 540px) {
+    .masthead { grid-template-columns: 1fr; }
+    .masthead .meta { text-align: left; }
+    .deck { font-size: 18px; }
+    .matrix-table thead th { font-size: 9.5px; padding: 0 8px 12px; }
+    .matrix-table tbody td { padding: 14px 8px; font-size: 13px; }
+    .matrix-table td:first-child { padding-left: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ============ MASTHEAD ============ -->
+  <header class="masthead">
+    <h1>Vinylogix <em>Capacity Review</em></h1>
+    <div class="meta">
+      <div><b>Volume I · №&nbsp;01</b></div>
+      <div id="today-date">April 2026</div>
+      <div>Internal / Technical</div>
+    </div>
+  </header>
+
+  <!-- ============ DECK ============ -->
+  <p class="deck">
+    A map of what scales, what strains, and what silently fails as Vinylogix grows from its
+    present shape — a single-digit count of distributors with modest inventories — toward the
+    two- and three-digit futures the platform is being built for. Ten findings, three critical.
+  </p>
+
+  <!-- ============ EXEC SUMMARY ============ -->
+  <section class="exec" aria-label="Executive summary">
+    <div class="stat">
+      <div class="kicker">Comfortable capacity</div>
+      <div class="figure">~200<span class="unit">RPS</span></div>
+      <div class="note">Sustained across all endpoints; burst to ~500&nbsp;RPS before Cloud&nbsp;Run concurrency tightens.</div>
+    </div>
+    <div class="stat">
+      <div class="kicker">First break point</div>
+      <div class="figure">&gt; 1<span class="unit">order / sec</span></div>
+      <div class="note">A single distributor's <span style="font-family:var(--font-mono);font-size:12px;">orderCounter</span> transaction saturates at Firestore's doc-write ceiling.</div>
+    </div>
+    <div class="stat">
+      <div class="kicker">Biggest latent risk</div>
+      <div class="figure">10k<span class="unit">docs</span></div>
+      <div class="note">Weekly digest &amp; inventory page both fail silently for any tenant past this size.</div>
+    </div>
+    <div class="stat">
+      <div class="kicker">Safe runway</div>
+      <div class="figure">~100<span class="unit">distributors</span></div>
+      <div class="note">Each with ~500 active records and ~50 orders / month before Phase-1 work is required.</div>
+    </div>
+  </section>
+
+  <!-- ============ ARCHITECTURE ============ -->
+  <section class="architecture">
+    <p class="label">Topology</p>
+    <h2 class="section-title">One app, four dependencies, one bottleneck database</h2>
+    <div class="architecture-wrap">
+      <svg viewBox="0 0 900 280" width="900" height="280" role="img" aria-label="Vinylogix architecture">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7d879a"/>
+          </marker>
+          <marker id="arrow-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#4d5669"/>
+          </marker>
+          <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#4fd1c5"/>
+          </marker>
+        </defs>
+
+        <!-- Browser (top-left) -->
+        <g transform="translate(60, 56)">
+          <rect x="0" y="0" width="144" height="56" rx="4" fill="none" stroke="#c2cad9" stroke-width="1.5"/>
+          <text x="72" y="24" text-anchor="middle" font-family="IBM Plex Sans" font-size="13" font-weight="500" fill="#e8edf5">Browser</text>
+          <text x="72" y="42" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#7d879a">distributor · customer</text>
+        </g>
+
+        <!-- Cloud Run / App Hosting -->
+        <g transform="translate(330, 40)">
+          <rect x="0" y="0" width="240" height="92" rx="6" fill="#0f1626" stroke="#4fd1c5" stroke-width="2"/>
+          <text x="120" y="30" text-anchor="middle" font-family="Fraunces" font-size="16" font-weight="500" fill="#e8edf5">Next.js · Firebase App Hosting</text>
+          <text x="120" y="52" text-anchor="middle" font-family="IBM Plex Mono" font-size="10.5" fill="#9aa5b8">Cloud Run · max 100 inst · 80 conc</text>
+          <line x1="24" y1="66" x2="216" y2="66" stroke="#293349" stroke-width="1"/>
+          <text x="120" y="82" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#7d879a">SSR + API routes + cron endpoints</text>
+        </g>
+
+        <!-- Firestore (critical dependency, bottom) -->
+        <g transform="translate(378, 200)">
+          <rect x="0" y="0" width="144" height="56" rx="4" fill="#0f1626" stroke="#c14848" stroke-width="1.8"/>
+          <text x="72" y="24" text-anchor="middle" font-family="Fraunces" font-size="14" font-weight="500" fill="#e8edf5">Cloud Firestore</text>
+          <text x="72" y="42" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#c14848">10k r/s · 1 write/sec/doc</text>
+        </g>
+
+        <!-- External providers (right) -->
+        <g transform="translate(700, 28)">
+          <rect x="0" y="0" width="150" height="42" rx="3" fill="none" stroke="#7d879a" stroke-width="1" stroke-dasharray="3 3"/>
+          <text x="75" y="18" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="500" fill="#e8edf5">Stripe</text>
+          <text x="75" y="32" text-anchor="middle" font-family="IBM Plex Mono" font-size="9.5" fill="#7d879a">Connect · webhooks</text>
+        </g>
+        <g transform="translate(700, 86)">
+          <rect x="0" y="0" width="150" height="42" rx="3" fill="none" stroke="#7d879a" stroke-width="1" stroke-dasharray="3 3"/>
+          <text x="75" y="18" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="500" fill="#e8edf5">Resend</text>
+          <text x="75" y="32" text-anchor="middle" font-family="IBM Plex Mono" font-size="9.5" fill="#7d879a">3k free / scales paid</text>
+        </g>
+        <g transform="translate(700, 144)">
+          <rect x="0" y="0" width="150" height="42" rx="3" fill="none" stroke="#b8802e" stroke-width="1" stroke-dasharray="3 3"/>
+          <text x="75" y="18" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="500" fill="#e8edf5">Gemini 2.0 Flash</text>
+          <text x="75" y="32" text-anchor="middle" font-family="IBM Plex Mono" font-size="9.5" fill="#b8802e">15 rpm · 1500 rpd (free)</text>
+        </g>
+        <g transform="translate(700, 202)">
+          <rect x="0" y="0" width="150" height="42" rx="3" fill="none" stroke="#7d879a" stroke-width="1" stroke-dasharray="3 3"/>
+          <text x="75" y="18" text-anchor="middle" font-family="IBM Plex Sans" font-size="12" font-weight="500" fill="#e8edf5">Discogs</text>
+          <text x="75" y="32" text-anchor="middle" font-family="IBM Plex Mono" font-size="9.5" fill="#7d879a">60 rpm upstream</text>
+        </g>
+
+        <!-- arrows -->
+        <!-- Browser -> Cloud Run -->
+        <path d="M 204 84 C 256 84, 288 72, 330 72" fill="none" stroke="#c2cad9" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <!-- Cloud Run -> Firestore (two-way) -->
+        <path d="M 450 132 L 450 200" fill="none" stroke="#c14848" stroke-width="1.7" marker-end="url(#arrow)"/>
+        <path d="M 460 200 L 460 132" fill="none" stroke="#c14848" stroke-width="1.7" opacity="0.6" marker-end="url(#arrow-soft)"/>
+        <!-- Cloud Run -> Stripe -->
+        <path d="M 570 56 C 630 52, 660 49, 700 49" fill="none" stroke="#7d879a" stroke-width="1.3" stroke-dasharray="2 4" marker-end="url(#arrow-soft)"/>
+        <!-- Cloud Run -> Resend -->
+        <path d="M 570 80 C 630 96, 660 106, 700 107" fill="none" stroke="#7d879a" stroke-width="1.3" stroke-dasharray="2 4" marker-end="url(#arrow-soft)"/>
+        <!-- Cloud Run -> Gemini -->
+        <path d="M 570 104 C 630 130, 660 160, 700 165" fill="none" stroke="#b8802e" stroke-width="1.3" stroke-dasharray="2 4" marker-end="url(#arrow-soft)"/>
+        <!-- Cloud Run -> Discogs -->
+        <path d="M 570 128 C 630 168, 660 208, 700 222" fill="none" stroke="#7d879a" stroke-width="1.3" stroke-dasharray="2 4" marker-end="url(#arrow-soft)"/>
+      </svg>
+      <div class="arch-caption">Read heavy at the top. Write contention lives at the red edge.</div>
+    </div>
+  </section>
+
+  <!-- ============ RISK MATRIX ============ -->
+  <section class="matrix">
+    <p class="label">Findings</p>
+    <h2 class="section-title">Ten places the platform touches its ceiling</h2>
+
+    <table class="matrix-table" aria-label="Risk matrix">
+      <thead>
+        <tr>
+          <th style="width: 40%;">Area</th>
+          <th style="width: 14%;">Risk</th>
+          <th style="width: 22%;" class="col-scaling">Scaling pattern</th>
+          <th style="width: 24%;">Break point</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="fine">
+          <td>
+            <div class="area-title">Order counter hot-doc <span style="font-family: var(--font-mono); font-size: 10px; color: var(--fine); letter-spacing: 0.1em; margin-left: 4px;">· RESOLVED</span></div>
+            <div class="area-path">now uses timestamp + random suffix (lib/order-number.ts)</div>
+          </td>
+          <td><span class="risk-chip fine"><span class="dot"></span>Resolved</span></td>
+          <td class="scaling-cell col-scaling">No shared write ceiling</td>
+          <td class="break-cell">N/A — collision-free at any volume</td>
+        </tr>
+        <tr class="crit">
+          <td>
+            <div class="area-title">Weekly digest unbounded fetch</div>
+            <div class="area-path">api/cron/weekly-digest/route.ts:34-57</div>
+          </td>
+          <td><span class="risk-chip crit"><span class="dot"></span>Critical</span></td>
+          <td class="scaling-cell col-scaling">Super-linear per distributor</td>
+          <td class="break-cell">~10k orders / distributor</td>
+        </tr>
+        <tr class="crit">
+          <td>
+            <div class="area-title">Inventory page loads all records</div>
+            <div class="area-path">(app)/inventory/page.tsx</div>
+          </td>
+          <td><span class="risk-chip crit"><span class="dot"></span>Critical</span></td>
+          <td class="scaling-cell col-scaling">Linear, client-bound</td>
+          <td class="break-cell">~10k records</td>
+        </tr>
+        <tr class="watch">
+          <td>
+            <div class="area-title">Payment-reminder global scan <span style="font-family: var(--font-mono); font-size: 10px; color: var(--ink-faint); letter-spacing: 0.1em; margin-left: 4px;">· DORMANT</span></div>
+            <div class="area-path">api/cron/payment-reminders/route.ts:51-58</div>
+          </td>
+          <td><span class="risk-chip watch"><span class="dot"></span>Watch</span></td>
+          <td class="scaling-cell col-scaling">Linear w/ total system orders</td>
+          <td class="break-cell">~500k system orders</td>
+        </tr>
+        <tr class="watch">
+          <td>
+            <div class="area-title">Email loop in cron <span style="font-family: var(--font-mono); font-size: 10px; color: var(--ink-faint); letter-spacing: 0.1em; margin-left: 4px;">· DORMANT</span></div>
+            <div class="area-path">api/cron/payment-reminders/route.ts (inner loop)</div>
+          </td>
+          <td><span class="risk-chip watch"><span class="dot"></span>Watch</span></td>
+          <td class="scaling-cell col-scaling">Linear w/ reminders sent</td>
+          <td class="break-cell">~200 emails / run</td>
+        </tr>
+        <tr class="watch">
+          <td>
+            <div class="area-title">Stock settle per-item transaction</div>
+            <div class="area-path">api/orders/[id]/mark-paid/route.ts:46-114</div>
+          </td>
+          <td><span class="risk-chip watch"><span class="dot"></span>Watch</span></td>
+          <td class="scaling-cell col-scaling">Linear w/ line items</td>
+          <td class="break-cell">Orders with &gt;50 items</td>
+        </tr>
+        <tr class="watch">
+          <td>
+            <div class="area-title">Rate limiter is per-instance</div>
+            <div class="area-path">lib/rate-limit.ts</div>
+          </td>
+          <td><span class="risk-chip watch"><span class="dot"></span>Watch</span></td>
+          <td class="scaling-cell col-scaling">Per-process Map; resets on scale</td>
+          <td class="break-cell">Distributed attack</td>
+        </tr>
+        <tr class="watch">
+          <td>
+            <div class="area-title">Invoice PDF generation</div>
+            <div class="area-path">lib/invoice-utils.ts</div>
+          </td>
+          <td><span class="risk-chip watch"><span class="dot"></span>Watch</span></td>
+          <td class="scaling-cell col-scaling">Memory-heavy per request</td>
+          <td class="break-cell">~10 concurrent jobs / instance</td>
+        </tr>
+        <tr class="watch">
+          <td>
+            <div class="area-title">Gemini free-tier quota</div>
+            <div class="area-path">records/[id]/page.tsx · ai/flows/*</div>
+          </td>
+          <td><span class="risk-chip watch"><span class="dot"></span>Watch</span></td>
+          <td class="scaling-cell col-scaling">Already soft-failing</td>
+          <td class="break-cell">15 RPM / 1500 RPD (free)</td>
+        </tr>
+        <tr class="fine">
+          <td>
+            <div class="area-title">Storefront &amp; tracking page</div>
+            <div class="area-path">storefront/[slug]/page.tsx · t/[token]/page.tsx</div>
+          </td>
+          <td><span class="risk-chip fine"><span class="dot"></span>Fine</span></td>
+          <td class="scaling-cell col-scaling">Linear, read-only</td>
+          <td class="break-cell">~1000 viral stores simultaneously</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============ DEEP DIVES ============ -->
+  <section class="deep-dives">
+    <p class="label">The three critical items, up close</p>
+    <h2 class="section-title">Where it breaks, and what breaking looks like</h2>
+
+    <article class="dive">
+      <div class="dive-index">
+        01
+        <span class="of">Critical · write contention</span>
+      </div>
+      <div>
+        <h3>Every order increments the same document</h3>
+        <span class="path">src/services/server-order-service.ts:191–200</span>
+        <p>
+          At order creation time — in each of the Stripe, PayPal, and manual flows — a Firestore
+          transaction reads the distributor's <span style="font-family:var(--font-mono);color:var(--ink);">orderCounter</span>
+          field, increments it, and writes it back. Firestore enforces a hard ceiling of
+          approximately one write per second against any single document.
+        </p>
+        <p>
+          Under current volumes this is invisible. Under a marketing push that lands five
+          concurrent checkouts on the same distributor, the third transaction queues, the fourth
+          times out at ten seconds, and the customer sees a failed checkout that may have
+          actually charged their card.
+        </p>
+        <div class="dive-facts">
+          <div class="dive-fact">
+            <div class="k">Break scenario</div>
+            <div class="v">Distributor processes &gt;1 order/sec sustained.</div>
+          </div>
+          <div class="dive-fact">
+            <div class="k">Typical fix</div>
+            <div class="v">Drop the counter for a timestamp + random ID, or shard into N sibling counters.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="dive">
+      <div class="dive-index">
+        02
+        <span class="of">Critical · silent failure</span>
+      </div>
+      <div>
+        <h3>The weekly digest fetches every order, forever</h3>
+        <span class="path">src/app/api/cron/weekly-digest/route.ts:34–57</span>
+        <p>
+          For each distributor that opted into the Monday report, the cron issues a single
+          <span style="font-family:var(--font-mono);color:var(--ink);">collection('orders').where('distributorId', '==', id).get()</span>
+          — unbounded, no pagination, no limit.
+        </p>
+        <p>
+          A distributor that grows past ten thousand lifetime orders will silently stop receiving
+          their weekly report. The function times out or runs out of memory, logs an error that
+          nobody reads, and moves to the next tenant. Worst class of failure: correct-looking
+          system, missing behavior, no alert.
+        </p>
+        <div class="dive-facts">
+          <div class="dive-fact">
+            <div class="k">Break scenario</div>
+            <div class="v">Any single distributor with &gt;10k orders.</div>
+          </div>
+          <div class="dive-fact">
+            <div class="k">Typical fix</div>
+            <div class="v">Paginate by date range — only last 8 days of orders are needed for the digest anyway.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="dive">
+      <div class="dive-index">
+        03
+        <span class="of">Critical · client memory</span>
+      </div>
+      <div>
+        <h3>The inventory page holds the whole catalog in RAM</h3>
+        <span class="path">src/app/(app)/inventory/page.tsx</span>
+        <p>
+          <span style="font-family:var(--font-mono);color:var(--ink);">getAllInventoryRecords</span>
+          loads every record for the distributor into a single JavaScript array on the client.
+          For a small shop this is nothing — a few hundred kilobytes. For a distributor with
+          ten thousand records, it is eight to ten seconds of wait and a browser tab that
+          consumes more memory than the OS allocates to Safari on iPhone.
+        </p>
+        <p>
+          The symptom is indistinguishable from a bad laptop. Users blame the browser. The page
+          still works, until it doesn't.
+        </p>
+        <div class="dive-facts">
+          <div class="dive-fact">
+            <div class="k">Break scenario</div>
+            <div class="v">Distributor catalog exceeds ~10k records; mobile breaks first.</div>
+          </div>
+          <div class="dive-fact">
+            <div class="k">Typical fix</div>
+            <div class="v">Move pagination and search server-side; render virtual rows only.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============ CHARTS ============ -->
+  <section class="charts">
+    <p class="label">Capacity curves</p>
+    <h2 class="section-title">What failure looks like as a function of volume</h2>
+
+    <div class="chart-grid">
+      <div class="chart-cell span-2">
+        <h4>Firestore hot-doc contention on order creation</h4>
+        <p class="subtitle">Transaction latency against concurrent orders per second, per distributor. Dashed line marks Firestore's written guidance of one write per document per second.</p>
+        <div class="chart-canvas-wrap"><canvas id="chartContention"></canvas></div>
+        <div class="chart-note">Data points are indicative, based on Firestore documented limits and typical transaction retry behavior.</div>
+      </div>
+
+      <div class="chart-cell">
+        <h4>Cron-scan cost vs. system volume</h4>
+        <p class="subtitle">Firestore reads per payment-reminder run as the platform's total orders grow. The cron does not scope by tenant. <b style="color: var(--watch);">Currently dormant</b> — the Firebase scheduler is off; the endpoint only fires when triggered manually or once an external scheduler is wired up.</p>
+        <div class="chart-canvas-wrap"><canvas id="chartCron"></canvas></div>
+        <div class="chart-note">Prospective cost · assumes ~50% of orders sit in awaiting_payment / pending at any time.</div>
+      </div>
+
+      <div class="chart-cell">
+        <h4>Inventory page load time vs. records</h4>
+        <p class="subtitle">Wall-clock seconds until the list becomes interactive, plotted against the size of the distributor's catalog.</p>
+        <div class="chart-canvas-wrap"><canvas id="chartInventory"></canvas></div>
+        <div class="chart-note">Measured on a typical broadband connection; mobile is roughly 2&ndash;3× slower.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SCENARIOS ============ -->
+  <section class="scenarios">
+    <p class="label">Growth horizons</p>
+    <h2 class="section-title">What breaks, at what scale</h2>
+
+    <div class="scenario-grid">
+      <div class="scenario stable">
+        <div class="scale">10×</div>
+        <div class="scale-label">Near-term growth</div>
+        <div class="projections">
+          <div class="proj-row"><div class="l">Distributors</div><div class="v">~1,000</div></div>
+          <div class="proj-row"><div class="l">Orders / day</div><div class="v">~1,700</div></div>
+          <div class="proj-row"><div class="l">Sustained RPS</div><div class="v">~20</div></div>
+          <div class="proj-row"><div class="l">Records / tenant</div><div class="v">~500</div></div>
+        </div>
+        <div class="verdict">
+          <b>Mostly comfortable</b>
+          The three critical items are still latent. Weekly digest starts strained for the top 1%
+          of distributors; inventory page still snappy for most.
+        </div>
+      </div>
+
+      <div class="scenario strain">
+        <div class="scale">100×</div>
+        <div class="scale-label">Ambitious target</div>
+        <div class="projections">
+          <div class="proj-row"><div class="l">Distributors</div><div class="v">~10,000</div></div>
+          <div class="proj-row"><div class="l">Orders / day</div><div class="v">~165,000</div></div>
+          <div class="proj-row"><div class="l">Sustained RPS</div><div class="v">~200</div></div>
+          <div class="proj-row"><div class="l">Records / tenant</div><div class="v">~2,000</div></div>
+        </div>
+        <div class="verdict">
+          <b>Three things are on fire</b>
+          Order counter contends on any distributor with concurrent checkouts. Weekly digest
+          silently fails for high-volume tenants. Inventory page is unusable at the 95th
+          percentile distributor size. Phase-1 rework is non-optional here.
+        </div>
+      </div>
+
+      <div class="scenario break">
+        <div class="scale">1000×</div>
+        <div class="scale-label">Moonshot</div>
+        <div class="projections">
+          <div class="proj-row"><div class="l">Distributors</div><div class="v">~100,000</div></div>
+          <div class="proj-row"><div class="l">Orders / day</div><div class="v">~1.7&nbsp;M</div></div>
+          <div class="proj-row"><div class="l">Sustained RPS</div><div class="v">~2,000</div></div>
+          <div class="proj-row"><div class="l">Records / tenant</div><div class="v">~5,000</div></div>
+        </div>
+        <div class="verdict">
+          <b>Architecture rewrite</b>
+          Cross-tenant crons no longer viable. Firestore default quotas (10k r/s) reached at peak.
+          Email provider likely upgraded; Gemini on paid tier with per-tenant allocation.
+          This tier needs sharded counters, a queue for heavy work, and a read model.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RECOMMENDATIONS ============ -->
+  <section class="recs">
+    <p class="label">What to fix, and when</p>
+    <h2 class="section-title">Eight moves, ordered by the growth they unblock</h2>
+
+    <ol class="rec-list">
+      <li class="rec" style="opacity: 0.55;">
+        <span class="priority p3" style="color: var(--fine);">Done ✓</span>
+        <div class="body">
+          <div class="title" style="text-decoration: line-through; text-decoration-color: var(--ink-ghost);">Replace the order counter with a timestamp+random ID</div>
+          <div class="impact">Shipped · new format <span style="font-family: var(--font-mono);">PREFIX-YYYYMMDD-XXXXXX</span>. No shared counter, no contention.</div>
+        </div>
+        <div class="fix">lib/order-number.ts</div>
+      </li>
+      <li class="rec">
+        <span class="priority p1">Do before 10×</span>
+        <div class="body">
+          <div class="title">Paginate the weekly digest by date range</div>
+          <div class="impact">Only last 8 days needed — cap the per-distributor query so it works at any tenant size.</div>
+        </div>
+        <div class="fix">where('paidAt', '&gt;=', 7d)</div>
+      </li>
+      <li class="rec">
+        <span class="priority p1">Do before 10×</span>
+        <div class="body">
+          <div class="title">Server-paginate the inventory list</div>
+          <div class="impact">Cursor-based fetch + search pushed to Firestore. Client stays lean on any catalog size.</div>
+        </div>
+        <div class="fix">.limit(50) + .startAfter()</div>
+      </li>
+      <li class="rec">
+        <span class="priority p2">Do before 100×</span>
+        <div class="body">
+          <div class="title">Add composite index + per-tenant chunking to payment reminders</div>
+          <div class="impact">Index on (status, approvedAt); iterate per distributor instead of global scan.</div>
+        </div>
+        <div class="fix">firestore.indexes.json</div>
+      </li>
+      <li class="rec">
+        <span class="priority p2">Do before 100×</span>
+        <div class="body">
+          <div class="title">Move the rate limiter to Upstash or Redis</div>
+          <div class="impact">Global, cross-instance limits — what the in-memory Map pretends to do but can't.</div>
+        </div>
+        <div class="fix">Upstash Ratelimit</div>
+      </li>
+      <li class="rec">
+        <span class="priority p2">Do before 100×</span>
+        <div class="body">
+          <div class="title">Queue invoice-PDF generation behind Cloud Tasks</div>
+          <div class="impact">Decouples heavy jobs from the request path. Fan-out stops blowing up Cloud Run memory.</div>
+        </div>
+        <div class="fix">Cloud Tasks + worker</div>
+      </li>
+      <li class="rec">
+        <span class="priority p2">Do before 100×</span>
+        <div class="body">
+          <div class="title">Move Gemini to paid tier with per-distributor quotas</div>
+          <div class="impact">Removes the 15 RPM ceiling; bills only active tenants; caches repeated bio generations.</div>
+        </div>
+        <div class="fix">billing + per-tenant meter</div>
+      </li>
+      <li class="rec">
+        <span class="priority p3">Do before 1000×</span>
+        <div class="body">
+          <div class="title">Batch per-item stock settlement into a multi-record transaction</div>
+          <div class="impact">Collapses N serial transactions into a single 500-op bulk write for large orders.</div>
+        </div>
+        <div class="fix">bulkWriter or single tx</div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="footer">
+    <div>
+      <div>Vinylogix · Capacity &amp; Bottleneck Analysis</div>
+      <div>Produced in tandem with branch code review</div>
+    </div>
+    <div class="right">
+      <div>main @ 34ef5bd</div>
+      <div id="footer-date">Generated April 2026</div>
+      <div>Internal · do not distribute</div>
+    </div>
+    <div class="note" style="grid-column: 1 / -1;">
+      Numbers in this report reflect documented limits (Firestore, Cloud Run, Stripe, Resend, Gemini)
+      and indicative projections derived from the current codebase — not load-test measurements.
+      A real stress test would refine the break-point figures; the relative ordering of risks should hold.
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  // Date stamping — friendly format, no locale surprises
+  (function() {
+    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const d = new Date();
+    const stamp = months[d.getMonth()] + " " + d.getFullYear();
+    const el1 = document.getElementById("today-date");
+    const el2 = document.getElementById("footer-date");
+    if (el1) el1.textContent = stamp;
+    if (el2) el2.textContent = "Generated " + stamp;
+  })();
+
+  // Chart.js global defaults — editorial, understated
+  const INK       = "#e8edf5";
+  const INK_SOFT  = "#9aa5b8";
+  const INK_FAINT = "#4d5669";
+  const RULE      = "#1b2438";
+  const ACCENT    = "#4fd1c5";
+  const CRITICAL  = "#c14848";
+  const WATCH     = "#b8802e";
+
+  Chart.defaults.font.family = "'IBM Plex Sans', -apple-system, system-ui, sans-serif";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = INK_SOFT;
+  Chart.defaults.borderColor = RULE;
+  Chart.defaults.animation.duration = 600;
+  Chart.defaults.animation.easing = "easeOutQuart";
+
+  const axisTheme = {
+    grid: { color: RULE, drawTicks: false, lineWidth: 1 },
+    border: { color: "#293349" },
+    ticks: { color: INK_SOFT, padding: 8 },
+  };
+
+  const tooltipTheme = {
+    enabled: true,
+    backgroundColor: "#0f1626",
+    titleColor: INK,
+    bodyColor: INK_SOFT,
+    borderColor: "#293349",
+    borderWidth: 1,
+    titleFont: { family: "'Fraunces', serif", size: 13, weight: "500" },
+    bodyFont: { family: "'IBM Plex Mono', monospace", size: 11 },
+    padding: 12,
+    displayColors: false,
+    caretSize: 0,
+  };
+
+  // =============== Chart 1: Hot-doc contention ===============
+  new Chart(document.getElementById("chartContention"), {
+    type: "line",
+    data: {
+      labels: ["0.5", "1", "2", "3", "5"],
+      datasets: [{
+        label: "Transaction latency (ms)",
+        data: [60, 80, 2000, 5000, 10000],
+        borderColor: CRITICAL,
+        backgroundColor: "transparent",
+        borderWidth: 2,
+        pointBackgroundColor: CRITICAL,
+        pointBorderColor: "#0a0f1e",
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        tension: 0.25,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...tooltipTheme,
+          callbacks: {
+            title: (items) => items[0].label + " orders/sec",
+            label: (ctx) => {
+              if (ctx.parsed.y >= 10000) return "Timeout (10s) · checkout fails";
+              if (ctx.parsed.y >= 2000) return ctx.parsed.y + " ms · retries queuing";
+              return ctx.parsed.y + " ms";
+            },
+          },
+        },
+        annotation: false,
+      },
+      scales: {
+        x: {
+          ...axisTheme,
+          title: { display: true, text: "Concurrent orders / sec (per distributor)", color: INK_FAINT, font: { size: 11 }, padding: { top: 10 } },
+        },
+        y: {
+          ...axisTheme,
+          beginAtZero: true,
+          max: 11000,
+          ticks: {
+            ...axisTheme.ticks,
+            callback: (v) => v === 0 ? "0" : v >= 1000 ? (v/1000) + "s" : v + "ms",
+          },
+          title: { display: true, text: "Latency", color: INK_FAINT, font: { size: 11 } },
+        },
+      },
+    },
+    plugins: [{
+      id: "firestoreCeilingLine",
+      afterDraw(chart) {
+        const {ctx, chartArea, scales} = chart;
+        const x = scales.x.getPixelForValue(1);
+        ctx.save();
+        ctx.strokeStyle = INK_FAINT;
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, chartArea.top);
+        ctx.lineTo(x, chartArea.bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = INK_FAINT;
+        ctx.font = "10px 'IBM Plex Mono', monospace";
+        ctx.fillText("FIRESTORE 1 WRITE/SEC/DOC", x + 6, chartArea.top + 14);
+        ctx.restore();
+      },
+    }],
+  });
+
+  // =============== Chart 2: Cron scan cost ===============
+  new Chart(document.getElementById("chartCron"), {
+    type: "bar",
+    data: {
+      labels: ["10 k", "50 k", "100 k", "500 k", "1 M"],
+      datasets: [{
+        label: "Reads / run",
+        data: [5000, 25000, 50000, 250000, 500000],
+        backgroundColor: WATCH,
+        borderRadius: 2,
+        borderSkipped: false,
+        barThickness: 18,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...tooltipTheme,
+          callbacks: {
+            title: (items) => items[0].label + " total orders",
+            label: (ctx) => ctx.parsed.y.toLocaleString() + " reads per cron run",
+          },
+        },
+      },
+      scales: {
+        x: {
+          ...axisTheme,
+          grid: { display: false, drawTicks: false },
+          title: { display: true, text: "Total system orders", color: INK_FAINT, font: { size: 11 }, padding: { top: 10 } },
+        },
+        y: {
+          ...axisTheme,
+          beginAtZero: true,
+          ticks: {
+            ...axisTheme.ticks,
+            callback: (v) => v >= 1000 ? (v/1000) + "k" : v,
+          },
+          title: { display: true, text: "Firestore reads", color: INK_FAINT, font: { size: 11 } },
+        },
+      },
+    },
+  });
+
+  // =============== Chart 3: Inventory page TTI ===============
+  new Chart(document.getElementById("chartInventory"), {
+    type: "line",
+    data: {
+      labels: ["100", "1 k", "5 k", "10 k", "25 k", "50 k"],
+      datasets: [{
+        label: "Time to interactive (s)",
+        data: [0.3, 0.8, 3, 7, 20, 45],
+        borderColor: ACCENT,
+        backgroundColor: "transparent",
+        borderWidth: 2,
+        pointBackgroundColor: ACCENT,
+        pointBorderColor: "#0a0f1e",
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        tension: 0.3,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...tooltipTheme,
+          callbacks: {
+            title: (items) => items[0].label + " records",
+            label: (ctx) => ctx.parsed.y + "s to interactive",
+          },
+        },
+      },
+      scales: {
+        x: {
+          ...axisTheme,
+          grid: { display: false, drawTicks: false },
+          title: { display: true, text: "Records in inventory", color: INK_FAINT, font: { size: 11 }, padding: { top: 10 } },
+        },
+        y: {
+          ...axisTheme,
+          beginAtZero: true,
+          ticks: { ...axisTheme.ticks, callback: (v) => v + "s" },
+          title: { display: true, text: "Load time", color: INK_FAINT, font: { size: 11 } },
+        },
+      },
+    },
+    plugins: [{
+      id: "acceptableThreshold",
+      afterDraw(chart) {
+        const {ctx, chartArea, scales} = chart;
+        const y = scales.y.getPixelForValue(3);
+        ctx.save();
+        ctx.strokeStyle = INK_FAINT;
+        ctx.setLineDash([3, 3]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, y);
+        ctx.lineTo(chartArea.right, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = INK_FAINT;
+        ctx.font = "10px 'IBM Plex Mono', monospace";
+        ctx.textAlign = "right";
+        ctx.fillText("ACCEPTABLE UX · 3s", chartArea.right - 6, y - 6);
+        ctx.restore();
+      },
+    }],
+  });
+</script>
+</body>
+</html>

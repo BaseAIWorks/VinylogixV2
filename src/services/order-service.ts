@@ -12,6 +12,7 @@ import {
   getRecordById,
 } from './record-service';
 import { getDistributorById, updateDistributor } from './distributor-service';
+import { generateOrderNumber } from '@/lib/order-number';
 import { logger } from '@/lib/logger';
 
 const ORDERS_COLLECTION = 'orders';
@@ -551,9 +552,7 @@ export async function createOrder(user: User, cartItems: CartItem[]): Promise<Or
         throw new Error(`Distributor with ID ${distributorId} not found.`);
     }
 
-    const prefix = distributor.orderIdPrefix || 'ORD';
-    const counter = (distributor.orderCounter || 0) + 1;
-    const orderNumber = `${prefix}-${counter.toString().padStart(5, '0')}`;
+    const orderNumber = generateOrderNumber(distributor.orderIdPrefix);
 
     const orderItems: OrderItem[] = cartItems.map(item => ({
         recordId: item.record.id,
@@ -612,8 +611,6 @@ export async function createOrder(user: User, cartItems: CartItem[]): Promise<Or
     }
     
     const orderDocRef = await addDoc(collection(db, ORDERS_COLLECTION), newOrderData);
-
-    await updateDistributor(distributorId, { orderCounter: counter }, user);
 
      // Create a notification for the new order
     const notificationsCollectionRef = collection(db, 'notifications');
