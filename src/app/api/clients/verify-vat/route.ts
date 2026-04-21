@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
     // fail to stick across refreshes.
     let persisted = false;
     let persistSkipReason: string | null = null;
+    let ordersRecalculated = 0;
     if (!clientUid) {
       persistSkipReason = 'no-client-uid';
     } else {
@@ -98,6 +99,35 @@ export async function POST(req: NextRequest) {
             persistSkipReason = 'firestore-write-failed';
             console.error(`[verify-vat] Firestore update failed for client ${clientUid}:`, writeErr);
           }
+
+          // Propagate the new vatValidated state to any of this customer's
+          // pending orders so the order-detail page + invoices immediately
+          // reflect the correct tax treatment, without waiting for approval.
+          // Scoped to the caller's distributor (master/worker); superadmin
+          // covers all distributors since the validation is a client-level
+          // fact.
+          if (persisted) {
+            try {
+              let ordersQuery = adminDb.collection('orders')
+                .where('viewerId', '==', clientUid)
+                .where('status', 'in', ['awaiting_approval', 'awaiting_payment']);
+              if (callerRole !== 'superadmin' && callerData.distributorId) {
+                ordersQuery = ordersQuery.where('distributorId', '==', callerData.distributorId);
+              }
+              const pendingSnap = await ordersQuery.get();
+              const { recalcOrderReverseCharge } = await import('@/services/server-order-service');
+              for (const orderDoc of pendingSnap.docs) {
+                try {
+                  const r = await recalcOrderReverseCharge(orderDoc.id);
+                  if (r.changed) ordersRecalculated++;
+                } catch (recalcErr) {
+                  console.error(`[verify-vat] Recalc failed for order ${orderDoc.id}:`, recalcErr);
+                }
+              }
+            } catch (batchErr) {
+              console.error('[verify-vat] Pending-orders batch recalc failed:', batchErr);
+            }
+          }
         }
       }
     }
@@ -112,7 +142,7 @@ export async function POST(req: NextRequest) {
       userRole: auth?.role,
       page: clientUid ? `/clients/${clientUid}` : '/clients',
     }));
-    return NextResponse.json({ ...result, persisted, ...(persistSkipReason ? { persistSkipReason } : {}) });
+    return NextResponse.json({ ...result, persisted, ordersRecalculated, ...(persistSkipReason ? { persistSkipReason } : {}) });
   } catch (error: any) {
     console.error('VIES validation error:', error);
     import('@/services/system-log-service').then(m => m.logSystemEvent({
