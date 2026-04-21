@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Order, OrderStatus, OrderItemStatus, OrderAssignmentEvent, User, CartItem, OrderItem } from '@/types';
+import type { Order, OrderStatus, OrderItemStatus, OrderAssignmentEvent, User, OrderItem } from '@/types';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, query, where, limit, Timestamp, runTransaction } from 'firebase/firestore';
 import {
@@ -11,8 +11,7 @@ import {
   restoreStockForOrder,
   getRecordById,
 } from './record-service';
-import { getDistributorById, updateDistributor } from './distributor-service';
-import { generateOrderNumber } from '@/lib/order-number';
+import { getDistributorById } from './distributor-service';
 import { logger } from '@/lib/logger';
 
 const ORDERS_COLLECTION = 'orders';
@@ -541,96 +540,6 @@ export async function recalculateOrderTax(
   });
 }
 
-export async function createOrder(user: User, cartItems: CartItem[]): Promise<Order> {
-    if (cartItems.length === 0) {
-        throw new Error("Cannot create an order with an empty cart.");
-    }
-    const distributorId = cartItems[0].distributorId;
-
-    const distributor = await getDistributorById(distributorId);
-    if (!distributor) {
-        throw new Error(`Distributor with ID ${distributorId} not found.`);
-    }
-
-    const orderNumber = generateOrderNumber(distributor.orderIdPrefix);
-
-    const orderItems: OrderItem[] = cartItems.map(item => ({
-        recordId: item.record.id,
-        title: item.record.title,
-        artist: item.record.artist,
-        cover_url: item.record.cover_url,
-        priceAtTimeOfOrder: item.record.sellingPrice || 0,
-        quantity: item.quantity,
-    }));
-
-    const now = new Date();
-    const totalAmount = cartItems.reduce((sum, item) => sum + (item.record.sellingPrice || 0) * item.quantity, 0);
-    const totalWeight = cartItems.reduce((sum, item) => sum + (item.record.weight || 0) * item.quantity, 0);
-
-    const shippingAddress = [
-      user.addressLine1,
-      user.addressLine2,
-      `${user.postcode || ''} ${user.city || ''}`.trim(),
-      user.country
-    ].filter(Boolean).join('\n');
-
-
-    const newOrderData: any = {
-        distributorId: distributorId,
-        viewerId: user.uid,
-        viewerEmail: user.email || 'N/A',
-        customerName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'N/A',
-        shippingAddress: shippingAddress || 'No shipping address provided',
-        items: orderItems,
-        status: 'pending' as OrderStatus,
-        totalAmount: totalAmount,
-        totalWeight: totalWeight,
-        createdAt: Timestamp.fromDate(now),
-        updatedAt: Timestamp.fromDate(now),
-        orderNumber: orderNumber,
-    };
-
-    // Conditionally add optional fields to avoid writing 'undefined' to Firestore
-    if (user.useDifferentBillingAddress && user.billingAddress) {
-        newOrderData.billingAddress = user.billingAddress;
-    }
-    if (user.phoneNumber) {
-        newOrderData.phoneNumber = user.phoneNumber;
-    }
-    if (user.companyName) {
-        newOrderData.customerCompanyName = user.companyName;
-    }
-    if (user.vatNumber) {
-        newOrderData.customerVatNumber = user.vatNumber;
-    }
-    if (user.eoriNumber) {
-        newOrderData.customerEoriNumber = user.eoriNumber;
-    }
-    if (user.chamberOfCommerce) {
-        newOrderData.customerChamberOfCommerce = user.chamberOfCommerce;
-    }
-    
-    const orderDocRef = await addDoc(collection(db, ORDERS_COLLECTION), newOrderData);
-
-     // Create a notification for the new order
-    const notificationsCollectionRef = collection(db, 'notifications');
-    const newNotificationData = {
-        distributorId: distributorId,
-        type: 'new_order' as const,
-        message: `New order received from ${user.email || 'a client'}.`,
-        orderId: orderDocRef.id,
-        orderTotal: totalAmount,
-        customerEmail: user.email || 'N/A',
-        createdAt: Timestamp.fromDate(now),
-        isRead: false,
-    };
-    await addDoc(notificationsCollectionRef, newNotificationData);
-
-    const newDocSnap = await getDoc(orderDocRef);
-    return processOrderTimestamps({ ...newDocSnap.data(), id: orderDocRef.id });
-}
-
-// createOrderRequest is now server-side only — see server-order-service.ts createOrderRequestServer
 
 // ====================================================================
 // Fulfillment workflow (soft ownership)

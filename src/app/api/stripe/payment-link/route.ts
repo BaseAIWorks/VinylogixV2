@@ -4,6 +4,7 @@ import { requireAuth, authErrorResponse } from '@/lib/auth-helpers';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { createPaymentSessionForOrder } from '@/lib/stripe-order-session';
 import { getInvoicePdfBase64 } from '@/lib/invoice-utils';
+import { recalcOrderReverseCharge } from '@/services/server-order-service';
 import type { Order, Distributor } from '@/types';
 
 // Convert admin Firestore Timestamps to ISO strings before handing to
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
     if (!orderSnap.exists) {
       return NextResponse.json({ error: 'Order not found.' }, { status: 404 });
     }
-    const order = orderSnap.data()!;
+    let order = orderSnap.data()!;
 
     // Only generate payment links for orders awaiting payment
     if (order.status !== 'awaiting_payment' && order.status !== 'awaiting_approval') {
@@ -55,12 +56,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Insufficient permissions.' }, { status: 403 });
     }
 
-    // Get distributor for Stripe account
-    const distSnap = await adminDb.collection('distributors').doc(order.distributorId).get();
-    if (!distSnap.exists) {
+    // Re-evaluate reverse charge against the customer's current vatValidated
+    // flag. If they were verified since order-create, the Stripe session must
+    // charge the corrected amount — otherwise we'd lock the old VAT into the
+    // payment.
+    const recalc = await recalcOrderReverseCharge(orderId);
+    if (!recalc.distributor) {
       return NextResponse.json({ error: 'Distributor not found.' }, { status: 404 });
     }
-    const distributor = distSnap.data()!;
+    if (recalc.changed) {
+      order = recalc.order;
+    }
+    const distributor = recalc.distributor;
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
 

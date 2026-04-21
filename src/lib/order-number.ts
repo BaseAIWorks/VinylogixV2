@@ -1,32 +1,47 @@
-// Order-number generator. Replaces the legacy per-distributor `orderCounter`
-// approach (which required a Firestore transaction on the distributor doc
-// for every order — a ~1 write/sec/doc hard ceiling).
+// Order-number allocator. Returns a sequential PREFIX-NNNNN number per
+// distributor by atomically incrementing `orderCounter` inside a focused
+// Firestore transaction on the distributor document.
 //
-// Format: {PREFIX}-{YYYYMMDD}-{6 hex chars}
-// Example: ABC-20260421-4AF89C
+// Format: {PREFIX}-{5-digit zero-padded counter}
+// Example: THA-00014
 //
-// - Human-readable and chronologically sortable by prefix scan.
-// - 16.7M combos per day per distributor → collision risk is effectively
-//   zero at any realistic volume, and the number is per-distributor-display-
-//   only (not a primary key), so even a theoretical collision is harmless.
-// - Uses Web Crypto so the same helper works in both Node (server) and
-//   browser (client-side createOrder) without a runtime branch.
+// The transaction body is kept to exactly one read + one write so Firestore's
+// automatic retry-on-contention can resolve concurrent allocations quickly.
+// Throughput is bounded to ~1 order/sec per distributor under sustained
+// contention — an acceptable trade-off for human-readable, bookkeeping-
+// friendly order numbers.
 
-function randomHex(byteCount: number): string {
-  const buf = new Uint8Array(byteCount);
-  const c: Crypto | undefined =
-    (typeof globalThis !== 'undefined' && (globalThis as any).crypto) as Crypto | undefined;
-  if (!c || typeof c.getRandomValues !== 'function') {
-    throw new Error('Web Crypto is not available in this environment.');
-  }
-  c.getRandomValues(buf);
-  return Array.from(buf, b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+import type { Firestore as AdminFirestore, DocumentData } from 'firebase-admin/firestore';
+
+const DISTRIBUTORS_COLLECTION = 'distributors';
+
+function sanitizePrefix(prefix: string | null | undefined): string {
+  const safe = (prefix || 'ORD').replace(/[^A-Za-z0-9]/g, '').slice(0, 8);
+  return safe || 'ORD';
 }
 
-export function generateOrderNumber(prefix: string | null | undefined, now: Date = new Date()): string {
-  const safePrefix = (prefix || 'ORD').replace(/[^A-Za-z0-9]/g, '').slice(0, 8) || 'ORD';
-  const yyyy = now.getFullYear();
-  const mm = (now.getMonth() + 1).toString().padStart(2, '0');
-  const dd = now.getDate().toString().padStart(2, '0');
-  return `${safePrefix}-${yyyy}${mm}${dd}-${randomHex(3)}`;
+export function formatOrderNumber(prefix: string | null | undefined, counter: number): string {
+  return `${sanitizePrefix(prefix)}-${counter.toString().padStart(5, '0')}`;
+}
+
+export async function allocateOrderNumberAdmin(
+  adminDb: AdminFirestore,
+  distributorId: string,
+): Promise<{ orderNumber: string; counter: number; distributor: DocumentData }> {
+  const ref = adminDb.collection(DISTRIBUTORS_COLLECTION).doc(distributorId);
+  return await adminDb.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) {
+      throw new Error(`Distributor with ID ${distributorId} not found`);
+    }
+    const data = snap.data()!;
+    const current = typeof data.orderCounter === 'number' ? data.orderCounter : 0;
+    const next = current + 1;
+    tx.update(ref, { orderCounter: next });
+    return {
+      orderNumber: formatOrderNumber(data.orderIdPrefix, next),
+      counter: next,
+      distributor: data,
+    };
+  });
 }

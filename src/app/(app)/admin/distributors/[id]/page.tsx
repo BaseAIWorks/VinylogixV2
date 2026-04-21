@@ -451,16 +451,16 @@ export default function DistributorDetailPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5 text-primary"/>Order Number Format</CardTitle>
-                            <CardDescription>Order numbers use the prefix plus the date and a short random ID.</CardDescription>
+                            <CardDescription>Sequential per-distributor counter with prefix.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="rounded-lg border p-4 space-y-2">
-                                <p className="font-medium">Example next order number</p>
+                                <p className="font-medium">Next order number</p>
                                 <p className="font-mono text-base text-foreground">
-                                    {distributor.orderIdPrefix || 'ORD'}-{(() => { const d = new Date(); return `${d.getFullYear()}${(d.getMonth()+1).toString().padStart(2,'0')}${d.getDate().toString().padStart(2,'0')}`; })()}-XXXXXX
+                                    {distributor.orderIdPrefix || 'ORD'}-{((distributor.orderCounter || 0) + 1).toString().padStart(5, '0')}
                                 </p>
                                 <p className="text-xs text-muted-foreground pt-1">
-                                    Prefix + YYYYMMDD + 6 random hex characters. No shared counter, so concurrent orders don&apos;t conflict.
+                                    Current counter: {distributor.orderCounter || 0}. Each new order increments this atomically.
                                 </p>
                             </div>
                         </CardContent>

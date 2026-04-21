@@ -4,6 +4,7 @@ import { authErrorResponse } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
 import { requireOrderAccess } from '@/lib/order-access';
 import { getInvoicePdfBase64 } from '@/lib/invoice-utils';
+import { recalcOrderReverseCharge } from '@/services/server-order-service';
 import type { Order, Distributor } from '@/types';
 
 function hydrateTimestamps<T extends Record<string, any>>(data: T, fields: string[]): T {
@@ -35,7 +36,9 @@ export async function POST(
 
   try {
     const { id: orderId } = await params;
-    const { orderData, orderRef, adminDb } = await requireOrderAccess(req, orderId);
+    const access = await requireOrderAccess(req, orderId);
+    const { orderRef } = access;
+    let orderData = access.orderData;
 
     if (orderData.status !== 'awaiting_approval') {
       return NextResponse.json(
@@ -44,11 +47,18 @@ export async function POST(
       );
     }
 
-    const distSnap = await adminDb.collection('distributors').doc(orderData.distributorId).get();
-    if (!distSnap.exists) {
+    // If the distributor validated the customer's VAT between order-create
+    // and now, the stored totals are stale (reverse charge not applied, or
+    // vice-versa). Recalc BEFORE building the PDF so the invoice matches
+    // what gets charged.
+    const recalc = await recalcOrderReverseCharge(orderId);
+    if (!recalc.distributor) {
       return NextResponse.json({ error: 'Distributor not found.' }, { status: 404 });
     }
-    const distData = { id: distSnap.id, ...distSnap.data() } as any;
+    if (recalc.changed) {
+      orderData = recalc.order;
+    }
+    const distData = { id: orderData.distributorId, ...recalc.distributor } as any;
 
     // Effective mode: if Stripe checkout is disabled on this distributor,
     // invoice-only is always allowed regardless of paymentLinkMode setting.

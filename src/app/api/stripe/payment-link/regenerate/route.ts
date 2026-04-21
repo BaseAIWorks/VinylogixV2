@@ -4,6 +4,7 @@ import { authErrorResponse } from '@/lib/auth-helpers';
 import { rateLimit } from '@/lib/rate-limit';
 import { requireOrderAccess } from '@/lib/order-access';
 import { createPaymentSessionForOrder } from '@/lib/stripe-order-session';
+import { recalcOrderReverseCharge } from '@/services/server-order-service';
 import type { Order } from '@/types';
 
 // Convert admin Firestore Timestamp fields to ISO strings so email-service
@@ -30,7 +31,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Order ID is required.' }, { status: 400 });
     }
 
-    const { orderData, orderRef, adminDb } = await requireOrderAccess(req, orderId);
+    const access = await requireOrderAccess(req, orderId);
+    const { orderRef } = access;
+    let orderData = access.orderData;
 
     if (orderData.paymentStatus === 'paid') {
       return NextResponse.json({ error: 'Order is already paid.' }, { status: 400 });
@@ -42,11 +45,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const distSnap = await adminDb.collection('distributors').doc(orderData.distributorId).get();
-    if (!distSnap.exists) {
+    // Re-evaluate reverse charge against the customer's current vatValidated
+    // flag so the regenerated session bakes in the correct amount.
+    const recalc = await recalcOrderReverseCharge(orderId);
+    if (!recalc.distributor) {
       return NextResponse.json({ error: 'Distributor not found.' }, { status: 404 });
     }
-    const distributor = distSnap.data()!;
+    if (recalc.changed) {
+      orderData = recalc.order;
+    }
+    const distributor = recalc.distributor;
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://vinylogix.com';
 
