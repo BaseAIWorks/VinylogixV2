@@ -669,7 +669,9 @@ export async function claimOrder(
   orderId: string,
   actingUser: User
 ): Promise<Order> {
-  if (!actingUser.distributorId) throw new Error("User has no distributorId.");
+  if (!actingUser.distributorId && actingUser.role !== 'superadmin') {
+    throw new Error("User has no distributorId.");
+  }
   if (!actingUser.uid || !actingUser.email) {
     throw new Error("User uid and email required to claim an order.");
   }
@@ -679,7 +681,9 @@ export async function claimOrder(
     const snap = await tx.get(orderDocRef);
     if (!snap.exists()) throw new Error("Order not found.");
     const order = snap.data() as Order;
-    if (order.distributorId !== actingUser.distributorId) {
+    // Superadmin may touch any distributor's order (e.g. support action);
+    // operators are constrained to their own.
+    if (actingUser.role !== 'superadmin' && order.distributorId !== actingUser.distributorId) {
       throw new Error("Permission Denied.");
     }
 
@@ -690,6 +694,11 @@ export async function claimOrder(
     const nowIso = new Date().toISOString();
     const isTakeover = !!currentAssignee && currentAssignee !== actingUser.uid;
 
+    // Conditional spread on `fromEmail` — Firestore rejects undefined
+    // inside array-nested objects (no `ignoreUndefinedProperties`), and
+    // `order.assigneeEmail` may be missing on legacy or externally-written
+    // docs where only `assigneeUid` got set. Omitting the key is safer
+    // than writing `null`.
     const event: OrderAssignmentEvent = isTakeover
       ? {
           action: 'taken_over',
@@ -697,7 +706,7 @@ export async function claimOrder(
           byEmail: actingUser.email!,
           at: nowIso,
           fromUid: currentAssignee,
-          fromEmail: order.assigneeEmail,
+          ...(order.assigneeEmail ? { fromEmail: order.assigneeEmail } : {}),
         }
       : {
           action: 'claimed',
@@ -706,7 +715,7 @@ export async function claimOrder(
           at: nowIso,
         };
 
-    const payload: any = {
+    const payload: Record<string, any> = {
       assigneeUid: actingUser.uid,
       assigneeEmail: actingUser.email,
       assignedAt: nowIso,
@@ -736,15 +745,17 @@ export async function markOrderPacked(
   orderId: string,
   actingUser: User
 ): Promise<Order> {
-  if (!actingUser.distributorId || !actingUser.uid || !actingUser.email) {
-    throw new Error("User info missing.");
+  if (!actingUser.uid || !actingUser.email) throw new Error("User info missing.");
+  if (!actingUser.distributorId && actingUser.role !== 'superadmin') {
+    throw new Error("User has no distributorId.");
   }
   const orderDocRef = doc(db, ORDERS_COLLECTION, orderId);
   const snap = await getDoc(orderDocRef);
-  if (!snap.exists() || snap.data().distributorId !== actingUser.distributorId) {
-    throw new Error("Permission Denied or Order not found.");
-  }
+  if (!snap.exists()) throw new Error("Order not found.");
   const order = snap.data() as Order;
+  if (actingUser.role !== 'superadmin' && order.distributorId !== actingUser.distributorId) {
+    throw new Error("Permission Denied.");
+  }
 
   // Idempotent — no double-write if already in target state.
   if (order.status === 'ready_to_ship') {
@@ -755,13 +766,14 @@ export async function markOrderPacked(
   }
 
   const nowIso = new Date().toISOString();
-  await updateDoc(orderDocRef, {
-    status: 'ready_to_ship' as OrderStatus,
+  const payload: Record<string, any> = {
+    status: 'ready_to_ship',
     packedAt: nowIso,
     packedByUid: actingUser.uid,
     packedByEmail: actingUser.email,
     updatedAt: Timestamp.now(),
-  });
+  };
+  await updateDoc(orderDocRef, payload);
 
   const final = await getDoc(orderDocRef);
   return processOrderTimestamps({ ...final.data(), id: final.id });
@@ -779,39 +791,48 @@ export async function markOrderShipped(
   actingUser: User,
   shipment: { carrier?: Order['carrier']; trackingNumber?: string; trackingUrl?: string } = {}
 ): Promise<Order> {
-  if (!actingUser.distributorId || !actingUser.uid || !actingUser.email) {
-    throw new Error("User info missing.");
+  if (!actingUser.uid || !actingUser.email) throw new Error("User info missing.");
+  if (!actingUser.distributorId && actingUser.role !== 'superadmin') {
+    throw new Error("User has no distributorId.");
   }
   const orderDocRef = doc(db, ORDERS_COLLECTION, orderId);
-  const snap = await getDoc(orderDocRef);
-  if (!snap.exists() || snap.data().distributorId !== actingUser.distributorId) {
-    throw new Error("Permission Denied or Order not found.");
-  }
-  const order = snap.data() as Order;
 
-  const alreadyShipped = order.status === 'shipped' || order.status === 'delivered';
-
-  const payload: any = { updatedAt: Timestamp.now() };
-  if (shipment.carrier !== undefined) payload.carrier = shipment.carrier;
-  if (shipment.trackingNumber !== undefined) payload.trackingNumber = shipment.trackingNumber;
-  if (shipment.trackingUrl !== undefined) payload.trackingUrl = shipment.trackingUrl;
-
-  if (!alreadyShipped) {
-    // Must come from processing or ready_to_ship.
-    if (order.status !== 'processing' && order.status !== 'ready_to_ship') {
-      throw new Error(`Cannot mark shipped from status '${order.status}'.`);
+  // Transactional so two operators hitting "Mark shipped" in the same
+  // split-second both observe the same `oldStatus` and only one of them
+  // writes `status = 'shipped'` + triggers the customer email. Outside
+  // the tx we read the `didShip` flag and fire the email exactly once.
+  const { didShip } = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(orderDocRef);
+    if (!snap.exists()) throw new Error("Order not found.");
+    const order = snap.data() as Order;
+    if (actingUser.role !== 'superadmin' && order.distributorId !== actingUser.distributorId) {
+      throw new Error("Permission Denied.");
     }
-    payload.status = 'shipped';
-    payload.shippedAt = Timestamp.now();
-    payload.shippedByUid = actingUser.uid;
-    payload.shippedByEmail = actingUser.email;
-  }
 
-  await updateDoc(orderDocRef, payload);
+    const alreadyShipped = order.status === 'shipped' || order.status === 'delivered';
 
-  // Customer email only fires on the first shipped transition — editing
-  // tracking info later must not re-send it.
-  if (!alreadyShipped) {
+    const payload: Record<string, any> = { updatedAt: Timestamp.now() };
+    if (shipment.carrier !== undefined) payload.carrier = shipment.carrier;
+    if (shipment.trackingNumber !== undefined) payload.trackingNumber = shipment.trackingNumber;
+    if (shipment.trackingUrl !== undefined) payload.trackingUrl = shipment.trackingUrl;
+
+    if (!alreadyShipped) {
+      if (order.status !== 'processing' && order.status !== 'ready_to_ship') {
+        throw new Error(`Cannot mark shipped from status '${order.status}'.`);
+      }
+      payload.status = 'shipped';
+      payload.shippedAt = Timestamp.now();
+      payload.shippedByUid = actingUser.uid;
+      payload.shippedByEmail = actingUser.email;
+    }
+
+    tx.update(orderDocRef, payload);
+    return { didShip: !alreadyShipped };
+  });
+
+  // Customer email fires once per first-shipped transition. Editing tracking
+  // on an already-shipped order never re-emails.
+  if (didShip) {
     try {
       const afterSnap = await getDoc(orderDocRef);
       const afterOrder = processOrderTimestamps({ ...afterSnap.data(), id: afterSnap.id });
@@ -836,15 +857,17 @@ export async function markOrderDelivered(
   orderId: string,
   actingUser: User
 ): Promise<Order> {
-  if (!actingUser.distributorId || !actingUser.uid || !actingUser.email) {
-    throw new Error("User info missing.");
+  if (!actingUser.uid || !actingUser.email) throw new Error("User info missing.");
+  if (!actingUser.distributorId && actingUser.role !== 'superadmin') {
+    throw new Error("User has no distributorId.");
   }
   const orderDocRef = doc(db, ORDERS_COLLECTION, orderId);
   const snap = await getDoc(orderDocRef);
-  if (!snap.exists() || snap.data().distributorId !== actingUser.distributorId) {
-    throw new Error("Permission Denied or Order not found.");
-  }
+  if (!snap.exists()) throw new Error("Order not found.");
   const order = snap.data() as Order;
+  if (actingUser.role !== 'superadmin' && order.distributorId !== actingUser.distributorId) {
+    throw new Error("Permission Denied.");
+  }
 
   if (order.status === 'delivered') {
     return processOrderTimestamps({ ...order, id: orderId });
@@ -854,13 +877,14 @@ export async function markOrderDelivered(
   }
 
   const nowIso = new Date().toISOString();
-  await updateDoc(orderDocRef, {
-    status: 'delivered' as OrderStatus,
+  const payload: Record<string, any> = {
+    status: 'delivered',
     deliveredAt: nowIso,
     deliveredByUid: actingUser.uid,
     deliveredByEmail: actingUser.email,
     updatedAt: Timestamp.now(),
-  });
+  };
+  await updateDoc(orderDocRef, payload);
 
   const final = await getDoc(orderDocRef);
   return processOrderTimestamps({ ...final.data(), id: final.id });

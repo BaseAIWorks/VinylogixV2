@@ -202,31 +202,6 @@ export default function FulfillmentPage() {
     }
   };
 
-  const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
-    if (!user) return;
-
-    // Block processing/shipped if business profile is incomplete
-    if ((newStatus === 'processing' || newStatus === 'shipped') && !businessProfileStatus.isComplete) {
-      toast({
-        title: "Business Profile Incomplete",
-        description: `Please complete your business profile before processing orders. Missing: ${businessProfileStatus.missingFields.join(', ')}`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      await updateOrderStatus(orderId, newStatus, user);
-      toast({
-        title: "Status Updated",
-        description: `Order marked as ${newStatus.replace('_', ' ')}.`,
-      });
-      fetchFulfillmentOrders();
-    } catch (error) {
-      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
-    }
-  };
-
   const handleViewOrder = (orderId: string) => {
     router.push(`/orders/${orderId}`);
   };

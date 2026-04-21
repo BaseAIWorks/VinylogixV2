@@ -120,6 +120,33 @@ service cloud.firestore {
       return !('role' in after) || (after.role != 'master' && after.role != 'superadmin');
     }
 
+    // Fulfillment action fields must name the acting user, not a colleague.
+    // Any operator is allowed to advance any order (soft ownership), but
+    // writing e.g. `shippedByUid: "someone-else"` would let an operator
+    // frame a colleague in the audit trail. Enforced by comparing each of
+    // the four *ByUid fields before/after — the field may stay the same,
+    // stay absent, or match request.auth.uid. Master reassign lands in
+    // phase 2 as a dedicated path (admin SDK or a rule carve-out).
+    function fulfillmentActionFieldsMatchCaller() {
+      let before = resource.data;
+      let after = request.resource.data;
+
+      let assigneeOk = !('assigneeUid' in after) ||
+                       (('assigneeUid' in before) && before.assigneeUid == after.assigneeUid) ||
+                       after.assigneeUid == request.auth.uid;
+      let packedOk = !('packedByUid' in after) ||
+                     (('packedByUid' in before) && before.packedByUid == after.packedByUid) ||
+                     after.packedByUid == request.auth.uid;
+      let shippedOk = !('shippedByUid' in after) ||
+                      (('shippedByUid' in before) && before.shippedByUid == after.shippedByUid) ||
+                      after.shippedByUid == request.auth.uid;
+      let deliveredOk = !('deliveredByUid' in after) ||
+                        (('deliveredByUid' in before) && before.deliveredByUid == after.deliveredByUid) ||
+                        after.deliveredByUid == request.auth.uid;
+
+      return assigneeOk && packedOk && shippedOk && deliveredOk;
+    }
+
     // Prevent masters from moving users between distributors
     function masterCannotReassignOrg() {
       let before = resource.data;
@@ -246,8 +273,19 @@ service cloud.firestore {
         allow read, write, delete: if isSuperAdmin();
 
         allow create: if isSignedIn() && request.resource.data.viewerId == request.auth.uid;
-        // Allow operators (with fallback) or the viewer who placed the order
-        allow read, update: if isOperatorOfWithFallback(resource.data.distributorId) || isOwner(resource.data.viewerId);
+
+        // Read is unchanged — any operator of the distributor or the customer
+        // who placed the order can see it.
+        allow read: if isOperatorOfWithFallback(resource.data.distributorId) || isOwner(resource.data.viewerId);
+
+        // Update splits in two: operators may update orders for their
+        // distributor BUT must not spoof the fulfillment *ByUid audit fields
+        // onto a colleague. The customer who placed the order can still
+        // update their own order (e.g. cancellation, address correction) —
+        // they can't touch those action fields because they're not an
+        // operator and the audit-field guard blocks it anyway.
+        allow update: if (isOperatorOfWithFallback(resource.data.distributorId) && fulfillmentActionFieldsMatchCaller())
+                      || (isOwner(resource.data.viewerId) && fulfillmentActionFieldsMatchCaller());
     }
 
     match /notifications/{notificationId} {

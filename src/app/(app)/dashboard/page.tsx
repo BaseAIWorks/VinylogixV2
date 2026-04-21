@@ -217,8 +217,20 @@ export default function DashboardPage() {
         setIsLoadingFulfillment(true);
         try {
             const fetched = await getOrders(user);
+            // Shipped orders accumulate forever. The dashboard only needs them
+            // for the "shipped today" counter + can cap the state footprint
+            // by dropping anything older than a week. The full shipped
+            // history stays reachable via /orders. Future: add a server-side
+            // since-cursor to getOrders so we don't even fetch the tail.
+            const sevenDaysAgo = subDays(new Date(), 7);
             setFulfillmentOrders(
-                fetched.filter(o => ['paid', 'processing', 'ready_to_ship', 'shipped'].includes(o.status))
+                fetched.filter(o => {
+                    if (o.status === 'paid' || o.status === 'processing' || o.status === 'ready_to_ship') return true;
+                    if (o.status === 'shipped' && o.shippedAt) {
+                        return isAfter(parseISO(o.shippedAt), sevenDaysAgo);
+                    }
+                    return false;
+                })
             );
         } catch (error) {
             console.error("DashboardPage: Failed to fetch fulfillment orders", error);
